@@ -1,0 +1,22 @@
+export interface Candidate {
+  id: string;
+  vacancy_id: string;
+  hh_resume_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  age: number | null;
+  gender: string | null;
+  area: string | null;
+  title: string | null;
+  salary_amount: number | null;
+  salary_currency: string | null;
+  skills: string[];
+  photo_url: string | null;
+  resume_url: string | null;
+  relevance_score: number | null;
+  matched_at: string;
+}
+
+export interface CandidateDetail extends Candidate {
+  raw_resume_json: Record<string, unknown>;
+}
