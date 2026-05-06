@@ -11,6 +11,8 @@ import { Vacancy, EXPERIENCE_OPTIONS, EMPLOYMENT_OPTIONS, SCHEDULE_OPTIONS } fro
 import { Candidate } from "@/types/candidate";
 import useSWR from "swr";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type MatchStep = {
   step: string;
   message: string;
@@ -25,111 +27,437 @@ type MatchStep = {
   pages?: number;
   top_score?: number;
   queries?: string[];
+  hits?: number;
+  upserted?: number;
+  batch?: number;
+  total_batches?: number;
+  skills?: string[];
 };
 
-function stepIcon(step: string, passed?: number) {
-  if (step === "done") return "✓";
-  if (step === "error") return "✕";
-  if (step === "early_stop") return "✓";
-  if (step === "no_results" || step === "switch_search") return "↺";
-  if (step === "new_search") return "→";
-  if (step === "queries_ready") return "✦";
-  if (step === "filtered") return passed ? "✓" : "○";
-  return "·";
+type MethodId = "rematch" | "pool" | "live" | "file";
+
+// ─── Step classification helpers ─────────────────────────────────────────────
+
+function getStepStatus(step: string): "done" | "error" | "warn" | "info" | "active" | "neutral" {
+  if (step === "done" || step === "early_stop") return "done";
+  if (step === "error") return "error";
+  if (step === "no_results" || step === "switch_search" || step === "rate_limit") return "warn";
+  if (["planning", "embedding", "extracting_skills", "queries_ready", "skills_ready",
+       "collection_created", "hh_fetched", "pool_ready", "search_done", "fetched",
+       "new_search", "cleanup"].includes(step)) return "info";
+  if (["scoring", "fetching", "searching", "fetching_hh", "embedding_progress",
+       "next_page", "filtered", "scored"].includes(step)) return "active";
+  return "neutral";
 }
 
-function stepColors(step: string, passed?: number): string {
-  if (step === "done" || step === "early_stop") return "text-green-700 bg-green-50 border-green-200";
-  if (step === "error") return "text-red-600 bg-red-50 border-red-200";
-  if (step === "no_results" || step === "switch_search") return "text-orange-600 bg-orange-50 border-orange-200";
-  if (step === "new_search") return "text-purple-700 bg-purple-50 border-purple-200";
-  if (step === "planning" || step === "embedding") return "text-indigo-600 bg-indigo-50 border-indigo-200";
-  if (step === "queries_ready" || step === "fetched") return "text-indigo-700 bg-indigo-50 border-indigo-200";
-  if (step === "filtered") return passed ? "text-green-700 bg-green-50 border-green-200" : "text-orange-600 bg-orange-50 border-orange-200";
-  if (step === "scoring" || step === "fetching" || step === "searching") return "text-blue-700 bg-blue-50 border-blue-200";
-  return "text-gray-600 bg-gray-50 border-gray-200";
+function getStepPhaseLabel(step: string): string {
+  const map: Record<string, string> = {
+    planning: "Planning",
+    queries_ready: "Ready",
+    extracting_skills: "AI",
+    skills_ready: "AI",
+    collection_created: "Setup",
+    fetching: "Fetch",
+    fetching_hh: "Fetch",
+    hh_fetched: "Fetch",
+    embedding: "Embed",
+    embedding_progress: "Embed",
+    pool_ready: "Index",
+    searching: "Search",
+    search_done: "Search",
+    scoring: "Score",
+    scored: "Score",
+    filtered: "Filter",
+    new_search: "Retry",
+    switch_search: "Retry",
+    no_results: "Empty",
+    rate_limit: "Limit",
+    early_stop: "Done",
+    done: "Done",
+    error: "Error",
+    cleanup: "Cleanup",
+  };
+  return map[step] ?? "···";
 }
 
-function MatchProgress({
+const PHASE_COLORS: Record<string, string> = {
+  done: "#10b981",
+  error: "#ef4444",
+  warn: "#f59e0b",
+  info: "#6366f1",
+  active: "#3b82f6",
+  neutral: "#64748b",
+};
+
+// ─── Terminal Progress Panel ──────────────────────────────────────────────────
+
+const METHOD_ACCENTS: Record<MethodId, { border: string; glow: string; tag: string; dot: string }> = {
+  rematch: { border: "#3b82f6", glow: "rgba(59,130,246,0.15)", tag: "bg-blue-500", dot: "bg-blue-400" },
+  pool:    { border: "#8b5cf6", glow: "rgba(139,92,246,0.15)", tag: "bg-violet-500", dot: "bg-violet-400" },
+  live:    { border: "#10b981", glow: "rgba(16,185,129,0.15)", tag: "bg-emerald-500", dot: "bg-emerald-400" },
+  file:    { border: "#f59e0b", glow: "rgba(245,158,11,0.15)", tag: "bg-amber-500", dot: "bg-amber-400" },
+};
+
+const METHOD_LABELS: Record<MethodId, string> = {
+  rematch: "Smart Rematch",
+  pool:    "Talent Pool",
+  live:    "Live Pool",
+  file:    "File Match",
+};
+
+function TerminalProgress({
   steps,
   running,
   onClear,
-  label: progressLabel = "Smart Rematch Progress",
+  method,
 }: {
   steps: MatchStep[];
   running: boolean;
   onClear: () => void;
-  label?: string;
+  method: MethodId;
 }) {
-  if (steps.length === 0 && !running) return null;
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const accent = METHOD_ACCENTS[method];
   const last = steps[steps.length - 1];
   const isDone = last?.step === "done" || last?.step === "error" || last?.step === "no_results";
+  const isSuccess = last?.step === "done" && (last.matched ?? 0) > 0;
+  const isError = last?.step === "error";
+
+  useEffect(() => {
+    if (running) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [steps, running]);
+
+  if (steps.length === 0 && !running) return null;
+
   return (
-    <div className="mt-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center gap-2">
-        {running && !isDone && (
-          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-        )}
-        <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-          {progressLabel}
+    <div
+      className="mt-4 overflow-hidden rounded-xl"
+      style={{
+        border: `1px solid ${accent.border}40`,
+        boxShadow: `0 0 0 1px ${accent.border}20, 0 4px 20px ${accent.glow}`,
+      }}
+    >
+      {/* Terminal header */}
+      <div
+        className="flex items-center gap-3 px-4 py-2.5"
+        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)", borderBottom: `1px solid ${accent.border}30` }}
+      >
+        {/* Traffic lights */}
+        <div className="flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-full ${isError ? "bg-red-500" : "bg-red-400 opacity-40"}`} />
+          <span className="h-2.5 w-2.5 rounded-full bg-yellow-400 opacity-40" />
+          <span className={`h-2.5 w-2.5 rounded-full ${isSuccess ? "bg-green-400" : "bg-green-400 opacity-40"}`} />
+        </div>
+
+        {/* Method tag */}
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white ${accent.tag}`}>
+          {METHOD_LABELS[method]}
         </span>
+
+        {/* Live indicator */}
+        {running && !isDone && (
+          <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${accent.dot}`} />
+            live
+          </span>
+        )}
+
+        {/* Step counter */}
+        <span className="ml-auto font-mono text-[11px] text-slate-500">
+          {steps.length} events
+        </span>
+
+        {/* Clear */}
         {!running && steps.length > 0 && (
           <button
             onClick={onClear}
-            className="ml-auto text-xs text-gray-300 hover:text-gray-500 transition-colors"
-            title="Clear progress"
+            className="ml-2 font-mono text-[11px] text-slate-600 transition-colors hover:text-slate-300"
           >
             ✕ clear
           </button>
         )}
       </div>
-      <div className="space-y-1.5">
+
+      {/* Log body */}
+      <div
+        className="max-h-72 overflow-y-auto px-0 py-2 font-mono text-[12.5px]"
+        style={{ background: "#0f172a" }}
+      >
+        {steps.length === 0 && running && (
+          <div className="flex items-center gap-3 px-4 py-1.5 text-slate-500">
+            <span className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${accent.dot}`} />
+            <span>Connecting to server...</span>
+          </div>
+        )}
+
         {steps.map((s, i) => {
           const isLatest = i === steps.length - 1;
+          const status = getStepStatus(s.step);
+          const phaseColor = PHASE_COLORS[status];
+          const isActive = isLatest && running && !isDone;
+
           return (
             <div
               key={i}
-              className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm transition-all ${stepColors(s.step, s.passed)} ${isLatest && running && !isDone ? "ring-1 ring-blue-300" : ""}`}
+              className="group flex items-start gap-0 px-0 py-0.5 transition-colors hover:bg-white/[0.03]"
             >
-              <span className="mt-px w-3 shrink-0 text-center font-bold leading-none">
-                {isLatest && running && !isDone ? (
-                  <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-blue-400" />
+              {/* Left accent bar */}
+              <div
+                className="ml-3 mr-0 mt-1 h-3 w-0.5 shrink-0 rounded-full opacity-60"
+                style={{ background: phaseColor }}
+              />
+
+              {/* Phase tag */}
+              <div
+                className="mx-2 mt-[3px] shrink-0 rounded px-1 py-px text-[9px] font-bold uppercase tracking-widest"
+                style={{ background: phaseColor + "22", color: phaseColor, minWidth: "42px", textAlign: "center" }}
+              >
+                {getStepPhaseLabel(s.step)}
+              </div>
+
+              {/* Message */}
+              <div className="flex-1 pr-4 leading-relaxed" style={{ color: isActive ? "#e2e8f0" : "#94a3b8" }}>
+                {isActive ? (
+                  <span>
+                    {s.message}
+                    <span className="ml-0.5 inline-block h-3 w-px animate-pulse bg-slate-300 align-middle" />
+                  </span>
                 ) : (
-                  stepIcon(s.step, s.passed)
+                  s.message
                 )}
-              </span>
-              <span className="leading-snug">{s.message}</span>
+
+                {/* Extra detail chips */}
+                {s.queries && s.queries.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {s.queries.map((q, qi) => (
+                      <span key={qi} className="rounded bg-blue-500/10 px-1.5 py-px text-[10px] text-blue-400">
+                        {q}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {s.skills && s.skills.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {s.skills.slice(0, 8).map((sk, ski) => (
+                      <span key={ski} className="rounded bg-emerald-500/10 px-1.5 py-px text-[10px] text-emerald-400">
+                        {sk}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {s.step === "embedding_progress" && s.batch != null && s.total_batches != null && (
+                  <div className="mt-1 h-1 w-32 overflow-hidden rounded-full bg-slate-700">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                      style={{ width: `${(s.batch / s.total_batches) * 100}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Timestamp-style step number */}
+              <div className="mr-3 shrink-0 font-mono text-[10px] text-slate-700">
+                #{String(i + 1).padStart(2, "0")}
+              </div>
             </div>
           );
         })}
-        {running && !isDone && steps.length === 0 && (
-          <div className="flex items-center gap-2 px-1 text-sm text-gray-400">
-            <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-blue-400" />
-            Connecting...
+
+        {/* Final status banner */}
+        {isDone && (
+          <div
+            className="mx-3 mt-2 rounded-lg px-3 py-2"
+            style={{
+              background: isError ? "#ef444415" : isSuccess ? "#10b98115" : "#f59e0b15",
+              border: `1px solid ${isError ? "#ef444430" : isSuccess ? "#10b98130" : "#f59e0b30"}`,
+            }}
+          >
+            <span
+              className="font-mono text-[11px] font-semibold"
+              style={{ color: isError ? "#f87171" : isSuccess ? "#34d399" : "#fbbf24" }}
+            >
+              {isError ? "✕ Process failed" : isSuccess ? `✓ Done — ${last?.matched} candidate${(last?.matched ?? 0) !== 1 ? "s" : ""} saved` : "○ No qualifying candidates found"}
+            </span>
           </div>
         )}
+
+        <div ref={bottomRef} />
       </div>
     </div>
   );
 }
 
+// ─── Matching Method Card ─────────────────────────────────────────────────────
+
+type MethodCardProps = {
+  id: MethodId;
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  steps: string[];
+  badge?: React.ReactNode;
+  running: boolean;
+  disabled: boolean;
+  result?: number | null;   // matched count after last run
+  onClick: () => void;
+  onStop?: () => void;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
+};
+
+function MethodCard({ id, icon, label, description, steps, badge, running, disabled, result, onClick, onStop, accentColor, accentBg, accentBorder }: MethodCardProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const hasResult = result != null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={onClick}
+        disabled={disabled || running}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className="group relative flex w-full flex-col items-start gap-2 overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+        style={{
+          borderColor: running ? accentColor : hasResult && result! > 0 ? accentColor + "60" : "#e2e8f0",
+          background: running ? accentBg : "white",
+          boxShadow: running ? `0 0 0 2px ${accentColor}40, 0 4px 12px ${accentColor}20` : "none",
+        }}
+      >
+        {/* Running shimmer */}
+        {running && (
+          <div
+            className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
+            style={{ background: `linear-gradient(90deg, transparent, ${accentColor}10, transparent)` }}
+          />
+        )}
+
+        {/* Icon + badge row */}
+        <div className="flex w-full items-start justify-between">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-base"
+            style={{ background: accentBg, color: accentColor, border: `1px solid ${accentBorder}` }}
+          >
+            {icon}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {/* Result star badge */}
+            {hasResult && !running && (
+              <span
+                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  background: result! > 0 ? accentColor + "18" : "#64748b18",
+                  color: result! > 0 ? accentColor : "#64748b",
+                  border: `1px solid ${result! > 0 ? accentColor + "30" : "#64748b30"}`,
+                }}
+              >
+                {result! > 0 ? "★" : "○"} {result! > 0 ? `${result} found` : "0 found"}
+              </span>
+            )}
+            {badge}
+          </div>
+        </div>
+
+        {/* Label */}
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-gray-800 group-hover:text-gray-900">
+            {label}
+          </span>
+          {running && (
+            <span
+              className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{ background: accentBg, color: accentColor }}
+            >
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: accentColor }} />
+              Running
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        <p className="text-[11.5px] leading-relaxed text-gray-400">{description}</p>
+      </button>
+
+      {/* Stop button — shown when running */}
+      {running && onStop && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onStop(); }}
+          className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
+          style={{
+            background: "#0f172a",
+            color: "#f87171",
+            border: "1px solid #ef444430",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+          }}
+          title="Stop matching"
+        >
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
+            <rect x="1" y="1" width="8" height="8" rx="1.5"/>
+          </svg>
+          Stop
+        </button>
+      )}
+
+      {/* Tooltip */}
+      {showTooltip && !running && !disabled && (
+        <div
+          className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl p-3 shadow-xl"
+          style={{
+            background: "#0f172a",
+            border: `1px solid ${accentColor}40`,
+            boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${accentColor}20`,
+          }}
+        >
+          <p
+            className="mb-2 text-[10px] font-bold uppercase tracking-widest"
+            style={{ color: accentColor }}
+          >
+            How it works
+          </p>
+          <ol className="space-y-1.5">
+            {steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-[11.5px] text-slate-300">
+                <span
+                  className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold"
+                  style={{ background: accentColor + "20", color: accentColor }}
+                >
+                  {i + 1}
+                </span>
+                {s}
+              </li>
+            ))}
+          </ol>
+          {/* Arrow */}
+          <div
+            className="absolute -bottom-1.5 left-6 h-3 w-3 rotate-45"
+            style={{ background: "#0f172a", border: `1px solid ${accentColor}40`, borderTop: "none", borderLeft: "none" }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Other helpers ────────────────────────────────────────────────────────────
+
 type Props = { params: Promise<{ id: string }> };
 
-const label = (val: string | null, opts: { value: string; label: string }[]) =>
+const labelOf = (val: string | null, opts: { value: string; label: string }[]) =>
   opts.find((o) => o.value === val)?.label ?? val;
 
 function CandidateRow({ candidate }: { candidate: Candidate }) {
   const router = useRouter();
-  const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
-    || candidate.title
-    || "Anonymous";
+  const name =
+    [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") ||
+    candidate.title ||
+    "Anonymous";
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
     : null;
 
   return (
     <tr
-      className="group cursor-pointer hover:bg-gray-50 transition-colors"
+      className="group cursor-pointer hover:bg-slate-50/60 transition-colors"
       onClick={() => router.push(`/candidates/${candidate.id}`)}
     >
       <td className="py-3 pl-4 pr-3">
@@ -143,7 +471,9 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
               </div>
             )}
           </div>
-          <span className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{name}</span>
+          <span className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+            {name}
+          </span>
         </div>
       </td>
       <td className="px-3 py-3 text-sm text-gray-500 max-w-[160px] truncate">{candidate.title || "—"}</td>
@@ -161,11 +491,15 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
       </td>
       <td className="px-3 py-3 pr-4">
         {candidate.relevance_score != null && (
-          <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-            candidate.relevance_score >= 70 ? "bg-green-50 text-green-700" :
-            candidate.relevance_score >= 40 ? "bg-yellow-50 text-yellow-700" :
-            "bg-red-50 text-red-600"
-          }`}>
+          <span
+            className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
+              candidate.relevance_score >= 70
+                ? "bg-green-50 text-green-700"
+                : candidate.relevance_score >= 40
+                ? "bg-yellow-50 text-yellow-700"
+                : "bg-red-50 text-red-600"
+            }`}
+          >
             {candidate.relevance_score}%
           </span>
         )}
@@ -186,17 +520,35 @@ function InfoItem({ label, value }: { label: string; value?: string | null }) {
 
 const PROGRESS_KEY = (id: string) => `rematch-progress-${id}`;
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function VacancyDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
+
+  // ── matching state ────────────────────────────────────────────────────────
   const [rematching, setRematching] = useState(false);
   const [matchSteps, setMatchSteps] = useState<MatchStep[]>([]);
+  const [rematchResult, setRematchResult] = useState<number | null>(null);
+
   const [poolMatching, setPoolMatching] = useState(false);
   const [poolSteps, setPoolSteps] = useState<MatchStep[]>([]);
+  const [poolResult, setPoolResult] = useState<number | null>(null);
+
+  const [livePoolMatching, setLivePoolMatching] = useState(false);
+  const [livePoolSteps, setLivePoolSteps] = useState<MatchStep[]>([]);
+  const [liveResult, setLiveResult] = useState<number | null>(null);
+
   const [fileMatching, setFileMatching] = useState(false);
+  const [fileResult, setFileResult] = useState<number | null>(null);
+
+  // EventSource refs — used by stop handlers
+  const rematchSourceRef = useRef<EventSource | null>(null);
+  const poolSourceRef    = useRef<EventSource | null>(null);
+  const liveSourceRef    = useRef<EventSource | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Restore persisted progress on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PROGRESS_KEY(id));
@@ -204,7 +556,6 @@ export default function VacancyDetailPage({ params }: Props) {
     } catch {}
   }, [id]);
 
-  // Persist steps whenever they change
   useEffect(() => {
     if (matchSteps.length === 0) return;
     try {
@@ -229,10 +580,12 @@ export default function VacancyDetailPage({ params }: Props) {
   );
 
   const { data: rawCandidates = [], mutate: mutateCandidates } = useSWR<Candidate[]>(
-    vacancy?.status === "approved" || vacancy?.status === "closed" || vacancy?.status === "archived" ? `candidates-${id}` : null,
+    vacancy?.status === "approved" || vacancy?.status === "closed" || vacancy?.status === "archived"
+      ? `candidates-${id}`
+      : null,
     () => candidateApi.byVacancy(id).then((r) => r.data)
   );
-  // Sort candidates by relevance_score descending
+
   const candidates = [...rawCandidates].sort(
     (a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0)
   );
@@ -244,6 +597,8 @@ export default function VacancyDetailPage({ params }: Props) {
       </div>
     );
   }
+
+  // ── Actions ──────────────────────────────────────────────────────────────────
 
   const duplicate = async () => {
     try {
@@ -271,7 +626,9 @@ export default function VacancyDetailPage({ params }: Props) {
       mutateVacancy(res.data);
       toast.success("Vacancy approved!");
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Approval failed";
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Approval failed";
       toast.error(msg);
     }
   };
@@ -286,99 +643,126 @@ export default function VacancyDetailPage({ params }: Props) {
     }
   };
 
+  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching;
+
+  // ── Smart Rematch ─────────────────────────────────────────────────────────
   const rematch = () => {
     setRematching(true);
     setMatchSteps([]);
-    try { localStorage.removeItem(PROGRESS_KEY(id)); } catch {};
-
-    const source = new EventSource(
-      `${API_BASE}/api/matching/vacancies/${id}/rematch-stream`,
-      { withCredentials: true }
-    );
-
+    setRematchResult(null);
+    try { localStorage.removeItem(PROGRESS_KEY(id)); } catch {}
+    const source = new EventSource(`${API_BASE}/api/matching/vacancies/${id}/rematch-stream`, { withCredentials: true });
+    rematchSourceRef.current = source;
     source.onmessage = (e) => {
       const event: MatchStep = JSON.parse(e.data);
       setMatchSteps((prev) => [...prev, event]);
-
       if (event.step === "done") {
-        source.close();
-        setRematching(false);
-        mutateCandidates();
-        if ((event.matched ?? 0) > 0) {
-          toast.success(`Found ${event.matched} candidates`);
-        } else {
-          toast.info("No qualifying candidates found.");
-        }
+        source.close(); rematchSourceRef.current = null;
+        setRematching(false); mutateCandidates();
+        setRematchResult(event.matched ?? 0);
+        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates`) : toast.info("No qualifying candidates found.");
       }
       if (event.step === "error") {
-        source.close();
-        setRematching(false);
-        toast.error(event.message);
+        source.close(); rematchSourceRef.current = null;
+        setRematching(false); toast.error(event.message);
       }
     };
-
     source.onerror = () => {
-      source.close();
-      setRematching(false);
-      setMatchSteps((prev) => [
-        ...prev,
-        { step: "error", message: "Connection lost. Please try again." },
-      ]);
+      source.close(); rematchSourceRef.current = null; setRematching(false);
+      setMatchSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
     };
   };
 
+  const stopRematch = () => {
+    rematchSourceRef.current?.close();
+    rematchSourceRef.current = null;
+    setRematching(false);
+    setMatchSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+  };
+
+  // ── Talent Pool ───────────────────────────────────────────────────────────
   const matchFromPool = () => {
     setPoolMatching(true);
     setPoolSteps([]);
-
-    const source = new EventSource(
-      `${API_BASE}/api/matching/vacancies/${id}/match-from-pool-stream`,
-      { withCredentials: true }
-    );
-
+    setPoolResult(null);
+    const source = new EventSource(`${API_BASE}/api/matching/vacancies/${id}/match-from-pool-stream`, { withCredentials: true });
+    poolSourceRef.current = source;
     source.onmessage = (e) => {
       const event: MatchStep = JSON.parse(e.data);
       setPoolSteps((prev) => [...prev, event]);
-
       if (event.step === "done") {
-        source.close();
-        setPoolMatching(false);
-        mutateCandidates();
-        mutatePool();
-        if ((event.matched ?? 0) > 0) {
-          toast.success(`Found ${event.matched} candidates from talent pool`);
-        } else {
-          toast.info("No qualifying candidates found in talent pool.");
-        }
+        source.close(); poolSourceRef.current = null;
+        setPoolMatching(false); mutateCandidates(); mutatePool();
+        setPoolResult(event.matched ?? 0);
+        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates from talent pool`) : toast.info("No qualifying candidates found in talent pool.");
       }
       if (event.step === "error") {
-        source.close();
-        setPoolMatching(false);
-        toast.error(event.message);
+        source.close(); poolSourceRef.current = null;
+        setPoolMatching(false); toast.error(event.message);
       }
     };
-
     source.onerror = () => {
-      source.close();
-      setPoolMatching(false);
-      setPoolSteps((prev) => [
-        ...prev,
-        { step: "error", message: "Connection lost. Please try again." },
-      ]);
+      source.close(); poolSourceRef.current = null; setPoolMatching(false);
+      setPoolSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
     };
   };
 
+  const stopPool = () => {
+    poolSourceRef.current?.close();
+    poolSourceRef.current = null;
+    setPoolMatching(false);
+    setPoolSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+  };
+
+  // ── Live Pool ─────────────────────────────────────────────────────────────
+  const matchFromLivePool = () => {
+    setLivePoolMatching(true);
+    setLivePoolSteps([]);
+    setLiveResult(null);
+    const source = new EventSource(`${API_BASE}/api/matching/vacancies/${id}/match-from-live-pool-stream`, { withCredentials: true });
+    liveSourceRef.current = source;
+    source.onmessage = (e) => {
+      const event: MatchStep = JSON.parse(e.data);
+      setLivePoolSteps((prev) => [...prev, event]);
+      if (event.step === "done") {
+        source.close(); liveSourceRef.current = null;
+        setLivePoolMatching(false); mutateCandidates();
+        setLiveResult(event.matched ?? 0);
+        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates via live pool`) : toast.info("No qualifying candidates found in live pool.");
+      }
+      if (event.step === "error") {
+        source.close(); liveSourceRef.current = null;
+        setLivePoolMatching(false); toast.error(event.message);
+      }
+    };
+    source.onerror = () => {
+      source.close(); liveSourceRef.current = null; setLivePoolMatching(false);
+      setLivePoolSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
+    };
+  };
+
+  const stopLivePool = () => {
+    liveSourceRef.current?.close();
+    liveSourceRef.current = null;
+    setLivePoolMatching(false);
+    setLivePoolSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+  };
+
+  // ── File upload ───────────────────────────────────────────────────────────
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
     setFileMatching(true);
+    setFileResult(null);
     try {
       const res = await matchingApi.matchFromFile(id, file);
       toast.success(`${res.data.name} — score: ${res.data.score}%`);
       mutateCandidates();
+      setFileResult(1);
     } catch {
       toast.error("Failed to match from file");
+      setFileResult(0);
     } finally {
       setFileMatching(false);
     }
@@ -387,7 +771,11 @@ export default function VacancyDetailPage({ params }: Props) {
   const salary = [
     vacancy.salary_from ? new Intl.NumberFormat("ru-RU").format(vacancy.salary_from) : null,
     vacancy.salary_to ? new Intl.NumberFormat("ru-RU").format(vacancy.salary_to) : null,
-  ].filter(Boolean).join(" – ");
+  ]
+    .filter(Boolean)
+    .join(" – ");
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <div>
@@ -398,27 +786,21 @@ export default function VacancyDetailPage({ params }: Props) {
         ← Back
       </button>
 
-      {/* Main card */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        {/* Title + status */}
+      {/* Vacancy card */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-xl font-semibold text-gray-900">{vacancy.title || "Untitled"}</h1>
           <StatusBadge status={vacancy.status} />
         </div>
 
-        {/* Meta grid */}
         <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
           <InfoItem label="Area" value={vacancy.area} />
-          <InfoItem
-            label="Salary"
-            value={salary ? `${salary} ${vacancy.currency}` : null}
-          />
-          <InfoItem label="Experience" value={label(vacancy.experience, EXPERIENCE_OPTIONS)} />
-          <InfoItem label="Employment" value={label(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
-          <InfoItem label="Schedule" value={label(vacancy.schedule, SCHEDULE_OPTIONS)} />
+          <InfoItem label="Salary" value={salary ? `${salary} ${vacancy.currency}` : null} />
+          <InfoItem label="Experience" value={labelOf(vacancy.experience, EXPERIENCE_OPTIONS)} />
+          <InfoItem label="Employment" value={labelOf(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
+          <InfoItem label="Schedule" value={labelOf(vacancy.schedule, SCHEDULE_OPTIONS)} />
         </div>
 
-        {/* Skills */}
         {(vacancy.skills?.length ?? 0) > 0 && (
           <div className="mt-5 flex flex-wrap gap-1.5">
             {(vacancy.skills ?? []).map((s) => (
@@ -429,21 +811,16 @@ export default function VacancyDetailPage({ params }: Props) {
           </div>
         )}
 
-        {/* Description */}
         {vacancy.description && (
           <p className="mt-5 border-t border-gray-100 pt-4 text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">
             {vacancy.description}
           </p>
         )}
 
-        {/* Actions */}
+        {/* General actions */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>
-            Edit
-          </Button>
-          <Button variant="outline" size="sm" onClick={duplicate}>
-            Duplicate
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>Edit</Button>
+          <Button variant="outline" size="sm" onClick={duplicate}>Duplicate</Button>
           {vacancy.status === "draft" && vacancy.is_approvable && (
             <Button size="sm" onClick={approve}>Approve & Publish</Button>
           )}
@@ -454,97 +831,179 @@ export default function VacancyDetailPage({ params }: Props) {
           )}
           <div className="ml-auto flex gap-2">
             {vacancy.status !== "archived" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={archive}
-                className="text-red-400 hover:text-red-600 hover:border-red-200"
-              >
+              <Button variant="outline" size="sm" onClick={archive} className="text-red-400 hover:text-red-600 hover:border-red-200">
                 Archive
               </Button>
-            )}
-            {vacancy.status === "approved" && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.txt"
-                  className="hidden"
-                  onChange={onFileChange}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={fileMatching}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {fileMatching ? "Analyzing..." : "Match from File"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={matchFromPool}
-                  disabled={poolMatching || rematching}
-                  title={poolStatus?.points_count ? `Search ${poolStatus.points_count.toLocaleString()} indexed candidates` : "Talent pool is empty — run ingestion first"}
-                >
-                  {poolMatching ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Searching Pool...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5">
-                      <span className="text-xs">⚡</span>
-                      Talent Pool
-                      {(poolStatus?.points_count ?? 0) > 0 && (
-                        <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
-                          {poolStatus!.points_count.toLocaleString()}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </Button>
-                <Button size="sm" onClick={rematch} disabled={rematching || poolMatching}>
-                  {rematching ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Running...
-                    </span>
-                  ) : "Smart Rematch"}
-                </Button>
-              </>
             )}
           </div>
         </div>
       </div>
 
-      {/* Rematch progress */}
-      <MatchProgress steps={matchSteps} running={rematching} onClear={clearProgress} />
+      {/* ── AI Matching Panel ───────────────────────────────────────────────── */}
+      {vacancy.status === "approved" && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          {/* Section header */}
+          <div className="mb-4 flex items-center gap-2.5">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
+              </svg>
+            </div>
+            <span className="text-[13px] font-semibold text-gray-800">AI Candidate Matching</span>
+            <span className="ml-auto text-[11px] text-gray-400">Hover cards to see how each method works</span>
+          </div>
 
-      {/* Pool match progress */}
-      <MatchProgress
-        steps={poolSteps}
-        running={poolMatching}
-        onClear={() => setPoolSteps([])}
-        label="Talent Pool Search Progress"
-      />
+          {/* Method cards grid */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* Smart Rematch */}
+            <MethodCard
+              id="rematch"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                </svg>
+              }
+              label="Smart Rematch"
+              description="Searches HH.uz live using AI-generated semantic queries"
+              steps={[
+                "AI generates 6 search queries (RU + EN)",
+                "Search HH.uz — up to 2000 resumes",
+                "Pre-filter by title keyword overlap",
+                "Ollama scores each resume 0–100",
+                "Top 10 with score ≥60 saved to MongoDB",
+              ]}
+              running={rematching}
+              disabled={anyRunning && !rematching}
+              result={rematchResult}
+              onClick={rematch}
+              onStop={stopRematch}
+              accentColor="#3b82f6"
+              accentBg="#eff6ff"
+              accentBorder="#bfdbfe"
+            />
 
-      {/* Candidates */}
+            {/* Talent Pool */}
+            <MethodCard
+              id="pool"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+              }
+              label="Talent Pool"
+              description="Searches pre-indexed candidates in the talent pool via vector similarity"
+              steps={[
+                "Embed vacancy description (768-dim vector)",
+                "Qdrant: cosine similarity search (threshold ≥0.5)",
+                "Retrieve top 50 closest candidates",
+                "Ollama re-scores top 30 precisely",
+                "Top 10 with score ≥60 saved to MongoDB",
+              ]}
+              badge={
+                (poolStatus?.points_count ?? 0) > 0 ? (
+                  <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+                    {poolStatus!.points_count.toLocaleString()}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-400">empty</span>
+                )
+              }
+              running={poolMatching}
+              disabled={anyRunning && !poolMatching}
+              result={poolResult}
+              onClick={matchFromPool}
+              onStop={stopPool}
+              accentColor="#8b5cf6"
+              accentBg="#f5f3ff"
+              accentBorder="#ddd6fe"
+            />
+
+            {/* Live Pool */}
+            <MethodCard
+              id="live"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+              }
+              label="Live Pool"
+              description="Fetches 2000 fresh HH.uz resumes, indexes temporarily, then vector-matches"
+              steps={[
+                "AI extracts skills from vacancy description",
+                "Fetch 2000 fresh HH.uz resumes (20p × 100)",
+                "Embed all resumes → temporary Qdrant collection",
+                "Vector search with threshold ≥0.55 (cosine similarity)",
+                "Ollama re-scores top 30 → top 10 to MongoDB",
+                "Temporary collection deleted after use",
+              ]}
+              running={livePoolMatching}
+              disabled={anyRunning && !livePoolMatching}
+              result={liveResult}
+              onClick={matchFromLivePool}
+              onStop={stopLivePool}
+              accentColor="#10b981"
+              accentBg="#ecfdf5"
+              accentBorder="#a7f3d0"
+            />
+
+            {/* File Upload */}
+            <div className="relative">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt"
+                className="hidden"
+                onChange={onFileChange}
+              />
+              <MethodCard
+                id="file"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
+                }
+                label="Match from File"
+                description="Upload a single PDF or DOCX resume to evaluate against this vacancy"
+                steps={[
+                  "Extract text from PDF / DOCX file",
+                  "AI parses: name, title, skills, salary",
+                  "Ollama scores fit against vacancy 0–100",
+                  "Saved as candidate in MongoDB",
+                ]}
+                running={fileMatching}
+                disabled={anyRunning && !fileMatching}
+                result={fileResult}
+                onClick={() => fileInputRef.current?.click()}
+                accentColor="#f59e0b"
+                accentBg="#fffbeb"
+                accentBorder="#fde68a"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Progress Terminals ──────────────────────────────────────────────── */}
+      <TerminalProgress steps={matchSteps} running={rematching} onClear={clearProgress} method="rematch" />
+      <TerminalProgress steps={poolSteps} running={poolMatching} onClear={() => setPoolSteps([])} method="pool" />
+      <TerminalProgress steps={livePoolSteps} running={livePoolMatching} onClear={() => setLivePoolSteps([])} method="live" />
+
+      {/* ── Candidates ──────────────────────────────────────────────────────── */}
       {candidates.length > 0 && (
         <div className="mt-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
             Matched Candidates ({candidates.length})
           </p>
-          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Name</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Position</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Area</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Salary</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Skills</th>
-                  <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">Match</th>
+                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">Name</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Position</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Area</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Salary</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Skills</th>
+                  <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400">Match</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -556,14 +1015,18 @@ export default function VacancyDetailPage({ params }: Props) {
       )}
 
       {vacancy.status === "approved" && candidates.length === 0 && (
-        <div className="mt-6 rounded-xl border border-dashed border-gray-200 p-10 text-center">
-          <p className="text-sm text-gray-400">No candidates yet.</p>
-          <p className="mt-1 text-xs text-gray-300">
-            Use <span className="font-medium">Smart Rematch</span> to search HH.uz live, or{" "}
-            <span className="font-medium">Talent Pool</span> to search indexed Uzbek candidates.
-          </p>
+        <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-10 text-center">
+          <p className="text-sm text-gray-400">No candidates yet — choose a matching method above.</p>
         </div>
       )}
+
+      {/* Shimmer keyframe */}
+      <style>{`
+        @keyframes shimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+      `}</style>
     </div>
   );
 }

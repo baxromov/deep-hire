@@ -112,7 +112,9 @@ async def run_ingestion(
         batch_size = 50
         for i in range(0, len(stub_ids), batch_size):
             batch_ids = stub_ids[i: i + batch_size]
-            full_resumes = await get_resume_details_bulk(batch_ids, concurrency=5)
+            full_resumes, rate_limited = await get_resume_details_bulk(batch_ids, concurrency=5)
+            if rate_limited:
+                logger.warning("Ingestion: hh.uz rate limited %d requests in batch %d", rate_limited, i // batch_size + 1)
             valid = [r for r in full_resumes if r.get("id")]
 
             # Build text blobs and embed

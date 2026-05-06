@@ -53,5 +53,11 @@ class Settings(BaseSettings):
     # Smart rematch: max candidates to save per vacancy
     match_top_n: int = 10
 
+    # Live pool matching (Stage 2 revised — ephemeral Qdrant collection per session)
+    live_pool_pages: int = 20                 # 20 pages × 100 = 2000 candidates
+    live_pool_per_page: int = 100             # HH.uz supports up to 100 per page
+    live_pool_score_threshold: float = 0.55   # Qdrant cosine similarity gate (0.55 practical for Uzbek CVs)
+    live_pool_batch_delay: float = 0.3        # seconds pause between HH detail-fetch batches (rate limit)
+
 
 settings = Settings()

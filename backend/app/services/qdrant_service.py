@@ -162,3 +162,82 @@ async def collection_info(client: AsyncQdrantClient) -> Dict[str, Any]:
         }
     except Exception:
         return {"points_count": 0, "indexed_vectors_count": 0, "status": "not_found"}
+
+
+# ── Temporary collection helpers (live pool matching) ─────────────────────────
+
+async def ensure_temp_collection(client: AsyncQdrantClient, collection_name: str) -> None:
+    """Create a temporary named collection for one live-pool matching session.
+
+    No payload indexes — temp collections are searched then deleted immediately.
+    Silently reuses an existing collection (handles crash-recovery for same name).
+    """
+    existing = {c.name for c in (await client.get_collections()).collections}
+    if collection_name not in existing:
+        await client.create_collection(
+            collection_name=collection_name,
+            vectors_config=qmodels.VectorParams(size=VECTOR_SIZE, distance=DISTANCE),
+        )
+        logger.info("Created temp Qdrant collection '%s'", collection_name)
+    else:
+        logger.debug("Temp collection '%s' already exists (prior crash?)", collection_name)
+
+
+async def upsert_to_temp_collection(
+    client: AsyncQdrantClient,
+    collection_name: str,
+    resumes: List[Dict[str, Any]],
+    vectors: List[List[float]],
+) -> int:
+    """Upsert resume vectors into a named temp collection."""
+    points = []
+    for resume, vector in zip(resumes, vectors):
+        resume_id = resume.get("id") or ""
+        if not resume_id or not vector:
+            continue
+        point_id = int(hashlib.sha1(resume_id.encode()).hexdigest(), 16) % (2**53)
+        points.append(
+            qmodels.PointStruct(
+                id=point_id,
+                vector=vector,
+                payload=_resume_payload(resume),
+            )
+        )
+
+    if not points:
+        return 0
+
+    batch_size = 200
+    for i in range(0, len(points), batch_size):
+        await client.upsert(
+            collection_name=collection_name,
+            points=points[i:i + batch_size],
+        )
+    return len(points)
+
+
+async def search_temp_collection(
+    client: AsyncQdrantClient,
+    collection_name: str,
+    query_vector: List[float],
+    top_k: int = 50,
+    score_threshold: float = 0.85,
+) -> List[Dict[str, Any]]:
+    """Search a temp collection by vector similarity. No payload filters."""
+    response = await client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        limit=top_k,
+        score_threshold=score_threshold,
+        with_payload=True,
+    )
+    return [hit.payload for hit in response.points if hit.payload]
+
+
+async def delete_temp_collection(client: AsyncQdrantClient, collection_name: str) -> None:
+    """Delete a temporary collection. Safe to call even if it doesn't exist."""
+    try:
+        await client.delete_collection(collection_name)
+        logger.info("Deleted temp Qdrant collection '%s'", collection_name)
+    except Exception as exc:
+        logger.warning("delete_temp_collection '%s' failed: %s", collection_name, exc)

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 REDIS_TOKEN_KEY = "hh:access_token"
 
+_RATE_LIMITED = object()  # sentinel for 429 responses from hh.uz
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -375,7 +377,7 @@ async def search_resumes(vacancy: Vacancy, per_page: int = 50) -> List[Dict[str,
     return items
 
 
-async def _get_resume_detail_single(client: httpx.AsyncClient, resume_id: str, headers: Dict) -> Dict:
+async def _get_resume_detail_single(client: httpx.AsyncClient, resume_id: str, headers: Dict):
     try:
         resp = await client.get(
             f"{settings.hh_base_url}/resumes/{resume_id}",
@@ -383,6 +385,9 @@ async def _get_resume_detail_single(client: httpx.AsyncClient, resume_id: str, h
         )
         if resp.status_code == 200:
             return resp.json()
+        if resp.status_code == 429:
+            logger.warning("get_resume_detail: resume %s returned 429 (rate limited by hh.uz)", resume_id)
+            return _RATE_LIMITED
         logger.warning("get_resume_detail: resume %s returned %s", resume_id, resp.status_code)
     except Exception as exc:
         logger.error("get_resume_detail: resume %s failed: %s", resume_id, exc)
@@ -398,20 +403,26 @@ async def get_resume_detail(resume_id: str) -> Dict:
         return await _get_resume_detail_single(client, resume_id, headers)
 
 
-async def get_resume_details_bulk(resume_ids: List[str], concurrency: int = 5) -> List[Dict]:
-    """Fetch multiple resume details concurrently with a semaphore to avoid hammering HH API."""
+async def get_resume_details_bulk(resume_ids: List[str], concurrency: int = 5) -> tuple[List[Dict], int]:
+    """Fetch multiple resume details concurrently.
+
+    Returns (results, rate_limited_count) where rate_limited_count is how many
+    requests hh.uz rejected with 429.
+    """
     token = await get_valid_token()
     if not token:
-        return []
+        return [], 0
 
     headers = {**_build_headers(), "Authorization": f"Bearer {token}"}
     sem = asyncio.Semaphore(concurrency)
 
-    async def _fetch(client: httpx.AsyncClient, rid: str) -> Dict:
+    async def _fetch(client: httpx.AsyncClient, rid: str):
         async with sem:
             return await _get_resume_detail_single(client, rid, headers)
 
     async with httpx.AsyncClient(timeout=15) as client:
-        results = await asyncio.gather(*[_fetch(client, rid) for rid in resume_ids])
+        raw = await asyncio.gather(*[_fetch(client, rid) for rid in resume_ids])
 
-    return list(results)
+    rate_limited_count = sum(1 for r in raw if r is _RATE_LIMITED)
+    results = [{} if r is _RATE_LIMITED else r for r in raw]
+    return results, rate_limited_count

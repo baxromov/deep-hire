@@ -51,6 +51,8 @@ export const matchingApi = {
   },
   matchFromPool: (vacancyId: string) =>
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-pool`),
+  matchFromLivePool: (vacancyId: string) =>
+    api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-live-pool`),
 };
 
 // --- Talent Pool ---
