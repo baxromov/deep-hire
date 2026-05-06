@@ -11,9 +11,17 @@ from app.config import settings
 from app.database import get_qdrant
 from app.models.vacancy import VacancyStatus
 from app.services import ai_service, candidate_service, file_service, hh_service, vacancy_service
-from app.services.embedding_service import build_vacancy_text, embed
+from app.services.embedding_service import build_vacancy_text, embed, embed_batch
 from app.services.hh_service import title_score
-from app.services.qdrant_service import collection_info, search_candidates
+from app.services.ingestion_service import _fetch_resume_page
+from app.services.qdrant_service import (
+    collection_info,
+    search_candidates,
+    ensure_temp_collection,
+    upsert_to_temp_collection,
+    search_temp_collection,
+    delete_temp_collection,
+)
 
 router = APIRouter(prefix="/api/matching", tags=["matching"])
 logger = logging.getLogger(__name__)
@@ -27,6 +35,9 @@ PRE_FILTER_THRESHOLD = 0.2  # min title keyword overlap before sending to Ollama
 # Read thresholds from settings (tunable via env vars)
 MIN_SCORE: int = settings.match_min_score
 TOP_N: int = settings.match_top_n
+
+LIVE_POOL_PAGES: int = settings.live_pool_pages
+LIVE_POOL_PER_PAGE: int = settings.live_pool_per_page
 
 
 def _make_scorer(vacancy, sem: asyncio.Semaphore):
@@ -49,18 +60,22 @@ def _make_scorer(vacancy, sem: asyncio.Semaphore):
     return _score
 
 
-async def _fetch_and_resolve(items: list[dict]) -> list[dict]:
-    """Fetch full resume details, fall back to summary on failure."""
+async def _fetch_and_resolve(items: list[dict]) -> tuple[list[dict], int]:
+    """Fetch full resume details, fall back to summary on failure.
+
+    Returns (resolved_resumes, rate_limited_count).
+    """
     ids = [r["id"] for r in items if r.get("id")]
     if not ids:
-        return []
-    details = await hh_service.get_resume_details_bulk(ids, concurrency=CONCURRENCY)
+        return [], 0
+    details, rate_limited = await hh_service.get_resume_details_bulk(ids, concurrency=CONCURRENCY)
     id_to_summary = {r["id"]: r for r in items if r.get("id")}
-    return [
+    resolved = [
         (detail if detail else id_to_summary.get(rid, {}))
         for rid, detail in zip(ids, details)
         if detail or id_to_summary.get(rid)
     ]
+    return resolved, rate_limited
 
 
 async def rematch(vacancy_id: str):
@@ -103,7 +118,7 @@ async def rematch(vacancy_id: str):
             if not items:
                 break
 
-            resolved = await _fetch_and_resolve(items)
+            resolved, _rl = await _fetch_and_resolve(items)
             if not resolved:
                 break
 
@@ -320,7 +335,12 @@ async def rematch_stream(vacancy_id: str):
                             "count": len(items),
                             "message": f"Page {page + 1}: fetching details for {len(items)} resumes...",
                         })
-                        resolved = await _fetch_and_resolve(items)
+                        resolved, rate_limited = await _fetch_and_resolve(items)
+                        if rate_limited:
+                            await emit({
+                                "step": "rate_limit",
+                                "message": f"hh.uz rate limited {rate_limited} request(s) — some resumes skipped. Results may be partial.",
+                            })
                         if not resolved:
                             break
 
@@ -450,7 +470,7 @@ async def rematch_stream(vacancy_id: str):
 
 async def match_from_pool(vacancy_id: str):
     """
-    Approach B — search the pre-indexed Uzbek talent pool in Qdrant,
+    Approach B — search the pre-indexed talent pool in Qdrant,
     re-score top results with Ollama, save the best candidates to MongoDB.
     """
     vacancy = await vacancy_service.get_vacancy(vacancy_id)
@@ -537,9 +557,36 @@ async def match_from_pool_stream(vacancy_id: str):
                     })
                     return
 
+                # Search plan summary
+                filters = []
+                if vacancy.area:
+                    filters.append(f"area: {vacancy.area}")
+                if vacancy.salary_from:
+                    filters.append(f"salary ≥ {vacancy.salary_from:,}")
+                if vacancy.salary_to:
+                    filters.append(f"salary ≤ {vacancy.salary_to:,}")
+                plan_lines = [
+                    f"Pool: {pool['points_count']:,} indexed candidates",
+                    f"Step 1 → embed vacancy → cosine similarity search (top {settings.pool_top_k})",
+                    f"Step 2 → re-score top {settings.pool_rescore_n} with Ollama LLM",
+                    f"Step 3 → save top {settings.pool_top_n} with score ≥{MIN_SCORE}% to MongoDB",
+                ]
+                if filters:
+                    plan_lines.insert(1, "Filters: " + ", ".join(filters))
+                await emit({
+                    "step": "queries_ready",
+                    "queries": plan_lines,
+                    "message": "Search plan: " + "  →  ".join([
+                        f"{pool['points_count']:,} candidates",
+                        f"top {settings.pool_top_k} by vector",
+                        f"re-score {settings.pool_rescore_n}",
+                        f"save top {settings.pool_top_n}",
+                    ]),
+                })
+
                 await emit({
                     "step": "embedding",
-                    "message": f"Embedding vacancy into vector space... (pool size: {pool['points_count']})",
+                    "message": f"Embedding vacancy into vector space... (pool: {pool['points_count']:,})",
                 })
                 vacancy_text = build_vacancy_text(vacancy)
                 query_vector = await embed(vacancy_text)
@@ -614,7 +661,7 @@ async def match_from_pool_stream(vacancy_id: str):
                     "matched": count,
                     "qualifying": len(good),
                     "message": (
-                        f"Done! Saved {count} candidates from the Uzbek talent pool "
+                        f"Done! Saved {count} candidates from the talent pool "
                         f"(from {len(good)} qualifying ≥{MIN_SCORE}%)."
                     ),
                 })
@@ -640,9 +687,247 @@ async def match_from_pool_stream(vacancy_id: str):
     )
 
 
+async def _run_live_pool_pipeline(vacancy, emit) -> tuple[int, int]:
+    """
+    Core pipeline for live-pool matching. Fetches 2000 HH candidates into a
+    temporary Qdrant collection, vector-searches with threshold 0.85, Ollama
+    re-scores the top 30, saves qualifying top-10 to MongoDB, then deletes
+    the temp collection.
+
+    emit: async callable(dict) -> None for progress events (no-op for sync callers).
+    Returns (saved_count, qualifying_count).
+    """
+    import httpx
+    from app.services.hh_service import get_valid_token, _build_headers
+    from app.services.embedding_service import build_resume_text
+
+    qdrant = await get_qdrant()
+    vacancy_id = str(vacancy.id)
+    tmp_collection = f"tmp_{vacancy_id}"
+
+    # Step 1 — LLM extracts skills → query vector
+    await emit({"step": "extracting_skills", "message": "Extracting skills from vacancy with LLM..."})
+    extracted = await ai_service.extract_fields(vacancy.description or vacancy.title or "")
+    skill_list = extracted.get("skills") or vacancy.skills or []
+    skill_text = ", ".join(skill_list[:20]) if skill_list else (vacancy.title or "")
+    query_vector = await embed(skill_text)
+    await emit({"step": "skills_ready", "skills": skill_list,
+                "message": f"Skills: {', '.join(skill_list[:5])}{'...' if len(skill_list) > 5 else ''}"})
+
+    # Search plan
+    live_plan = [
+        f"Step 1 → fetch {LIVE_POOL_PAGES * LIVE_POOL_PER_PAGE:,} resumes from HH.uz ({LIVE_POOL_PAGES}p × {LIVE_POOL_PER_PAGE})",
+        f"Step 2 → embed all resumes → temporary Qdrant collection",
+        f"Step 3 → cosine similarity search (threshold ≥{settings.live_pool_score_threshold}, top {settings.pool_top_k})",
+        f"Step 4 → re-score top {settings.pool_rescore_n} with Ollama LLM",
+        f"Step 5 → save top {settings.pool_top_n} with score ≥{MIN_SCORE}% to MongoDB",
+        f"Step 6 → delete temp collection",
+    ]
+    await emit({
+        "step": "queries_ready",
+        "queries": live_plan,
+        "message": "Search plan: " + "  →  ".join([
+            f"fetch {LIVE_POOL_PAGES * LIVE_POOL_PER_PAGE:,}",
+            "embed → index",
+            f"search ≥{settings.live_pool_score_threshold}",
+            f"score top {settings.pool_rescore_n}",
+            f"save top {settings.pool_top_n}",
+        ]),
+    })
+
+    # Step 2 — Create temp collection
+    await ensure_temp_collection(qdrant, tmp_collection)
+    await emit({"step": "collection_created", "collection": tmp_collection,
+                "message": f"Temp Qdrant collection '{tmp_collection}' ready."})
+
+    try:
+        # Step 3 — Fetch stub IDs from HH (20 pages × 100)
+        await emit({"step": "fetching_hh",
+                    "message": f"Fetching {LIVE_POOL_PAGES} pages × {LIVE_POOL_PER_PAGE} from HH.uz..."})
+        token = await get_valid_token()
+        if not token:
+            raise RuntimeError("No HH.uz token available")
+        headers = {**_build_headers(), "Authorization": f"Bearer {token}"}
+        area_id = vacancy.area_hh_id or settings.uzbekistan_area_id
+
+        sem_fetch = asyncio.Semaphore(3)
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http_client:
+            async def fetch_page(p: int) -> list[str]:
+                async with sem_fetch:
+                    items, _ = await _fetch_resume_page(
+                        http_client, headers, area_id, p, LIVE_POOL_PER_PAGE
+                    )
+                    return [r["id"] for r in items if r.get("id")]
+
+            pages_results = await asyncio.gather(
+                *[fetch_page(p) for p in range(LIVE_POOL_PAGES)]
+            )
+
+        stub_ids: list[str] = list(dict.fromkeys(
+            rid for page_ids in pages_results for rid in page_ids
+        ))
+        await emit({"step": "hh_fetched", "count": len(stub_ids),
+                    "message": f"Collected {len(stub_ids)} unique resume IDs from HH.uz."})
+
+        # Step 4 — Fetch full resumes, embed, upsert in batches of 50
+        total_upserted = 0
+        batch_size = 50
+        total_batches = -(-len(stub_ids) // batch_size)
+        for i in range(0, len(stub_ids), batch_size):
+            # Small pause between batches to respect HH.uz rate limits
+            if i > 0:
+                await asyncio.sleep(settings.live_pool_batch_delay)
+            batch_ids = stub_ids[i: i + batch_size]
+            full_resumes, rate_limited = await hh_service.get_resume_details_bulk(batch_ids, concurrency=CONCURRENCY)
+            if rate_limited:
+                await emit({
+                    "step": "rate_limit",
+                    "message": f"hh.uz rate limited {rate_limited} request(s) in this batch — some resumes skipped.",
+                })
+            valid = [r for r in full_resumes if r.get("id")]
+            texts = [build_resume_text(r) for r in valid]
+            vectors = await embed_batch(texts)
+            upserted = await upsert_to_temp_collection(qdrant, tmp_collection, valid, vectors)
+            total_upserted += upserted
+            await emit({"step": "embedding_progress",
+                        "batch": i // batch_size + 1, "total_batches": total_batches,
+                        "upserted": total_upserted,
+                        "message": f"Batch {i // batch_size + 1}/{total_batches}: {total_upserted} indexed."})
+
+        await emit({"step": "pool_ready", "total": total_upserted,
+                    "message": f"Temp pool ready: {total_upserted} candidates indexed."})
+
+        # Step 5 — Vector search with threshold 0.85
+        await emit({"step": "searching",
+                    "message": f"Searching temp pool (threshold ≥{settings.live_pool_score_threshold})..."})
+        pool_hits = await search_temp_collection(
+            qdrant, tmp_collection, query_vector,
+            top_k=settings.pool_top_k,
+            score_threshold=settings.live_pool_score_threshold,
+        )
+        await emit({"step": "search_done", "hits": len(pool_hits),
+                    "message": f"Vector search returned {len(pool_hits)} candidates above threshold."})
+
+        if not pool_hits:
+            return 0, 0
+
+        # Step 6 — Ollama re-score top pool_rescore_n (30)
+        resumes_to_score = [
+            hit["raw_resume_json"]
+            for hit in pool_hits[:settings.pool_rescore_n]
+            if hit.get("raw_resume_json")
+        ]
+        await emit({"step": "scoring", "total": len(resumes_to_score),
+                    "message": f"AI re-scoring {len(resumes_to_score)} candidates with Ollama..."})
+        sem_score = asyncio.Semaphore(SCORE_CONCURRENCY)
+        score_resume = _make_scorer(vacancy, sem_score)
+        scored: list[tuple[dict, int]] = list(
+            await asyncio.gather(*[score_resume(r) for r in resumes_to_score])
+        )
+        good = [(r, s) for r, s in scored if s >= MIN_SCORE]
+        good.sort(key=lambda x: x[1], reverse=True)
+        top_score = max((s for _, s in scored), default=0)
+        await emit({"step": "scored", "passed": len(good), "total": len(scored), "top_score": top_score,
+                    "message": f"{len(good)}/{len(scored)} passed ≥{MIN_SCORE}% (top: {top_score}%)."})
+
+        # Step 7 — Save top pool_top_n (10) to MongoDB
+        top = good[:settings.pool_top_n]
+        tagged = [({**r, "_source": "live_pool"}, s) for r, s in top]
+        count = await candidate_service.replace_candidates(vacancy, tagged)
+        vacancy.last_matched_at = datetime.now(timezone.utc)
+        await vacancy.save()
+
+        return count, len(good)
+
+    finally:
+        # Step 8 — Always delete temp collection
+        await delete_temp_collection(qdrant, tmp_collection)
+        await emit({"step": "cleanup", "message": f"Temporary collection '{tmp_collection}' deleted."})
+
+
+async def match_from_live_pool(vacancy_id: str):
+    """
+    Live-pool flow: fetch 2000 HH candidates → temporary Qdrant collection
+    → vector search ≥0.85 → Ollama re-score → top-10 saved to MongoDB → cleanup.
+    """
+    vacancy = await vacancy_service.get_vacancy(vacancy_id)
+    if not vacancy:
+        raise HTTPException(status_code=404, detail="Vacancy not found")
+    if vacancy.status != VacancyStatus.approved:
+        raise HTTPException(status_code=422, detail="Vacancy must be approved to match candidates")
+
+    async def _noop(event: dict) -> None:
+        logger.debug("live_pool [%s]: %s", event.get("step"), event.get("message", ""))
+
+    count, qualifying = await _run_live_pool_pipeline(vacancy, emit=_noop)
+    logger.info("match_from_live_pool: saved %d/%d qualifying for vacancy %s", count, qualifying, vacancy_id)
+    return {"matched": count, "total": qualifying, "last_matched_at": vacancy.last_matched_at}
+
+
+async def match_from_live_pool_stream(vacancy_id: str):
+    """SSE streaming version of match-from-live-pool."""
+
+    async def event_stream():
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def emit(event: dict) -> None:
+            await queue.put(event)
+
+        async def run() -> None:
+            try:
+                vacancy = await vacancy_service.get_vacancy(vacancy_id)
+                if not vacancy:
+                    await emit({"step": "error", "message": "Vacancy not found."})
+                    return
+                if vacancy.status != VacancyStatus.approved:
+                    await emit({"step": "error", "message": "Vacancy must be approved."})
+                    return
+
+                count, qualifying = await _run_live_pool_pipeline(vacancy, emit=emit)
+
+                if count:
+                    await emit({
+                        "step": "done", "matched": count, "qualifying": qualifying,
+                        "message": (
+                            f"Done! Saved {count} candidates from live pool "
+                            f"(from {qualifying} qualifying ≥{MIN_SCORE}%)."
+                        ),
+                    })
+                else:
+                    await emit({
+                        "step": "done", "matched": 0, "qualifying": 0,
+                        "message": (
+                            f"No candidates scored ≥{MIN_SCORE}% from live pool. "
+                            "Try adjusting vacancy skills or description."
+                        ),
+                    })
+
+            except Exception as exc:
+                logger.error("match_from_live_pool_stream error: %s", exc)
+                await emit({"step": "error", "message": f"Live pool match failed: {exc}"})
+            finally:
+                await queue.put(None)
+
+        asyncio.create_task(run())
+
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 router.add_api_route("/vacancies/{vacancy_id}/rematch", rematch, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/rematch-stream", rematch_stream, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/status", rematch_status, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-file", match_from_file, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-pool", match_from_pool, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-pool-stream", match_from_pool_stream, methods=["GET"])
+router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool", match_from_live_pool, methods=["POST"])
+router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool-stream", match_from_live_pool_stream, methods=["GET"])
