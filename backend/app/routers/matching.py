@@ -26,7 +26,7 @@ from app.services.qdrant_service import (
 router = APIRouter(prefix="/api/matching", tags=["matching"])
 logger = logging.getLogger(__name__)
 
-MAX_PAGES = 40         # max pages per search variant (40 × 50 = 2 000 — HH limit)
+MAX_PAGES = settings.hh_max_search_pages  # Problem 6: hard cap (default 3 pages)
 PER_PAGE = 50          # results per HH page
 CONCURRENCY = 5        # parallel HH detail-fetch requests
 SCORE_CONCURRENCY = 10 # parallel Ollama scoring calls
