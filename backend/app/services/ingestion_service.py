@@ -7,7 +7,7 @@ import httpx
 
 from app.config import settings
 from app.services.embedding_service import build_resume_text, embed_batch
-from app.services.hh_service import get_valid_token, _build_headers, get_resume_details_bulk
+from app.services.hh_service import get_valid_token, _build_headers, get_resume_details_bulk, _guarded_get
 from app.services.qdrant_service import ensure_collection, upsert_candidates
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,8 @@ async def _fetch_resume_page(
         "host": settings.hh_host,
     }
     try:
-        resp = await client.get(
+        resp = await _guarded_get(
+            client,
             f"{settings.hh_base_url}/resumes",
             params=params,
             headers=headers,

@@ -59,5 +59,12 @@ class Settings(BaseSettings):
     live_pool_score_threshold: float = 0.55   # Qdrant cosine similarity gate (0.55 practical for Uzbek CVs)
     live_pool_batch_delay: float = 0.3        # seconds pause between HH detail-fetch batches (rate limit)
 
+    # HH.uz rate-limit protection (Problems 2, 3, 5, 6, 7)
+    hh_global_concurrency: int = 3       # max parallel HH API requests system-wide (central queue)
+    hh_request_delay: float = 0.35       # seconds to sleep after each HH request inside the global sem
+    hh_search_cache_ttl: int = 3600      # seconds to cache HH resume search results in Redis
+    hh_max_search_pages: int = 3         # hard cap on pages fetched per search query
+    hh_retry_backoff: list[float] = [2.0, 5.0]  # wait times between 429 retries (exponential backoff)
+
 
 settings = Settings()

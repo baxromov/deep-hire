@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -15,8 +17,29 @@ from app.models.vacancy import Vacancy
 logger = logging.getLogger(__name__)
 
 REDIS_TOKEN_KEY = "hh:access_token"
+_SEARCH_CACHE_PREFIX = "hh:search:"
 
 _RATE_LIMITED = object()  # sentinel for 429 responses from hh.uz
+
+# ---------------------------------------------------------------------------
+# Global HH rate-limit guard (Problem 2 & 7: central queue, max concurrency)
+# ---------------------------------------------------------------------------
+_HH_SEM: Optional[asyncio.Semaphore] = None
+
+
+def _get_hh_sem() -> asyncio.Semaphore:
+    global _HH_SEM
+    if _HH_SEM is None:
+        _HH_SEM = asyncio.Semaphore(settings.hh_global_concurrency)
+    return _HH_SEM
+
+
+async def _guarded_get(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    """All HH API GETs go through here: global concurrency cap + inter-request delay."""
+    async with _get_hh_sem():
+        resp = await client.get(url, **kwargs)
+        await asyncio.sleep(settings.hh_request_delay)
+        return resp
 
 
 def _utcnow() -> datetime:
@@ -282,6 +305,19 @@ def _build_base_params(vacancy: Vacancy, per_page: int) -> Dict[str, Any]:
     return params
 
 
+def _search_cache_key(text: str, logic: str, field: str, base_params: Dict, page: int) -> str:
+    """Stable Redis key for a search request (Problem 3: result caching)."""
+    key_data = {
+        "text": text, "logic": logic, "field": field, "page": page,
+        "area": base_params.get("area"),
+        "experience": base_params.get("experience"),
+        "employment": base_params.get("employment"),
+        "per_page": base_params.get("per_page"),
+    }
+    digest = hashlib.md5(json.dumps(key_data, sort_keys=True).encode()).hexdigest()
+    return f"{_SEARCH_CACHE_PREFIX}{digest}"
+
+
 async def _do_search(
     client: httpx.AsyncClient,
     headers: Dict,
@@ -291,16 +327,34 @@ async def _do_search(
     base_params: Dict[str, Any],
     page: int = 0,
 ) -> tuple[List[Dict], int]:
-    """Returns (items, total_pages)."""
+    """Returns (items, total_pages). Checks Redis cache before hitting HH."""
+    # Problem 3: serve from cache when available
+    cache_key = _search_cache_key(text, logic, field, base_params, page)
+    redis = await get_redis()
+    cached = await redis.get(cache_key)
+    if cached:
+        data = json.loads(cached)
+        logger.debug("_do_search: cache hit for %r page=%d", text, page)
+        return data["items"], data["pages"]
+
     params = {**base_params, "text": text, "text.logic": logic, "text.period": "", "page": page}
     if field:
         params["text.field"] = field
-    resp = await client.get(f"{settings.hh_base_url}/resumes", params=params, headers=headers)
+    # Problem 2 & 7: all requests go through the global guard
+    resp = await _guarded_get(client, f"{settings.hh_base_url}/resumes", params=params, headers=headers)
     if resp.status_code != 200:
         logger.error("_do_search: HH returned %s — %s", resp.status_code, resp.text[:200])
         return [], 0
     data = resp.json()
-    return data.get("items", []), data.get("pages", 1)
+    items, pages = data.get("items", []), data.get("pages", 1)
+
+    # Store in Redis for future identical queries
+    await redis.set(
+        cache_key,
+        json.dumps({"items": items, "pages": pages}),
+        ex=settings.hh_search_cache_ttl,
+    )
+    return items, pages
 
 
 async def find_search_variant(
@@ -317,23 +371,34 @@ async def find_search_variant(
         return None
 
     base_params = _build_base_params(vacancy, per_page)
+    probe_params = {**base_params, "per_page": 1}  # Problem 1: light-check params
     headers = {**_build_headers(), "Authorization": f"Bearer {token}"}
 
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             for text, logic, field in _title_variants(vacancy.title):
                 logger.info(
-                    "find_search_variant: trying text=%r logic=%s field=%s",
+                    "find_search_variant: probe text=%r logic=%s field=%s",
                     text, logic, field or "all_fields",
                 )
-                items, total_pages = await _do_search(client, headers, text, logic, field, base_params, page=0)
+                # Problem 1: light check — per_page=1 to confirm results exist cheaply
+                probe_items, _ = await _do_search(
+                    client, headers, text, logic, field, probe_params, page=0
+                )
+                if not probe_items:
+                    logger.info("find_search_variant: 0 results on probe, trying next variant")
+                    continue
+
+                # Results confirmed — now fetch full page
+                items, total_pages = await _do_search(
+                    client, headers, text, logic, field, base_params, page=0
+                )
                 if items:
                     logger.info(
                         "find_search_variant: %d results, total_pages=%d for text=%r",
                         len(items), total_pages, text,
                     )
                     return text, logic, field, items, total_pages
-                logger.info("find_search_variant: 0 results, trying next variant")
     except Exception as exc:
         logger.error("find_search_variant failed: %s", exc)
 
@@ -378,20 +443,34 @@ async def search_resumes(vacancy: Vacancy, per_page: int = 50) -> List[Dict[str,
 
 
 async def _get_resume_detail_single(client: httpx.AsyncClient, resume_id: str, headers: Dict):
-    try:
-        resp = await client.get(
-            f"{settings.hh_base_url}/resumes/{resume_id}",
-            headers=headers,
-        )
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code == 429:
-            logger.warning("get_resume_detail: resume %s returned 429 (rate limited by hh.uz)", resume_id)
-            return _RATE_LIMITED
-        logger.warning("get_resume_detail: resume %s returned %s", resume_id, resp.status_code)
-    except Exception as exc:
-        logger.error("get_resume_detail: resume %s failed: %s", resume_id, exc)
-    return {}
+    """Fetch one resume detail with exponential backoff on 429 (Problem 5).
+
+    Uses the global guard (_guarded_get) for system-wide rate limiting.
+    """
+    url = f"{settings.hh_base_url}/resumes/{resume_id}"
+    backoffs = settings.hh_retry_backoff  # e.g. [2.0, 5.0]
+    for attempt in range(len(backoffs) + 1):
+        try:
+            resp = await _guarded_get(client, url, headers=headers)
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 429:
+                if attempt < len(backoffs):
+                    wait = backoffs[attempt]
+                    logger.warning(
+                        "resume %s → 429, backoff %.1fs (attempt %d/%d)",
+                        resume_id, wait, attempt + 1, len(backoffs) + 1,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                logger.warning("resume %s → 429 after %d attempts, skipping", resume_id, attempt + 1)
+                return _RATE_LIMITED
+            logger.warning("resume %s returned %s", resume_id, resp.status_code)
+            return {}
+        except Exception as exc:
+            logger.error("resume %s failed: %s", resume_id, exc)
+            return {}
+    return _RATE_LIMITED
 
 
 async def get_resume_detail(resume_id: str) -> Dict:
@@ -406,18 +485,19 @@ async def get_resume_detail(resume_id: str) -> Dict:
 async def get_resume_details_bulk(resume_ids: List[str], concurrency: int = 5) -> tuple[List[Dict], int]:
     """Fetch multiple resume details concurrently.
 
-    Returns (results, rate_limited_count) where rate_limited_count is how many
-    requests hh.uz rejected with 429.
+    concurrency is a per-call soft limit; the global _HH_SEM is the hard system cap.
+    Returns (results, rate_limited_count).
     """
     token = await get_valid_token()
     if not token:
         return [], 0
 
     headers = {**_build_headers(), "Authorization": f"Bearer {token}"}
-    sem = asyncio.Semaphore(concurrency)
+    # Local sem limits task fan-out; global sem (_guarded_get) limits actual HH traffic
+    local_sem = asyncio.Semaphore(concurrency)
 
     async def _fetch(client: httpx.AsyncClient, rid: str):
-        async with sem:
+        async with local_sem:
             return await _get_resume_detail_single(client, rid, headers)
 
     async with httpx.AsyncClient(timeout=15) as client:
