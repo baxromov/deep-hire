@@ -32,16 +32,26 @@ def _parse_candidate(vacancy_id: PydanticObjectId, resume: Dict[str, Any], relev
 
 
 async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> int:
-    """Delete old candidates for vacancy, insert new scored ones."""
-    await Candidate.find({"vacancy_id": vacancy.id}).delete()
-    count = 0
+    """Upsert candidates: update existing by hh_resume_id, insert new ones."""
+    from pymongo import UpdateOne
+
+    collection = Candidate.get_motor_collection()
+    ops = []
     for resume, score in scored_resumes:
         data = _parse_candidate(vacancy.id, resume, relevance_score=score)
         if not data["hh_resume_id"]:
             continue
-        await Candidate(**data).insert()
-        count += 1
-    return count
+        ops.append(
+            UpdateOne(
+                {"vacancy_id": vacancy.id, "hh_resume_id": data["hh_resume_id"]},
+                {"$set": data},
+                upsert=True,
+            )
+        )
+    if not ops:
+        return 0
+    result = await collection.bulk_write(ops, ordered=False)
+    return result.upserted_count + result.modified_count
 
 
 async def get_candidates_for_vacancy(vacancy_id: str) -> List[Candidate]:

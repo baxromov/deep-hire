@@ -234,6 +234,24 @@ async def search_temp_collection(
     return [hit.payload for hit in response.points if hit.payload]
 
 
+async def search_temp_collection_scored(
+    client: AsyncQdrantClient,
+    collection_name: str,
+    query_vector: List[float],
+    top_k: int = 50,
+    score_threshold: float = 0.0,
+) -> List[tuple]:
+    """Search a temp collection and return (payload, score) pairs sorted by score desc."""
+    response = await client.query_points(
+        collection_name=collection_name,
+        query=query_vector,
+        limit=top_k,
+        score_threshold=score_threshold,
+        with_payload=True,
+    )
+    return [(hit.payload, hit.score) for hit in response.points if hit.payload]
+
+
 async def delete_temp_collection(client: AsyncQdrantClient, collection_name: str) -> None:
     """Delete a temporary collection. Safe to call even if it doesn't exist."""
     try:

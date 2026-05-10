@@ -11,8 +11,7 @@ from app.config import settings
 from app.database import get_qdrant
 from app.models.vacancy import VacancyStatus
 from app.services import ai_service, candidate_service, file_service, hh_service, vacancy_service
-from app.services.embedding_service import build_vacancy_text, embed, embed_batch
-from app.services.hh_service import title_score
+from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch
 from app.services.ingestion_service import _fetch_resume_page
 from app.services.qdrant_service import (
     collection_info,
@@ -20,6 +19,7 @@ from app.services.qdrant_service import (
     ensure_temp_collection,
     upsert_to_temp_collection,
     search_temp_collection,
+    search_temp_collection_scored,
     delete_temp_collection,
 )
 
@@ -30,9 +30,9 @@ MAX_PAGES = settings.hh_max_search_pages  # Problem 6: hard cap (default 3 pages
 PER_PAGE = 50          # results per HH page
 CONCURRENCY = 5        # parallel HH detail-fetch requests
 SCORE_CONCURRENCY = 10 # parallel Ollama scoring calls
-PRE_FILTER_THRESHOLD = 0.2  # min title keyword overlap before sending to Ollama
+REMATCH_TOP_N = 50     # top candidates saved after vector reranking
 
-# Read thresholds from settings (tunable via env vars)
+# Read thresholds from settings (tunable via env vars — used by pool flows)
 MIN_SCORE: int = settings.match_min_score
 TOP_N: int = settings.match_top_n
 
@@ -88,7 +88,6 @@ async def rematch(vacancy_id: str):
     if not vacancy.title:
         return {"matched": 0, "total": 0, "last_matched_at": vacancy.last_matched_at}
 
-    # Build search variants: prefer AI-generated semantic queries, fall back to mechanical
     ai_queries = await ai_service.generate_search_queries(
         vacancy.title, vacancy.description or "", vacancy.skills
     )
@@ -99,67 +98,58 @@ async def rematch(vacancy_id: str):
         variants = hh_service.get_title_variants(vacancy.title)
         logger.info("rematch: AI query generation failed, using mechanical variants")
 
-    sem = asyncio.Semaphore(SCORE_CONCURRENCY)
-    score_resume = _make_scorer(vacancy, sem)
-    collected: list[tuple[dict, int]] = []
+    # Phase 1 — Collect all resumes from HH across all variants and pages
+    all_resumes: list[dict] = []
     seen_ids: set[str] = set()
-
     for text, logic, field in variants:
-        if len(collected) >= TOP_N:
-            break
-
         for page in range(MAX_PAGES):
-            if len(collected) >= TOP_N:
-                break
-
             items, total_pages = await hh_service.search_resumes_page(
                 vacancy, page, text, logic, field, PER_PAGE
             )
             if not items:
                 break
-
             resolved, _rl = await _fetch_and_resolve(items)
-            if not resolved:
-                break
-
-            # Deduplication: skip already-scored resumes
             resolved = [r for r in resolved if r.get("id") not in seen_ids]
             seen_ids.update(r.get("id", "") for r in resolved)
-
-            # Pre-filter by title keyword overlap before expensive Ollama call
-            pre_filtered = [
-                r for r in resolved
-                if title_score(r.get("title", ""), vacancy.title or "") >= PRE_FILTER_THRESHOLD
-            ]
-            to_score = pre_filtered if pre_filtered else resolved
-
-            scored: list[tuple[dict, int]] = list(
-                await asyncio.gather(*[score_resume(r) for r in to_score])
-            )
-            good = [(r, s) for r, s in scored if s >= MIN_SCORE]
-            top_score = max((s for _, s in scored), default=0)
-
-            logger.info(
-                "rematch: variant=%r page=%d fetched=%d pre_filtered=%d scored=%d qualifying=%d top=%d",
-                text, page, len(resolved), len(to_score), len(scored), len(good), top_score,
-            )
-            collected.extend(good)
-
-            # If page 0 of this variant yields nothing, switch to next variant
-            if page == 0 and not good:
-                logger.info("rematch: 0 qualify on page 0 of %r — trying next variant", text)
-                break
-
+            all_resumes.extend(resolved)
+            logger.info("rematch: variant=%r page=%d fetched=%d total_so_far=%d", text, page, len(resolved), len(all_resumes))
             if page + 1 >= total_pages:
                 break
 
-    collected.sort(key=lambda x: x[1], reverse=True)
-    top = collected[:TOP_N]
+    if not all_resumes:
+        return {"matched": 0, "total": 0, "last_matched_at": vacancy.last_matched_at}
+
+    # Phase 2 — Embed all resumes and upsert to a temporary Qdrant collection
+    qdrant = await get_qdrant()
+    tmp_collection = f"tmp_rematch_{vacancy_id}"
+    await ensure_temp_collection(qdrant, tmp_collection)
+
+    try:
+        texts = [build_resume_text(r) for r in all_resumes]
+        vectors = await embed_batch(texts)
+        await upsert_to_temp_collection(qdrant, tmp_collection, all_resumes, vectors)
+        logger.info("rematch: indexed %d resumes into temp collection", len(all_resumes))
+
+        # Phase 3 — Vector search → top REMATCH_TOP_N by cosine similarity
+        vacancy_text = build_vacancy_text(vacancy)
+        query_vector = await embed(vacancy_text)
+        hits = await search_temp_collection_scored(
+            qdrant, tmp_collection, query_vector, top_k=REMATCH_TOP_N
+        )
+
+        top = [
+            ({**payload["raw_resume_json"], "_source": "hh_search"}, int(score * 100))
+            for payload, score in hits
+            if payload.get("raw_resume_json")
+        ]
+    finally:
+        await delete_temp_collection(qdrant, tmp_collection)
+
     count = await candidate_service.replace_candidates(vacancy, top)
     vacancy.last_matched_at = datetime.now(timezone.utc)
     await vacancy.save()
 
-    logger.info("rematch: saved %d/%d qualifying for vacancy %s", count, len(collected), vacancy_id)
+    logger.info("rematch: saved %d top candidates from %d total for vacancy %s", count, len(all_resumes), vacancy_id)
     return {"matched": count, "total": count, "last_matched_at": vacancy.last_matched_at}
 
 
@@ -287,48 +277,28 @@ async def rematch_stream(vacancy_id: str):
                         "message": "Using title-based search: " + "  →  ".join(f'\"{t}\"' for t, _, _ in variants),
                     })
 
-                sem = asyncio.Semaphore(SCORE_CONCURRENCY)
-                score_resume = _make_scorer(vacancy, sem)
-                collected: list[tuple[dict, int]] = []
+                all_resumes: list[dict] = []
                 seen_ids: set[str] = set()
 
-                # ---------- variant loop ----------
+                # ---------- Phase 1: collect all resumes ----------
 
                 for var_idx, (text, logic, field) in enumerate(variants):
-                    if len(collected) >= TOP_N:
-                        break
-
                     if var_idx == 0:
-                        await emit({
-                            "step": "searching",
-                            "message": f"Searching HH.ru: \"{text}\"...",
-                        })
+                        await emit({"step": "searching", "message": f"Searching HH.uz: \"{text}\"..."})
                     else:
-                        await emit({
-                            "step": "new_search",
-                            "message": f"Trying next query: \"{text}\"...",
-                        })
+                        await emit({"step": "new_search", "message": f"Trying next query: \"{text}\"..."})
 
                     variant_has_results = False
-
                     for page in range(MAX_PAGES):
-                        if len(collected) >= TOP_N:
-                            break
-
                         items, total_pages = await hh_service.search_resumes_page(
                             vacancy, page, text, logic, field, PER_PAGE
                         )
                         if not items:
                             if not variant_has_results:
-                                await emit({
-                                    "step": "no_results",
-                                    "message": f"No results for \"{text}\".",
-                                })
+                                await emit({"step": "no_results", "message": f"No results for \"{text}\"."})
                             break
 
                         variant_has_results = True
-
-                        # Fetch details
                         await emit({
                             "step": "fetching",
                             "page": page + 1,
@@ -339,110 +309,84 @@ async def rematch_stream(vacancy_id: str):
                         if rate_limited:
                             await emit({
                                 "step": "rate_limit",
-                                "message": f"hh.uz rate limited {rate_limited} request(s) — some resumes skipped. Results may be partial.",
+                                "message": f"hh.uz rate limited {rate_limited} request(s) — some resumes skipped.",
                             })
                         if not resolved:
                             break
 
-                        # Deduplication + pre-filter
                         resolved = [r for r in resolved if r.get("id") not in seen_ids]
                         seen_ids.update(r.get("id", "") for r in resolved)
-                        pre_filtered = [
-                            r for r in resolved
-                            if title_score(r.get("title", ""), vacancy.title or "") >= PRE_FILTER_THRESHOLD
-                        ]
-                        to_score = pre_filtered if pre_filtered else resolved
-
-                        # Score (rate-limited)
-                        await emit({
-                            "step": "scoring",
-                            "page": page + 1,
-                            "total": len(to_score),
-                            "message": f"Page {page + 1}: AI scoring {len(to_score)}/{len(resolved)} candidates...",
-                        })
-                        scored: list[tuple[dict, int]] = list(
-                            await asyncio.gather(*[score_resume(r) for r in to_score])
-                        )
-                        good = [(r, s) for r, s in scored if s >= MIN_SCORE]
-                        top_score = max((s for _, s in scored), default=0)
+                        all_resumes.extend(resolved)
 
                         await emit({
-                            "step": "filtered",
+                            "step": "collected",
                             "page": page + 1,
-                            "passed": len(good),
-                            "total": len(scored),
-                            "top_score": top_score,
-                            "message": (
-                                f"Page {page + 1}: {len(good)}/{len(scored)} passed ≥{MIN_SCORE}%"
-                                f"  (top score: {top_score}%)"
-                            ),
+                            "added": len(resolved),
+                            "total": len(all_resumes),
+                            "message": f"Page {page + 1}: collected {len(resolved)} new resumes (total: {len(all_resumes)}).",
                         })
 
-                        collected.extend(good)
-
-                        # Page 0 had 0 qualifying → switch to next variant
-                        if page == 0 and not good:
-                            await emit({
-                                "step": "switch_search",
-                                "message": (
-                                    f"0 candidates qualified (top score {top_score}%) — "
-                                    "trying different search terms..."
-                                ),
-                            })
-                            break
-
-                        # Early stop within this variant
-                        if len(collected) >= TOP_N:
-                            await emit({
-                                "step": "early_stop",
-                                "collected": len(collected),
-                                "message": f"Found {len(collected)} qualifying candidates — stopping.",
-                            })
-                            break
-
-                        # No more pages
                         if page + 1 >= total_pages:
                             break
 
-                        await emit({
-                            "step": "next_page",
-                            "page": page + 2,
-                            "collected": len(collected),
-                            "needed": max(0, TOP_N - len(collected)),
-                            "message": (
-                                f"Need {max(0, TOP_N - len(collected))} more — "
-                                f"checking page {page + 2}..."
-                            ),
-                        })
+                if not all_resumes:
+                    await emit({"step": "done", "matched": 0, "message": "No candidates found across all search queries."})
+                    return
+
+                # ---------- Phase 2: embed → temp Qdrant collection ----------
+
+                await emit({
+                    "step": "embedding",
+                    "total": len(all_resumes),
+                    "message": f"Embedding {len(all_resumes)} resumes into temporary vector index...",
+                })
+                qdrant = await get_qdrant()
+                tmp_collection = f"tmp_rematch_{vacancy_id}"
+                await ensure_temp_collection(qdrant, tmp_collection)
+
+                try:
+                    texts = [build_resume_text(r) for r in all_resumes]
+                    vectors = await embed_batch(texts)
+                    upserted = await upsert_to_temp_collection(qdrant, tmp_collection, all_resumes, vectors)
+                    await emit({
+                        "step": "indexed",
+                        "count": upserted,
+                        "message": f"Indexed {upserted} candidates into temporary vector store.",
+                    })
+
+                    # ---------- Phase 3: vector search → top 50 ----------
+
+                    await emit({
+                        "step": "vector_search",
+                        "message": f"Vector searching for top {REMATCH_TOP_N} candidates by cosine similarity...",
+                    })
+                    vacancy_text = build_vacancy_text(vacancy)
+                    query_vector = await embed(vacancy_text)
+                    hits = await search_temp_collection_scored(
+                        qdrant, tmp_collection, query_vector, top_k=REMATCH_TOP_N
+                    )
+
+                    top = [
+                        ({**payload["raw_resume_json"], "_source": "hh_search"}, int(score * 100))
+                        for payload, score in hits
+                        if payload.get("raw_resume_json")
+                    ]
+                finally:
+                    await delete_temp_collection(qdrant, tmp_collection)
+                    await emit({"step": "cleanup", "message": f"Temporary vector index deleted."})
 
                 # ---------- save & finish ----------
 
-                collected.sort(key=lambda x: x[1], reverse=True)
-                top = collected[:TOP_N]
                 count = await candidate_service.replace_candidates(vacancy, top)
                 vacancy.last_matched_at = datetime.now(timezone.utc)
                 await vacancy.save()
 
-                if count:
-                    await emit({
-                        "step": "done",
-                        "matched": count,
-                        "qualifying": len(collected),
-                        "message": (
-                            f"Done! Saved {count} candidates "
-                            f"(from {len(collected)} qualifying ≥{MIN_SCORE}%)."
-                        ),
-                    })
-                else:
-                    await emit({
-                        "step": "done",
-                        "matched": 0,
-                        "qualifying": 0,
-                        "message": (
-                            f"No candidates scored ≥{MIN_SCORE}% across all search variants. "
-                            "Try adjusting vacancy skills or description."
-                        ),
-                    })
+                await emit({
+                    "step": "done",
+                    "matched": count,
+                    "total_collected": len(all_resumes),
+                    "message": f"Done! Saved top {count} candidates (from {len(all_resumes)} collected, ranked by vector similarity).",
+                })
 
             except Exception as exc:
                 logger.error("rematch_stream error: %s", exc)
