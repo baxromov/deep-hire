@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.database import get_qdrant
 from app.models.vacancy import VacancyStatus
-from app.services import ai_service, candidate_service, file_service, hh_service, vacancy_service
+from app.services import ai_service, candidate_service, file_service, hh_service, minio_service, vacancy_service
 from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch
 from app.services.ingestion_service import _fetch_resume_page
 from app.services.qdrant_service import (
@@ -208,6 +208,13 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
         "hh_resume_id": f"file:{file_hash}",
     }).delete()
 
+    # Upload file to MinIO for later retrieval
+    minio_key = None
+    try:
+        minio_key = await minio_service.upload_file(file_bytes, file.filename)
+    except Exception:
+        pass
+
     candidate = Candidate(
         vacancy_id=vacancy.id,
         hh_resume_id=f"file:{file_hash}",
@@ -219,16 +226,50 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
         salary_currency=fields.get("salary_currency"),
         skills=fields.get("skills", []),
         relevance_score=score,
-        raw_resume_json={"source": "file", "filename": file.filename, "extracted": fields},
+        raw_resume_json={"source": "file", "filename": file.filename, "extracted": fields, "minio_key": minio_key},
         matched_at=datetime.now(timezone.utc),
     )
     await candidate.insert()
 
-    logger.info("match_from_file: saved candidate score=%d for vacancy %s", score, vacancy_id)
+    if minio_key:
+        candidate.resume_url = f"/api/candidates/{str(candidate.id)}/resume"
+        await candidate.save()
+
+    # Also search Qdrant pool using the file text as query — find similar candidates
+    pool_count = 0
+    try:
+        qdrant = await get_qdrant()
+        pool = await collection_info(qdrant)
+        if pool["points_count"] > 0:
+            file_vector = await embed(text[:4000])
+            pool_hits = await search_candidates(qdrant, file_vector, top_k=settings.pool_top_k)
+            if pool_hits:
+                resumes_to_score = [
+                    hit["raw_resume_json"]
+                    for hit in pool_hits[:settings.pool_rescore_n]
+                    if hit.get("raw_resume_json")
+                ]
+                sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+                score_resume = _make_scorer(vacancy, sem)
+                scored: list[tuple[dict, int]] = list(
+                    await asyncio.gather(*[score_resume(r) for r in resumes_to_score])
+                )
+                good = [(r, s) for r, s in scored if s >= MIN_SCORE]
+                good.sort(key=lambda x: x[1], reverse=True)
+                top = good[:settings.pool_top_n]
+                tagged = [({**r, "_source": "talent_pool"}, s) for r, s in top]
+                pool_count = await candidate_service.replace_candidates(vacancy, tagged)
+    except Exception as exc:
+        logger.warning("match_from_file: pool search failed: %s", exc)
+
+    total = 1 + pool_count
+    logger.info("match_from_file: saved candidate score=%d + %d pool for vacancy %s", score, pool_count, vacancy_id)
     return {
         "id": str(candidate.id),
         "name": " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown",
         "score": score,
+        "total": total,
+        "pool_matched": pool_count,
     }
 
 

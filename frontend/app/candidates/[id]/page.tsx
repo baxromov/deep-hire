@@ -44,8 +44,20 @@ export default function CandidateDetailPage({ params }: Props) {
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
     : null;
 
-  const experience: { company: string; position: string; start: string; end: string | null }[] =
-    (candidate.raw_resume_json?.experience as typeof experience) || [];
+  type ExpEntry = {
+    company: unknown;
+    position: string;
+    start: string;
+    end: string | null;
+    description?: string;
+  };
+  const experience: ExpEntry[] =
+    (candidate.raw_resume_json?.experience as ExpEntry[]) || [];
+
+  function companyName(c: unknown): string {
+    if (c && typeof c === "object" && "name" in c) return (c as { name: string }).name || "";
+    return String(c || "");
+  }
 
   const score = candidate.relevance_score;
 
@@ -122,12 +134,17 @@ export default function CandidateDetailPage({ params }: Props) {
               {experience.map((exp, i) => (
                 <div key={i} className="flex gap-4">
                   <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gray-300" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm">{exp.position}</p>
-                    <p className="text-sm text-gray-500">{exp.company}</p>
+                    <p className="text-sm text-gray-500">{companyName(exp.company)}</p>
                     <p className="mt-0.5 text-xs text-gray-400">
                       {exp.start?.slice(0, 7)} — {exp.end?.slice(0, 7) || "present"}
                     </p>
+                    {exp.description && (
+                      <p className="mt-1.5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                        {exp.description}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -136,24 +153,48 @@ export default function CandidateDetailPage({ params }: Props) {
         </div>
       )}
 
-      {/* Footer actions */}
-      <div className="mt-4 flex items-center justify-between">
+      {/* Resume */}
+      {candidate.resume_url && (
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/40 p-6">
+          <Section title="Resume">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-800">
+                  {candidate.resume_url.startsWith("/api/") ? "Uploaded Resume" : "Full resume on HH.uz"}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  {candidate.resume_url.startsWith("/api/")
+                    ? "View the original uploaded resume file"
+                    : "Opens the candidate's public profile on HeadHunter Uzbekistan"}
+                </p>
+              </div>
+              <a
+                href={candidate.resume_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                {candidate.resume_url.startsWith("/api/") ? "View Resume →" : "View on HH.uz →"}
+              </a>
+            </div>
+          </Section>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="mt-4">
         <Link
           href={`/vacancies/${candidate.vacancy_id}`}
           className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
         >
           ← Back to vacancy
         </Link>
-        {candidate.resume_url && (
-          <a
-            href={candidate.resume_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            View on HH.uz →
-          </a>
-        )}
       </div>
     </div>
   );

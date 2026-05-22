@@ -44,7 +44,7 @@ export const matchingApi = {
   matchFromFile: (vacancyId: string, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    return api.post<{ id: string; name: string; score: number }>(
+    return api.post<{ id: string; name: string; score: number; total: number; pool_matched: number }>(
       `/api/matching/vacancies/${vacancyId}/match-from-file`,
       fd
     );
