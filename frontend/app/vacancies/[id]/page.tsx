@@ -757,9 +757,11 @@ export default function VacancyDetailPage({ params }: Props) {
     setFileResult(null);
     try {
       const res = await matchingApi.matchFromFile(id, file);
-      toast.success(`${res.data.name} — score: ${res.data.score}%`);
+      const { name, score, total, pool_matched } = res.data;
+      const poolNote = pool_matched > 0 ? ` + ${pool_matched} similar from pool` : "";
+      toast.success(`${name} — score: ${score}%${poolNote}`);
       mutateCandidates();
-      setFileResult(1);
+      setFileResult(total);
     } catch {
       toast.error("Failed to match from file");
       setFileResult(0);
@@ -963,12 +965,12 @@ export default function VacancyDetailPage({ params }: Props) {
                   </svg>
                 }
                 label="Match from File"
-                description="Upload a single PDF or DOCX resume to evaluate against this vacancy"
+                description="Upload a resume — saves it and finds similar candidates from the talent pool"
                 steps={[
                   "Extract text from PDF / DOCX file",
                   "AI parses: name, title, skills, salary",
                   "Ollama scores fit against vacancy 0–100",
-                  "Saved as candidate in MongoDB",
+                  "Saved as candidate + pool search for similar profiles",
                 ]}
                 running={fileMatching}
                 disabled={anyRunning && !fileMatching}
