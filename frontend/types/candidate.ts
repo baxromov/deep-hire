@@ -15,8 +15,23 @@ export interface Candidate {
   resume_url: string | null;
   relevance_score: number | null;
   matched_at: string;
+  // Source & contact (from raw_resume_json)
+  source: string | null;       // "xlsx" | "file" | "hh" | null
+  phone: string | null;
+  comment: string | null;
+  score_reasoning: string | null;
+  score_criteria: ScoreCriterion[] | null;
+}
+
+export interface ScoreCriterion {
+  name: string;
+  weight: number;
+  score: number;
+  comment: string;
 }
 
 export interface CandidateDetail extends Candidate {
   raw_resume_json: Record<string, unknown>;
 }
+
+export type { ScoreCriterion };

@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from typing import Any, Dict
 
@@ -6,27 +7,85 @@ import httpx
 
 from app.config import settings
 
-SCORE_PROMPT = """You are a recruiter. Score how well this candidate matches the vacancy (0-100).
+logger = logging.getLogger(__name__)
 
-Scoring guide:
-- 85-100: Excellent match — right role, most required skills present
-- 70-84:  Good match — similar role, key skills overlap
-- 50-69:  Partial match — related role or some key skills, but gaps exist
-- 0-49:   Poor match — wrong role or very few relevant skills
+_DEFAULT_CRITERIA = [
+    {"name": "Соответствие должности", "weight": 45},
+    {"name": "Навыки и инструменты",   "weight": 40},
+    {"name": "Уровень опыта",          "weight": 15},
+]
 
-Focus on ROLE alignment first, then skills. A candidate with the right job title but missing
-1-2 tools can still score 75+. Do NOT penalize for missing "nice to have" items.
 
-Vacancy: {vacancy_title}
-Core skills required: {skills}
-Experience level: {experience}
-Context (use for role alignment only): {vacancy_description}
+def _resolve_criteria(criteria: list | None, weights: dict | None) -> list[dict]:
+    """Return normalised list of {name, weight} summing to 100."""
+    if criteria and isinstance(criteria, list) and len(criteria) >= 2:
+        crit = [{"name": str(c.get("name", "")), "weight": int(c.get("weight", 0))} for c in criteria]
+    elif weights and isinstance(weights, dict):
+        crit = [
+            {"name": "Соответствие должности", "weight": int(weights.get("role", 45))},
+            {"name": "Навыки и инструменты",   "weight": int(weights.get("skills", 40))},
+            {"name": "Уровень опыта",          "weight": int(weights.get("experience", 15))},
+        ]
+    else:
+        crit = [c.copy() for c in _DEFAULT_CRITERIA]
 
-Candidate job title: {candidate_title}
-Candidate skills: {candidate_skills}
+    # Normalise sum to 100
+    total = sum(c["weight"] for c in crit) or 100
+    if total != 100:
+        for c in crit:
+            c["weight"] = round(c["weight"] * 100 / total)
+        crit[-1]["weight"] = 100 - sum(c["weight"] for c in crit[:-1])
+    return crit
 
-Return ONLY JSON:
-{{"score": <integer 0-100>}}"""
+
+def _build_score_prompt(
+    vacancy_title: str,
+    vacancy_description: str,
+    skills: list,
+    experience: str,
+    candidate_title: str,
+    candidate_skills: list,
+    crit: list[dict],
+) -> str:
+    n = len(crit)
+    criteria_lines = "\n".join(
+        f'{i + 1}. "{c["name"]}" (weight {c["weight"]}%)'
+        for i, c in enumerate(crit)
+    )
+    formula = " + ".join(
+        f'criteria{i + 1}*{c["weight"] / 100:.2f}'
+        for i, c in enumerate(crit)
+    )
+    criteria_json = ",\n    ".join(
+        f'{{"name": "{c["name"]}", "weight": {c["weight"]}, "score": <0-100>, "comment": "<ru>"}}'
+        for c in crit
+    )
+    return f"""You are a senior recruiter. Evaluate how well this candidate matches the vacancy.
+
+VACANCY:
+- Title: {vacancy_title or ""}
+- Required skills: {", ".join(skills[:10])}
+- Experience required: {experience or ""}
+- Description: {(vacancy_description or "")[:600]}
+
+CANDIDATE:
+- Job title: {candidate_title or ""}
+- Skills: {", ".join(candidate_skills[:10])}
+
+Evaluate across EXACTLY {n} criteria (0-100 each), then compute weighted total:
+{criteria_lines}
+
+For each criterion write a short comment IN RUSSIAN (1 sentence) explaining the exact reason.
+Final score = round({formula}).
+
+Return ONLY valid JSON, no markdown, no extra text:
+{{
+  "score": <integer 0-100>,
+  "reasoning": "<1-2 sentences in Russian — overall verdict with specific facts>",
+  "criteria": [
+    {criteria_json}
+  ]
+}}"""
 
 
 async def score_candidate(
@@ -36,14 +95,19 @@ async def score_candidate(
     candidate_title: str,
     candidate_skills: list,
     vacancy_description: str = "",
-) -> int:
-    prompt = SCORE_PROMPT.format(
-        vacancy_title=vacancy_title or "",
-        vacancy_description=(vacancy_description or "")[:600],
-        skills=", ".join(required_skills[:10]),
-        experience=experience or "",
-        candidate_title=candidate_title or "",
-        candidate_skills=", ".join(candidate_skills[:10]),
+    weights: dict | None = None,
+    criteria: list | None = None,
+) -> tuple[int, str, list]:
+    """Returns (score 0-100, reasoning string, criteria list)."""
+    crit = _resolve_criteria(criteria, weights)
+    prompt = _build_score_prompt(
+        vacancy_title=vacancy_title,
+        vacancy_description=vacancy_description,
+        skills=required_skills,
+        experience=experience,
+        candidate_title=candidate_title,
+        candidate_skills=candidate_skills,
+        crit=crit,
     )
     payload = {
         "model": settings.ollama_model,
@@ -52,14 +116,33 @@ async def score_candidate(
         "format": "json",
     }
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
             resp.raise_for_status()
             raw = resp.json().get("message", {}).get("content", "")
-            parsed = json.loads(_strip_fences(raw))
-            return max(0, min(100, int(parsed.get("score", 0))))
-    except Exception:
-        return 0
+            cleaned = _strip_fences(raw)
+
+            # Primary: strict JSON parse
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                # Fallback: extract score with regex, skip criteria
+                logger.warning("score_candidate: malformed JSON from LLM, using regex fallback. raw=%r", cleaned[:200])
+                m = re.search(r'"score"\s*:\s*(\d+)', cleaned)
+                score = max(0, min(100, int(m.group(1)))) if m else 0
+                r = re.search(r'"reasoning"\s*:\s*"([^"]*)"', cleaned)
+                reasoning = r.group(1).strip() if r else ""
+                return score, reasoning, []
+
+            score = max(0, min(100, int(parsed.get("score", 0))))
+            reasoning = str(parsed.get("reasoning", "")).strip()
+            criteria = parsed.get("criteria", [])
+            if not isinstance(criteria, list):
+                criteria = []
+            return score, reasoning, criteria
+    except Exception as e:
+        logger.warning("score_candidate failed: %s", e)
+        return 0, "", []
 
 
 SEARCH_QUERIES_PROMPT = """You are a recruiting expert on hh.ru / hh.uz (CIS job boards).

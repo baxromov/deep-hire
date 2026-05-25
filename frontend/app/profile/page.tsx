@@ -48,7 +48,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Profile</h1>
+      <h1 className="text-xl font-semibold text-gray-900 mb-6">Профиль</h1>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-4 mb-6">
@@ -66,9 +66,9 @@ export default function ProfilePage() {
         <div>
           <Row label="HH ID" value={profile.id} />
           <Row label="Email" value={profile.email} />
-          <Row label="Phone" value={profile.phone} />
-          <Row label="Employer" value={profile.is_employer ? "Yes" : undefined} />
-          <Row label="Employer ID" value={profile.employer_id} />
+          <Row label="Телефон" value={profile.phone} />
+          <Row label="Работодатель" value={profile.is_employer ? "Да" : undefined} />
+          <Row label="ID работодателя" value={profile.employer_id} />
         </div>
       </div>
     </div>

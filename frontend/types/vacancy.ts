@@ -19,6 +19,7 @@ export interface Vacancy {
   last_matched_at: string | null;
   created_at: string;
   updated_at: string;
+  score_criteria: { name: string; weight: number }[];
 }
 
 export interface AIFields {
@@ -35,26 +36,26 @@ export interface AIFields {
 }
 
 export const EXPERIENCE_OPTIONS = [
-  { value: "noExperience", label: "No experience" },
-  { value: "between1And3", label: "1–3 years" },
-  { value: "between3And6", label: "3–6 years" },
-  { value: "moreThan6", label: "6+ years" },
+  { value: "noExperience", label: "Без опыта" },
+  { value: "between1And3", label: "1–3 года" },
+  { value: "between3And6", label: "3–6 лет" },
+  { value: "moreThan6", label: "6+ лет" },
 ];
 
 export const EMPLOYMENT_OPTIONS = [
-  { value: "full", label: "Full-time" },
-  { value: "part", label: "Part-time" },
-  { value: "project", label: "Project" },
-  { value: "volunteer", label: "Volunteer" },
-  { value: "probation", label: "Probation" },
+  { value: "full", label: "Полная занятость" },
+  { value: "part", label: "Частичная занятость" },
+  { value: "project", label: "Проектная работа" },
+  { value: "volunteer", label: "Волонтёрство" },
+  { value: "probation", label: "Стажировка" },
 ];
 
 export const SCHEDULE_OPTIONS = [
-  { value: "fullDay", label: "Full day" },
-  { value: "shift", label: "Shift" },
-  { value: "flexible", label: "Flexible" },
-  { value: "remote", label: "Remote" },
-  { value: "flyInFlyOut", label: "Fly-in fly-out" },
+  { value: "fullDay", label: "Полный день" },
+  { value: "shift", label: "Сменный" },
+  { value: "flexible", label: "Гибкий" },
+  { value: "remote", label: "Удалённо" },
+  { value: "flyInFlyOut", label: "Вахтовый метод" },
 ];
 
 export const CURRENCY_OPTIONS = [

@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.config import settings
@@ -908,6 +908,200 @@ async def match_from_live_pool_stream(vacancy_id: str):
     )
 
 
+async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0, le=100)):
+    """SSE: score all existing MongoDB candidates against this vacancy and upsert matches."""
+
+    async def event_stream():
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def emit(event: dict) -> None:
+            await queue.put(event)
+
+        async def run() -> None:
+            try:
+                from app.models.candidate import Candidate
+
+                vacancy = await vacancy_service.get_vacancy(vacancy_id)
+                if not vacancy:
+                    await emit({"step": "error", "message": "Vacancy not found."}); return
+                if vacancy.status != VacancyStatus.approved:
+                    await emit({"step": "error", "message": "Vacancy must be approved."}); return
+
+                await emit({"step": "planning", "message": f"Scanning candidates database (порог ≥{min_score}%)…"})
+
+                # ── 1. xlsx groups (one LLM call per unique internship_name) ──────
+                pipeline = [
+                    {"$match": {"raw_resume_json.source": "xlsx"}},
+                    {"$group": {
+                        "_id": "$raw_resume_json.internship_name",
+                        "candidate_ids": {"$push": {"$toString": "$_id"}},
+                        "skills": {"$first": "$skills"},
+                        "first_name": {"$first": "$first_name"},
+                        "last_name": {"$first": "$last_name"},
+                        "phone": {"$first": "$raw_resume_json.phone"},
+                        "comment": {"$first": "$raw_resume_json.comment"},
+                    }},
+                ]
+                xlsx_groups = await Candidate.get_motor_collection().aggregate(pipeline).to_list(None)
+
+                # ── 2. non-xlsx candidates (file / hh), deduplicated by hh_resume_id ─
+                non_xlsx_all = await Candidate.find(
+                    {"raw_resume_json.source": {"$in": ["file", "hh"]}}
+                ).to_list()
+                seen_ids: set = set()
+                non_xlsx: list = []
+                for doc in non_xlsx_all:
+                    if doc.hh_resume_id not in seen_ids:
+                        seen_ids.add(doc.hh_resume_id)
+                        non_xlsx.append(doc)
+
+                total = len(xlsx_groups) + len(non_xlsx)
+                await emit({
+                    "step": "pool_ready",
+                    "message": f"Found {len(xlsx_groups)} internship groups + {len(non_xlsx)} individual profiles. Starting AI scoring…",
+                    "total": total,
+                })
+
+                sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+                now = datetime.now(timezone.utc)
+                matched = 0
+                processed = 0
+                col = Candidate.get_motor_collection()
+
+                # ── Score xlsx groups ──────────────────────────────────────────────
+                for group in xlsx_groups:
+                    internship = group["_id"] or ""
+                    skills = group.get("skills") or []
+                    processed += 1
+
+                    async with sem:
+                        sc, rs, cr = await ai_service.score_candidate(
+                            vacancy_title=vacancy.title or "",
+                            required_skills=vacancy.skills,
+                            experience=vacancy.experience or "",
+                            candidate_title=internship,
+                            candidate_skills=skills,
+                            vacancy_description=vacancy.description or "",
+                            criteria=vacancy.score_criteria,
+                        )
+
+                    if sc >= min_score:
+                        for cid in group["candidate_ids"]:
+                            uid = f"db_xlsx:{cid}"
+                            # Use only dotted paths to avoid $set/$setOnInsert path conflict
+                            await col.update_one(
+                                {"vacancy_id": vacancy.id, "hh_resume_id": uid},
+                                {"$set": {
+                                    "relevance_score": sc,
+                                    "raw_resume_json.score_reasoning": rs,
+                                    "raw_resume_json.score_criteria": cr,
+                                }, "$setOnInsert": {
+                                    "vacancy_id": vacancy.id,
+                                    "hh_resume_id": uid,
+                                    "first_name": group.get("first_name"),
+                                    "last_name": group.get("last_name"),
+                                    "title": internship or None,
+                                    "skills": skills,
+                                    "matched_at": now,
+                                    "raw_resume_json.source": "xlsx",
+                                    "raw_resume_json.internship_name": internship,
+                                    "raw_resume_json.phone": group.get("phone"),
+                                    "raw_resume_json.comment": group.get("comment"),
+                                }},
+                                upsert=True,
+                            )
+                        matched += len(group["candidate_ids"])
+
+                    await emit({
+                        "step": "scoring",
+                        "message": f"[{processed}/{total}] \"{internship or '—'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
+                        "count": processed, "total": total, "matched": matched,
+                    })
+
+                # ── Score non-xlsx individually ────────────────────────────────────
+                for doc in non_xlsx:
+                    title = doc.title or ""
+                    skills = doc.skills or []
+                    raw = doc.raw_resume_json or {}
+                    if raw.get("source") == "file":
+                        ext = raw.get("extracted") or {}
+                        title = ext.get("title") or title
+                        skills = ext.get("skills") or skills
+                    processed += 1
+
+                    async with sem:
+                        sc, rs, cr = await ai_service.score_candidate(
+                            vacancy_title=vacancy.title or "",
+                            required_skills=vacancy.skills,
+                            experience=vacancy.experience or "",
+                            candidate_title=title,
+                            candidate_skills=skills,
+                            vacancy_description=vacancy.description or "",
+                            criteria=vacancy.score_criteria,
+                        )
+
+                    if sc >= min_score:
+                        uid = f"db:{doc.hh_resume_id}"
+                        await col.update_one(
+                            {"vacancy_id": vacancy.id, "hh_resume_id": uid},
+                            {"$set": {
+                                "relevance_score": sc,
+                                "raw_resume_json.score_reasoning": rs,
+                                "raw_resume_json.score_criteria": cr,
+                            }, "$setOnInsert": {
+                                "vacancy_id": vacancy.id,
+                                "hh_resume_id": uid,
+                                "first_name": doc.first_name,
+                                "last_name": doc.last_name,
+                                "title": doc.title,
+                                "area": doc.area,
+                                "skills": doc.skills,
+                                "salary_amount": doc.salary_amount,
+                                "salary_currency": doc.salary_currency,
+                                "resume_url": doc.resume_url,
+                                "photo_url": doc.photo_url,
+                                "matched_at": now,
+                                "raw_resume_json.source": raw.get("source"),
+                                "raw_resume_json.filename": raw.get("filename"),
+                            }},
+                            upsert=True,
+                        )
+                        matched += 1
+
+                    await emit({
+                        "step": "scoring",
+                        "message": f"[{processed}/{total}] \"{title or 'Unknown'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
+                        "count": processed, "total": total, "matched": matched,
+                    })
+
+                vacancy.last_matched_at = now
+                await vacancy.save()
+                await emit({
+                    "step": "done",
+                    "message": f"Готово. Найдено {matched} подходящих из {processed} (порог ≥{min_score}%).",
+                    "matched": matched, "total": processed,
+                })
+
+            except Exception as exc:
+                logger.error("match_from_db_stream error: %s", exc)
+                await emit({"step": "error", "message": f"Ошибка: {exc}"})
+            finally:
+                await queue.put(None)
+
+        asyncio.create_task(run())
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 router.add_api_route("/vacancies/{vacancy_id}/rematch", rematch, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/rematch-stream", rematch_stream, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/status", rematch_status, methods=["GET"])
@@ -916,3 +1110,4 @@ router.add_api_route("/vacancies/{vacancy_id}/match-from-pool", match_from_pool,
 router.add_api_route("/vacancies/{vacancy_id}/match-from-pool-stream", match_from_pool_stream, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool", match_from_live_pool, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool-stream", match_from_live_pool_stream, methods=["GET"])
+router.add_api_route("/vacancies/{vacancy_id}/match-from-db-stream", match_from_db_stream, methods=["GET"])

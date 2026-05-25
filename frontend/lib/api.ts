@@ -53,6 +53,8 @@ export const matchingApi = {
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-pool`),
   matchFromLivePool: (vacancyId: string) =>
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-live-pool`),
+  matchFromDbStreamUrl: (vacancyId: string, minScore = 60) =>
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-db-stream?min_score=${minScore}`,
 };
 
 // --- Talent Pool ---
@@ -86,9 +88,35 @@ export const areasApi = {
 
 // --- Candidates ---
 export const candidateApi = {
-  list: (params?: { skip?: number; limit?: number; vacancy_id?: string; search?: string }) =>
+  list: (params?: { skip?: number; limit?: number; vacancy_id?: string; search?: string; sort_by?: string; source?: string }) =>
     api.get<{ items: unknown[]; total: number }>("/api/candidates/", { params }),
   byVacancy: (vacancyId: string) =>
     api.get(`/api/candidates/vacancy/${vacancyId}`),
   get: (id: string) => api.get(`/api/candidates/${id}`),
+  upload: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<{ id: string; name: string; score: number; vacancy_title: string; vacancy_id: string }>(
+      "/api/candidates/upload",
+      fd
+    );
+  },
+  importXlsx: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<{ imported: number; skipped: number; total: number }>(
+      "/api/candidates/import-xlsx",
+      fd
+    );
+  },
+  explainScore: (id: string) =>
+    api.post<{ reasoning: string; score: number; criteria: import("@/types/candidate").ScoreCriterion[] }>(
+      `/api/candidates/${id}/explain-score`
+    ),
+  rescoreAll: (resume = false) =>
+    api.post<{ status: string }>(`/api/candidates/rescore-all?resume=${resume}`),
+  rescoreStatus: () =>
+    api.get<{ status: string; total: number; processed: number; updated: number; error: string | null; can_resume: boolean }>(
+      "/api/candidates/rescore-status"
+    ),
 };

@@ -34,7 +34,7 @@ type MatchStep = {
   skills?: string[];
 };
 
-type MethodId = "rematch" | "pool" | "live" | "file";
+type MethodId = "rematch" | "pool" | "live" | "file" | "db";
 
 // ─── Step classification helpers ─────────────────────────────────────────────
 
@@ -52,30 +52,30 @@ function getStepStatus(step: string): "done" | "error" | "warn" | "info" | "acti
 
 function getStepPhaseLabel(step: string): string {
   const map: Record<string, string> = {
-    planning: "Planning",
-    queries_ready: "Ready",
-    extracting_skills: "AI",
-    skills_ready: "AI",
-    collection_created: "Setup",
-    fetching: "Fetch",
-    fetching_hh: "Fetch",
-    hh_fetched: "Fetch",
-    embedding: "Embed",
-    embedding_progress: "Embed",
-    pool_ready: "Index",
-    searching: "Search",
-    search_done: "Search",
-    scoring: "Score",
-    scored: "Score",
-    filtered: "Filter",
-    new_search: "Retry",
-    switch_search: "Retry",
-    no_results: "Empty",
-    rate_limit: "Limit",
-    early_stop: "Done",
-    done: "Done",
-    error: "Error",
-    cleanup: "Cleanup",
+    planning: "Планиров.",
+    queries_ready: "Готово",
+    extracting_skills: "ИИ",
+    skills_ready: "ИИ",
+    collection_created: "Настройка",
+    fetching: "Загрузка",
+    fetching_hh: "Загрузка",
+    hh_fetched: "Загрузка",
+    embedding: "Вектор.",
+    embedding_progress: "Вектор.",
+    pool_ready: "Индекс",
+    searching: "Поиск",
+    search_done: "Поиск",
+    scoring: "Оценка",
+    scored: "Оценка",
+    filtered: "Фильтр",
+    new_search: "Повтор",
+    switch_search: "Повтор",
+    no_results: "Пусто",
+    rate_limit: "Лимит",
+    early_stop: "Готово",
+    done: "Готово",
+    error: "Ошибка",
+    cleanup: "Очистка",
   };
   return map[step] ?? "···";
 }
@@ -92,17 +92,19 @@ const PHASE_COLORS: Record<string, string> = {
 // ─── Terminal Progress Panel ──────────────────────────────────────────────────
 
 const METHOD_ACCENTS: Record<MethodId, { border: string; glow: string; tag: string; dot: string }> = {
-  rematch: { border: "#3b82f6", glow: "rgba(59,130,246,0.15)", tag: "bg-blue-500", dot: "bg-blue-400" },
-  pool:    { border: "#8b5cf6", glow: "rgba(139,92,246,0.15)", tag: "bg-violet-500", dot: "bg-violet-400" },
+  rematch: { border: "#3b82f6", glow: "rgba(59,130,246,0.15)", tag: "bg-blue-500",    dot: "bg-blue-400" },
+  pool:    { border: "#8b5cf6", glow: "rgba(139,92,246,0.15)", tag: "bg-violet-500",  dot: "bg-violet-400" },
   live:    { border: "#10b981", glow: "rgba(16,185,129,0.15)", tag: "bg-emerald-500", dot: "bg-emerald-400" },
-  file:    { border: "#f59e0b", glow: "rgba(245,158,11,0.15)", tag: "bg-amber-500", dot: "bg-amber-400" },
+  file:    { border: "#f59e0b", glow: "rgba(245,158,11,0.15)", tag: "bg-amber-500",   dot: "bg-amber-400" },
+  db:      { border: "#ec4899", glow: "rgba(236,72,153,0.15)", tag: "bg-pink-500",    dot: "bg-pink-400" },
 };
 
 const METHOD_LABELS: Record<MethodId, string> = {
-  rematch: "Smart Rematch",
-  pool:    "Talent Pool",
-  live:    "Live Pool",
-  file:    "File Match",
+  rematch: "Умный поиск",
+  pool:    "Пул кандидатов",
+  live:    "Живой пул",
+  file:    "Файл",
+  db:      "Из нашей базы",
 };
 
 function TerminalProgress({
@@ -158,13 +160,13 @@ function TerminalProgress({
         {running && !isDone && (
           <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
             <span className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${accent.dot}`} />
-            live
+            в процессе
           </span>
         )}
 
         {/* Step counter */}
         <span className="ml-auto font-mono text-[11px] text-slate-500">
-          {steps.length} events
+          {steps.length} событий
         </span>
 
         {/* Clear */}
@@ -186,7 +188,7 @@ function TerminalProgress({
         {steps.length === 0 && running && (
           <div className="flex items-center gap-3 px-4 py-1.5 text-slate-500">
             <span className={`inline-block h-1.5 w-1.5 animate-pulse rounded-full ${accent.dot}`} />
-            <span>Connecting to server...</span>
+            <span>Подключение к серверу...</span>
           </div>
         )}
 
@@ -276,7 +278,7 @@ function TerminalProgress({
               className="font-mono text-[11px] font-semibold"
               style={{ color: isError ? "#f87171" : isSuccess ? "#34d399" : "#fbbf24" }}
             >
-              {isError ? "✕ Process failed" : isSuccess ? `✓ Done — ${last?.matched} candidate${(last?.matched ?? 0) !== 1 ? "s" : ""} saved` : "○ No qualifying candidates found"}
+              {isError ? "✕ Ошибка процесса" : isSuccess ? `✓ Готово — ${last?.matched} кандидатов сохранено` : "○ Подходящих кандидатов не найдено"}
             </span>
           </div>
         )}
@@ -351,7 +353,7 @@ function MethodCard({ id, icon, label, description, steps, badge, running, disab
                   border: `1px solid ${result! > 0 ? accentColor + "30" : "#64748b30"}`,
                 }}
               >
-                {result! > 0 ? "★" : "○"} {result! > 0 ? `${result} found` : "0 found"}
+                {result! > 0 ? "★" : "○"} {result! > 0 ? `${result} найдено` : "0 найдено"}
               </span>
             )}
             {badge}
@@ -369,7 +371,7 @@ function MethodCard({ id, icon, label, description, steps, badge, running, disab
               style={{ background: accentBg, color: accentColor }}
             >
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: accentColor }} />
-              Running
+              Запуск
             </span>
           )}
         </div>
@@ -389,7 +391,7 @@ function MethodCard({ id, icon, label, description, steps, badge, running, disab
             border: "1px solid #ef444430",
             boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
           }}
-          title="Stop matching"
+          title="Остановить подбор"
         >
           <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
             <rect x="1" y="1" width="8" height="8" rx="1.5"/>
@@ -412,7 +414,7 @@ function MethodCard({ id, icon, label, description, steps, badge, running, disab
             className="mb-2 text-[10px] font-bold uppercase tracking-widest"
             style={{ color: accentColor }}
           >
-            How it works
+            Как работает
           </p>
           <ol className="space-y-1.5">
             {steps.map((s, i) => (
@@ -450,7 +452,7 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
   const name =
     [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") ||
     candidate.title ||
-    "Anonymous";
+    "Аноним";
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
     : null;
@@ -542,10 +544,16 @@ export default function VacancyDetailPage({ params }: Props) {
   const [fileMatching, setFileMatching] = useState(false);
   const [fileResult, setFileResult] = useState<number | null>(null);
 
+  const [dbMatching, setDbMatching] = useState(false);
+  const [dbSteps, setDbSteps] = useState<MatchStep[]>([]);
+  const [dbResult, setDbResult] = useState<number | null>(null);
+  const [dbMinScore, setDbMinScore] = useState(60);
+
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);
   const poolSourceRef    = useRef<EventSource | null>(null);
   const liveSourceRef    = useRef<EventSource | null>(null);
+  const dbSourceRef      = useRef<EventSource | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -603,10 +611,10 @@ export default function VacancyDetailPage({ params }: Props) {
   const duplicate = async () => {
     try {
       const res = await vacancyApi.duplicate(id);
-      toast.success("Vacancy duplicated");
+      toast.success("Вакансия дублирована");
       router.push(`/vacancies/${res.data.id}/edit`);
     } catch {
-      toast.error("Failed to duplicate");
+      toast.error("Не удалось дублировать");
     }
   };
 
@@ -614,9 +622,9 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await vacancyApi.toggleOpen(id);
       mutateVacancy(res.data);
-      toast.success(res.data.is_open ? "Vacancy reopened" : "Vacancy closed");
+      toast.success(res.data.is_open ? "Вакансия открыта" : "Вакансия закрыта");
     } catch {
-      toast.error("Failed to update status");
+      toast.error("Не удалось обновить статус");
     }
   };
 
@@ -624,11 +632,11 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await vacancyApi.approve(id);
       mutateVacancy(res.data);
-      toast.success("Vacancy approved!");
+      toast.success("Вакансия опубликована!");
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        "Approval failed";
+        "Не удалось опубликовать";
       toast.error(msg);
     }
   };
@@ -636,14 +644,14 @@ export default function VacancyDetailPage({ params }: Props) {
   const archive = async () => {
     try {
       await vacancyApi.archive(id);
-      toast.success("Vacancy archived");
+      toast.success("Вакансия архивирована");
       router.push("/vacancies");
     } catch {
-      toast.error("Failed to archive");
+      toast.error("Не удалось архивировать");
     }
   };
 
-  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching;
+  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching;
 
   // ── Smart Rematch ─────────────────────────────────────────────────────────
   const rematch = () => {
@@ -660,7 +668,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); rematchSourceRef.current = null;
         setRematching(false); mutateCandidates();
         setRematchResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates`) : toast.info("No qualifying candidates found.");
+        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов`) : toast.info("Подходящих кандидатов не найдено.");
       }
       if (event.step === "error") {
         source.close(); rematchSourceRef.current = null;
@@ -669,7 +677,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); rematchSourceRef.current = null; setRematching(false);
-      setMatchSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
+      setMatchSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
     };
   };
 
@@ -677,7 +685,7 @@ export default function VacancyDetailPage({ params }: Props) {
     rematchSourceRef.current?.close();
     rematchSourceRef.current = null;
     setRematching(false);
-    setMatchSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+    setMatchSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
   };
 
   // ── Talent Pool ───────────────────────────────────────────────────────────
@@ -694,7 +702,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); poolSourceRef.current = null;
         setPoolMatching(false); mutateCandidates(); mutatePool();
         setPoolResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates from talent pool`) : toast.info("No qualifying candidates found in talent pool.");
+        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов из пула`) : toast.info("Подходящих кандидатов не найдено в пуле.");
       }
       if (event.step === "error") {
         source.close(); poolSourceRef.current = null;
@@ -703,7 +711,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); poolSourceRef.current = null; setPoolMatching(false);
-      setPoolSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
+      setPoolSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
     };
   };
 
@@ -711,7 +719,7 @@ export default function VacancyDetailPage({ params }: Props) {
     poolSourceRef.current?.close();
     poolSourceRef.current = null;
     setPoolMatching(false);
-    setPoolSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+    setPoolSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
   };
 
   // ── Live Pool ─────────────────────────────────────────────────────────────
@@ -728,7 +736,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); liveSourceRef.current = null;
         setLivePoolMatching(false); mutateCandidates();
         setLiveResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Found ${event.matched} candidates via live pool`) : toast.info("No qualifying candidates found in live pool.");
+        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов через живой пул`) : toast.info("Подходящих кандидатов не найдено в живом пуле.");
       }
       if (event.step === "error") {
         source.close(); liveSourceRef.current = null;
@@ -737,7 +745,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); liveSourceRef.current = null; setLivePoolMatching(false);
-      setLivePoolSteps((prev) => [...prev, { step: "error", message: "Connection lost. Please try again." }]);
+      setLivePoolSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
     };
   };
 
@@ -745,7 +753,44 @@ export default function VacancyDetailPage({ params }: Props) {
     liveSourceRef.current?.close();
     liveSourceRef.current = null;
     setLivePoolMatching(false);
-    setLivePoolSteps((prev) => [...prev, { step: "error", message: "Stopped by user." }]);
+    setLivePoolSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+  };
+
+  // ── From our DB ───────────────────────────────────────────────────────────
+  const matchFromDb = () => {
+    setDbMatching(true);
+    setDbSteps([]);
+    setDbResult(null);
+    const url = matchingApi.matchFromDbStreamUrl(id, dbMinScore);
+    const source = new EventSource(url, { withCredentials: true });
+    dbSourceRef.current = source;
+    source.onmessage = (e) => {
+      const event: MatchStep = JSON.parse(e.data);
+      setDbSteps((prev) => [...prev, event]);
+      if (event.step === "done") {
+        source.close(); dbSourceRef.current = null;
+        setDbMatching(false); mutateCandidates();
+        setDbResult(event.matched ?? 0);
+        (event.matched ?? 0) > 0
+          ? toast.success(`Найдено ${event.matched} подходящих из базы`)
+          : toast.info("Подходящих кандидатов не найдено.");
+      }
+      if (event.step === "error") {
+        source.close(); dbSourceRef.current = null;
+        setDbMatching(false); toast.error(event.message);
+      }
+    };
+    source.onerror = () => {
+      source.close(); dbSourceRef.current = null; setDbMatching(false);
+      setDbSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+    };
+  };
+
+  const stopDb = () => {
+    dbSourceRef.current?.close();
+    dbSourceRef.current = null;
+    setDbMatching(false);
+    setDbSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
   };
 
   // ── File upload ───────────────────────────────────────────────────────────
@@ -758,12 +803,12 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await matchingApi.matchFromFile(id, file);
       const { name, score, total, pool_matched } = res.data;
-      const poolNote = pool_matched > 0 ? ` + ${pool_matched} similar from pool` : "";
-      toast.success(`${name} — score: ${score}%${poolNote}`);
+      const poolNote = pool_matched > 0 ? ` + ${pool_matched} похожих из пула` : "";
+      toast.success(`${name} — балл: ${score}%${poolNote}`);
       mutateCandidates();
       setFileResult(total);
     } catch {
-      toast.error("Failed to match from file");
+      toast.error("Не удалось обработать файл");
       setFileResult(0);
     } finally {
       setFileMatching(false);
@@ -785,22 +830,22 @@ export default function VacancyDetailPage({ params }: Props) {
         onClick={() => router.push("/vacancies")}
         className="mb-6 text-sm text-gray-400 hover:text-gray-700 transition-colors"
       >
-        ← Back
+        ← Назад
       </button>
 
       {/* Vacancy card */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">{vacancy.title || "Untitled"}</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{vacancy.title || "Без названия"}</h1>
           <StatusBadge status={vacancy.status} />
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
-          <InfoItem label="Area" value={vacancy.area} />
-          <InfoItem label="Salary" value={salary ? `${salary} ${vacancy.currency}` : null} />
-          <InfoItem label="Experience" value={labelOf(vacancy.experience, EXPERIENCE_OPTIONS)} />
-          <InfoItem label="Employment" value={labelOf(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
-          <InfoItem label="Schedule" value={labelOf(vacancy.schedule, SCHEDULE_OPTIONS)} />
+          <InfoItem label="Город" value={vacancy.area} />
+          <InfoItem label="Зарплата" value={salary ? `${salary} ${vacancy.currency}` : null} />
+          <InfoItem label="Опыт" value={labelOf(vacancy.experience, EXPERIENCE_OPTIONS)} />
+          <InfoItem label="Занятость" value={labelOf(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
+          <InfoItem label="График" value={labelOf(vacancy.schedule, SCHEDULE_OPTIONS)} />
         </div>
 
         {(vacancy.skills?.length ?? 0) > 0 && (
@@ -821,20 +866,20 @@ export default function VacancyDetailPage({ params }: Props) {
 
         {/* General actions */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>Edit</Button>
-          <Button variant="outline" size="sm" onClick={duplicate}>Duplicate</Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>Редактировать</Button>
+          <Button variant="outline" size="sm" onClick={duplicate}>Дублировать</Button>
           {vacancy.status === "draft" && vacancy.is_approvable && (
-            <Button size="sm" onClick={approve}>Approve & Publish</Button>
+            <Button size="sm" onClick={approve}>Опубликовать</Button>
           )}
           {(vacancy.status === "approved" || vacancy.status === "closed") && (
             <Button variant="outline" size="sm" onClick={toggle}>
-              {vacancy.is_open ? "Close" : "Reopen"}
+              {vacancy.is_open ? "Закрыть" : "Открыть"}
             </Button>
           )}
           <div className="ml-auto flex gap-2">
             {vacancy.status !== "archived" && (
               <Button variant="outline" size="sm" onClick={archive} className="text-red-400 hover:text-red-600 hover:border-red-200">
-                Archive
+                Архив
               </Button>
             )}
           </div>
@@ -851,136 +896,147 @@ export default function VacancyDetailPage({ params }: Props) {
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
               </svg>
             </div>
-            <span className="text-[13px] font-semibold text-gray-800">AI Candidate Matching</span>
-            <span className="ml-auto text-[11px] text-gray-400">Hover cards to see how each method works</span>
+            <span className="text-[13px] font-semibold text-gray-800">ИИ-подбор кандидатов</span>
+            <span className="ml-auto text-[11px] text-gray-400">Наведите на карточку, чтобы увидеть как работает метод</span>
           </div>
 
           {/* Method cards grid */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {/* Smart Rematch */}
-            <MethodCard
-              id="rematch"
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-                </svg>
-              }
-              label="Smart Rematch"
-              description="Searches HH.uz live using AI-generated semantic queries"
-              steps={[
-                "AI generates 6 search queries (RU + EN)",
-                "Search HH.uz — up to 2000 resumes",
-                "Pre-filter by title keyword overlap",
-                "Ollama scores each resume 0–100",
-                "Top 10 with score ≥60 saved to MongoDB",
-              ]}
-              running={rematching}
-              disabled={anyRunning && !rematching}
-              result={rematchResult}
-              onClick={rematch}
-              onStop={stopRematch}
-              accentColor="#3b82f6"
-              accentBg="#eff6ff"
-              accentBorder="#bfdbfe"
-            />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
 
-            {/* Talent Pool */}
-            <MethodCard
-              id="pool"
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                </svg>
-              }
-              label="Talent Pool"
-              description="Searches pre-indexed candidates in the talent pool via vector similarity"
-              steps={[
-                "Embed vacancy description (768-dim vector)",
-                "Qdrant: cosine similarity search (threshold ≥0.5)",
-                "Retrieve top 50 closest candidates",
-                "Ollama re-scores top 30 precisely",
-                "Top 10 with score ≥60 saved to MongoDB",
-              ]}
-              badge={
-                (poolStatus?.points_count ?? 0) > 0 ? (
-                  <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
-                    {poolStatus!.points_count.toLocaleString()}
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-400">empty</span>
-                )
-              }
-              running={poolMatching}
-              disabled={anyRunning && !poolMatching}
-              result={poolResult}
-              onClick={matchFromPool}
-              onStop={stopPool}
-              accentColor="#8b5cf6"
-              accentBg="#f5f3ff"
-              accentBorder="#ddd6fe"
-            />
-
-            {/* Live Pool */}
-            <MethodCard
-              id="live"
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                </svg>
-              }
-              label="Live Pool"
-              description="Fetches 2000 fresh HH.uz resumes, indexes temporarily, then vector-matches"
-              steps={[
-                "AI extracts skills from vacancy description",
-                "Fetch 2000 fresh HH.uz resumes (20p × 100)",
-                "Embed all resumes → temporary Qdrant collection",
-                "Vector search with threshold ≥0.55 (cosine similarity)",
-                "Ollama re-scores top 30 → top 10 to MongoDB",
-                "Temporary collection deleted after use",
-              ]}
-              running={livePoolMatching}
-              disabled={anyRunning && !livePoolMatching}
-              result={liveResult}
-              onClick={matchFromLivePool}
-              onStop={stopLivePool}
-              accentColor="#10b981"
-              accentBg="#ecfdf5"
-              accentBorder="#a7f3d0"
-            />
-
-            {/* File Upload */}
-            <div className="relative">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                className="hidden"
-                onChange={onFileChange}
-              />
+            {/* ── Из нашей базы — ПЕРВЫЙ (активный) ── */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-1">
+                <span className="text-xs text-gray-500">Порог балла:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={dbMinScore}
+                    disabled={dbMatching}
+                    onChange={(e) => setDbMinScore(Math.max(0, Math.min(100, Number(e.target.value))))}
+                    className="w-14 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-center focus:outline-none focus:ring-1 focus:ring-pink-400 disabled:opacity-50"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={dbMinScore}
+                  disabled={dbMatching}
+                  onChange={(e) => setDbMinScore(Number(e.target.value))}
+                  className="flex-1 h-1.5 accent-pink-500 disabled:opacity-50"
+                />
+              </div>
               <MethodCard
-                id="file"
+                id="db"
                 icon={
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
                   </svg>
                 }
-                label="Match from File"
-                description="Upload a resume — saves it and finds similar candidates from the talent pool"
+                label="Из нашей базы"
+                description="Оценивает всех уже загруженных кандидатов (xlsx, резюме, HH) по критериям этой вакансии"
                 steps={[
-                  "Extract text from PDF / DOCX file",
-                  "AI parses: name, title, skills, salary",
-                  "Ollama scores fit against vacancy 0–100",
-                  "Saved as candidate + pool search for similar profiles",
+                  "Берёт все уникальные профили из MongoDB",
+                  "Группирует xlsx по названию стажировки",
+                  `ИИ оценивает каждый профиль (0–100) по критериям вакансии`,
+                  `Сохраняет кандидатов с баллом ≥ ${dbMinScore}%`,
                 ]}
-                running={fileMatching}
-                disabled={anyRunning && !fileMatching}
-                result={fileResult}
-                onClick={() => fileInputRef.current?.click()}
-                accentColor="#f59e0b"
-                accentBg="#fffbeb"
-                accentBorder="#fde68a"
+                badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{dbMinScore}%</span>}
+                running={dbMatching}
+                disabled={anyRunning && !dbMatching}
+                result={dbResult}
+                onClick={dbMatching ? stopDb : matchFromDb}
+                onStop={stopDb}
+                accentColor="#ec4899"
+                accentBg="#fdf2f8"
+                accentBorder="#fbcfe8"
               />
             </div>
+
+            {/* Умный поиск HH — Скоро */}
+            <div className="relative">
+              <div className="pointer-events-none select-none opacity-70">
+                <MethodCard
+                  id="rematch"
+                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+                  label="Умный поиск HH"
+                  description="Поиск по HH.uz через ИИ-запросы"
+                  steps={["ИИ генерирует поисковые запросы", "Поиск резюме на HH.uz", "Оценка кандидатов Ollama"]}
+                  running={false} disabled={true} result={null} onClick={() => {}}
+                  accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
+                />
+              </div>
+              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+              </div>
+            </div>
+
+            {/* Векторный пул — Скоро */}
+            <div className="relative">
+              <div className="pointer-events-none select-none opacity-70">
+                <MethodCard
+                  id="pool"
+                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>}
+                  label="Векторный пул"
+                  description="Поиск по предварительно проиндексированным кандидатам"
+                  steps={["Векторное сходство (Qdrant)", "Переоценка через Ollama", "Сохранение топ кандидатов"]}
+                  running={false} disabled={true} result={null} onClick={() => {}}
+                  accentColor="#8b5cf6" accentBg="#f5f3ff" accentBorder="#ddd6fe"
+                />
+              </div>
+              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+              </div>
+            </div>
+
+            {/* Живой пул — Скоро */}
+            <div className="relative">
+              <div className="pointer-events-none select-none opacity-70">
+                <MethodCard
+                  id="live"
+                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>}
+                  label="Живой пул HH"
+                  description="2000 свежих резюме с HH.uz, временная индексация"
+                  steps={["Загрузка 2000 резюме с HH.uz", "Временная индексация в Qdrant", "Векторный поиск + оценка"]}
+                  running={false} disabled={true} result={null} onClick={() => {}}
+                  accentColor="#10b981" accentBg="#ecfdf5" accentBorder="#a7f3d0"
+                />
+              </div>
+              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+              </div>
+            </div>
+
+            {/* Загрузка файла — Скоро */}
+            <div className="relative">
+              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={onFileChange} />
+              <div className="pointer-events-none select-none opacity-70">
+                <MethodCard
+                  id="file"
+                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
+                  label="Загрузка файла"
+                  description="Загрузите резюме — сохранит и найдёт похожих кандидатов из пула"
+                  steps={[
+                    "Извлечение текста из PDF/DOCX",
+                    "ИИ парсит: имя, должность, навыки, зарплату",
+                    "Ollama оценивает соответствие вакансии (0–100)",
+                    "Сохраняет кандидата + ищет похожие профили",
+                  ]}
+                  running={fileMatching}
+                  disabled={anyRunning && !fileMatching}
+                  result={fileResult}
+                  onClick={() => fileInputRef.current?.click()}
+                  accentColor="#f59e0b"
+                  accentBg="#fffbeb"
+                  accentBorder="#fde68a"
+                />
+              </div>
+              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
@@ -989,23 +1045,24 @@ export default function VacancyDetailPage({ params }: Props) {
       <TerminalProgress steps={matchSteps} running={rematching} onClear={clearProgress} method="rematch" />
       <TerminalProgress steps={poolSteps} running={poolMatching} onClear={() => setPoolSteps([])} method="pool" />
       <TerminalProgress steps={livePoolSteps} running={livePoolMatching} onClear={() => setLivePoolSteps([])} method="live" />
+      <TerminalProgress steps={dbSteps} running={dbMatching} onClear={() => setDbSteps([])} method="db" />
 
       {/* ── Candidates ──────────────────────────────────────────────────────── */}
       {candidates.length > 0 && (
         <div className="mt-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Matched Candidates ({candidates.length})
+            Подходящие кандидаты ({candidates.length})
           </p>
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">Name</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Position</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Area</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Salary</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Skills</th>
-                  <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400">Match</th>
+                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">Имя</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Должность</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Город</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Зарплата</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Навыки</th>
+                  <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400">Совпадение</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1018,7 +1075,7 @@ export default function VacancyDetailPage({ params }: Props) {
 
       {vacancy.status === "approved" && candidates.length === 0 && (
         <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-10 text-center">
-          <p className="text-sm text-gray-400">No candidates yet — choose a matching method above.</p>
+          <p className="text-sm text-gray-400">Пока нет кандидатов — выберите метод подбора выше.</p>
         </div>
       )}
 

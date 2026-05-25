@@ -22,21 +22,21 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-gray-900">deep-hire</h1>
-          <p className="mt-1 text-sm text-gray-400">Resume Matcher Platform</p>
+          <p className="mt-1 text-sm text-gray-400">Платформа подбора резюме</p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
           <p className="mb-6 text-sm text-gray-500 text-center">
-            Sign in with your HH.uz employer account to get started.
+            Войдите через аккаунт работодателя на HH.uz, чтобы начать.
           </p>
           <Button className="w-full" onClick={login} disabled={loading}>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Redirecting...
+                Перенаправление...
               </span>
             ) : (
-              "Login with HH.uz"
+              "Войти через HH.uz"
             )}
           </Button>
         </div>

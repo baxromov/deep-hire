@@ -79,6 +79,9 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
         );
         if (match) { resolvedId = match.id; resolvedName = match.name; }
       }
+      if (defaultValues.score_criteria?.length) {
+        setCriteria(defaultValues.score_criteria);
+      }
       return {
         ...prev,
         title: defaultValues.title ?? prev.title,
@@ -127,6 +130,32 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
     setSkillSuggestions([]);
   };
 
+  const DEFAULT_CRITERIA = [
+    { name: "Соответствие должности", weight: 45 },
+    { name: "Навыки и инструменты",   weight: 40 },
+    { name: "Уровень опыта",          weight: 15 },
+  ];
+
+  const [criteria, setCriteria] = useState<{ name: string; weight: number }[]>(
+    () => defaultValues?.score_criteria?.length ? defaultValues.score_criteria : DEFAULT_CRITERIA
+  );
+
+  function changeWeight(idx: number, newVal: number) {
+    const clamped = Math.max(0, Math.min(100, isNaN(newVal) ? 0 : newVal));
+    setCriteria(prev => prev.map((c, i) => i === idx ? { ...c, weight: clamped } : c));
+  }
+
+  function addCriterion() {
+    setCriteria(prev => [...prev, { name: "", weight: 0 }]);
+  }
+
+  function removeCriterion(idx: number) {
+    if (criteria.length <= 2) return;
+    setCriteria(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  const weightSum = criteria.reduce((s, c) => s + c.weight, 0);
+
   const [form, setForm] = useState({
     title: defaultValues?.title ?? "",
     area: defaultValues?.area ?? "",
@@ -168,28 +197,29 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
     schedule: form.schedule || null,
     description: form.description || null,
     skills: form.skills,
+    score_criteria: criteria,
   });
 
   return (
     <div className="space-y-5">
       <div>
-        <Label>Job Title</Label>
+        <Label>Название должности</Label>
         <Input
           className="mt-1"
-          placeholder="e.g. Senior QA Engineer"
+          placeholder="например, Старший QA-инженер"
           value={form.title}
           onChange={(e) => set("title", e.target.value)}
         />
       </div>
 
       <div>
-        <Label>Experience</Label>
+        <Label>Опыт</Label>
         <select
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={form.experience}
           onChange={(e) => set("experience", e.target.value)}
         >
-          <option value="">— select —</option>
+          <option value="">— выбрать —</option>
           {EXPERIENCE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -204,14 +234,14 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
         >
           <span className={`transition-transform ${showOptional ? "rotate-90" : ""}`}>›</span>
-          {showOptional ? "Hide optional fields" : "Add city, salary, employment & schedule"}
+          {showOptional ? "Скрыть доп. поля" : "Добавить город, зарплату, занятость и график"}
         </button>
       </div>
 
       {showOptional && (
         <>
           <div>
-            <Label>City / Region</Label>
+            <Label>Город / Регион</Label>
             <select
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={form.area_hh_id}
@@ -221,7 +251,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
                 else { set("area", ""); set("area_hh_id", ""); }
               }}
             >
-              <option value="">— select city —</option>
+              <option value="">— выбрать город —</option>
               {areaList.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
@@ -230,7 +260,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label>Salary from</Label>
+              <Label>Зарплата от</Label>
               <Input
                 className="mt-1"
                 type="number"
@@ -240,7 +270,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
               />
             </div>
             <div>
-              <Label>Salary to</Label>
+              <Label>Зарплата до</Label>
               <Input
                 className="mt-1"
                 type="number"
@@ -250,7 +280,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
               />
             </div>
             <div>
-              <Label>Currency</Label>
+              <Label>Валюта</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.currency}
@@ -265,26 +295,26 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Employment</Label>
+              <Label>Тип занятости</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.employment_type}
                 onChange={(e) => set("employment_type", e.target.value)}
               >
-                <option value="">— select —</option>
+                <option value="">— выбрать —</option>
                 {EMPLOYMENT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <Label>Schedule</Label>
+              <Label>График работы</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.schedule}
                 onChange={(e) => set("schedule", e.target.value)}
               >
-                <option value="">— select —</option>
+                <option value="">— выбрать —</option>
                 {SCHEDULE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
@@ -295,11 +325,11 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
       )}
 
       <div>
-        <Label>Skills</Label>
+        <Label>Навыки</Label>
         <div ref={skillRef} className="relative mt-1">
           <div className="flex gap-2">
             <Input
-              placeholder="Add skill..."
+              placeholder="Добавить навык..."
               value={form.skillInput}
               onChange={(e) => onSkillInput(e.target.value)}
               onKeyDown={(e) => {
@@ -310,7 +340,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
               autoComplete="off"
             />
             <Button type="button" variant="outline" onClick={() => { addSkill(); setSkillOpen(false); setSkillSuggestions([]); }}>
-              Add
+              Добавить
             </Button>
           </div>
           {skillOpen && skillSuggestions.length > 0 && (
@@ -347,31 +377,121 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
       </div>
 
       <div>
-        <Label>Description</Label>
+        <Label>Описание</Label>
         <Textarea
           className="mt-1"
           rows={6}
-          placeholder="Describe the role, responsibilities and requirements..."
+          placeholder="Опишите роль, обязанности и требования к кандидату..."
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
         />
+      </div>
+
+      {/* ── Score criteria editor ────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Критерии оценки кандидатов</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Настройте вес каждого критерия. Сумма должна быть ровно 100%.
+            </p>
+          </div>
+          <span className={`shrink-0 text-sm font-bold px-2.5 py-1 rounded-lg transition-colors ${
+            weightSum === 100
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-600"
+          }`}>
+            {weightSum === 100 ? "✓" : "✗"} {weightSum}%
+          </span>
+        </div>
+
+        {weightSum !== 100 && (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+            ⚠ Сумма весов <span className="font-bold">{weightSum}%</span> — должно быть ровно <span className="font-bold">100%</span>.
+            {weightSum > 100
+              ? ` Уменьшите на ${weightSum - 100}%.`
+              : ` Добавьте ещё ${100 - weightSum}%.`}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {criteria.map((c, idx) => (
+            <div key={idx} className="space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={c.name}
+                  placeholder={`Критерий ${idx + 1}`}
+                  onChange={(e) =>
+                    setCriteria(prev => prev.map((item, i) => i === idx ? { ...item, name: e.target.value } : item))
+                  }
+                  className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <div className="relative shrink-0 w-16">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={c.weight}
+                    onChange={(e) => changeWeight(idx, Number(e.target.value))}
+                    className={`w-full rounded-md border px-1.5 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                      c.weight >= 40 ? "bg-indigo-50 border-indigo-200 text-indigo-700" :
+                      c.weight >= 20 ? "bg-violet-50 border-violet-200 text-violet-700" :
+                                       "bg-slate-50 border-slate-200 text-slate-600"
+                    }`}
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50">%</span>
+                </div>
+                {criteria.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => removeCriterion(idx)}
+                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors text-sm"
+                    title="Удалить критерий"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={c.weight}
+                onChange={(e) => changeWeight(idx, Number(e.target.value))}
+                className="w-full h-1.5 rounded-full cursor-pointer accent-indigo-500"
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={addCriterion}
+          className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+        >
+          <span className="text-base leading-none">+</span> Добавить критерий
+        </button>
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
         <Button
           type="button"
           variant="outline"
-          disabled={loading}
+          disabled={loading || weightSum !== 100}
+          title={weightSum !== 100 ? `Сумма весов ${weightSum}% — должно быть 100%` : undefined}
           onClick={() => onSaveDraft(collect())}
         >
-          Save Draft
+          Сохранить черновик
         </Button>
         <Button
           type="button"
-          disabled={loading}
+          disabled={loading || weightSum !== 100}
+          title={weightSum !== 100 ? `Сумма весов ${weightSum}% — должно быть 100%` : undefined}
           onClick={() => onPublish(collect())}
         >
-          Approve & Publish
+          Опубликовать
         </Button>
       </div>
     </div>

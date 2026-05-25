@@ -59,10 +59,19 @@ async def get_candidates_for_vacancy(vacancy_id: str) -> List[Candidate]:
     return await Candidate.find({"vacancy_id": oid}).sort("-matched_at").to_list()
 
 
-async def get_all_candidates(skip: int = 0, limit: int = 20, vacancy_id: Optional[str] = None, search: Optional[str] = None):
+async def get_all_candidates(
+    skip: int = 0,
+    limit: int = 20,
+    vacancy_id: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: str = "score",       # "score" | "date" | "name"
+    source: Optional[str] = None, # "xlsx" | "file" | "hh" | None
+):
     query: dict = {}
     if vacancy_id:
         query["vacancy_id"] = PydanticObjectId(vacancy_id)
+    if source:
+        query["raw_resume_json.source"] = source
     if search:
         import re
         pattern = re.compile(re.escape(search), re.IGNORECASE)
@@ -73,8 +82,16 @@ async def get_all_candidates(skip: int = 0, limit: int = 20, vacancy_id: Optiona
             {"area": {"$regex": pattern}},
             {"skills": {"$regex": pattern}},
         ]
+
+    _SORT = {
+        "score": [("relevance_score", pymongo.DESCENDING), ("matched_at", pymongo.DESCENDING)],
+        "date":  [("matched_at", pymongo.DESCENDING)],
+        "name":  [("first_name", pymongo.ASCENDING), ("last_name", pymongo.ASCENDING)],
+    }
+    sort_spec = _SORT.get(sort_by, _SORT["score"])
+
     total = await Candidate.find(query).count()
-    items = await Candidate.find(query).skip(skip).limit(limit).sort("-matched_at").to_list()
+    items = await Candidate.find(query).skip(skip).limit(limit).sort(sort_spec).to_list()
     return items, total
 
 

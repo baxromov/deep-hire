@@ -15,8 +15,8 @@ interface Profile {
 }
 
 const NAV_LINKS = [
-  { href: "/vacancies", label: "Vacancies" },
-  { href: "/candidates", label: "Candidates" },
+  { href: "/vacancies", label: "Вакансии" },
+  { href: "/candidates", label: "Кандидаты" },
 ];
 
 export function Sidebar() {
@@ -80,7 +80,7 @@ export function Sidebar() {
           onClick={logout}
           className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
         >
-          Logout
+          Выйти
         </button>
       </div>
     </aside>

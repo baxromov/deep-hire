@@ -27,6 +27,11 @@ class Vacancy(Document):
     description: Optional[str] = None
     raw_description: Optional[str] = None
     status: VacancyStatus = VacancyStatus.draft
+    score_criteria: List[dict] = Field(default_factory=lambda: [
+        {"name": "Соответствие должности", "weight": 45},
+        {"name": "Навыки и инструменты",   "weight": 40},
+        {"name": "Уровень опыта",          "weight": 15},
+    ])
     is_open: bool = True
     last_matched_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

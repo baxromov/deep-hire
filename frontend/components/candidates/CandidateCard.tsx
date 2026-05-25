@@ -5,14 +5,30 @@ import { useRouter } from "next/navigation";
 import { Candidate } from "@/types/candidate";
 
 function RelevanceBadge({ score }: { score: number | null }) {
-  if (score == null) return null;
+  if (score == null) return <span className="text-sm text-gray-300">—</span>;
   const color =
     score >= 70 ? "bg-green-50 text-green-700" :
     score >= 40 ? "bg-yellow-50 text-yellow-700" :
     "bg-red-50 text-red-600";
   return (
-    <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${color}`}>
+    <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${color}`}>
       {score}%
+    </span>
+  );
+}
+
+const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
+  xlsx:  { label: "Excel",    cls: "bg-green-50 text-green-700" },
+  file:  { label: "Загрузка", cls: "bg-purple-50 text-purple-700" },
+  hh:    { label: "HH",       cls: "bg-blue-50 text-blue-600" },
+};
+
+function SourceBadge({ source }: { source: string | null }) {
+  if (!source) return null;
+  const cfg = SOURCE_LABELS[source] ?? { label: source, cls: "bg-gray-100 text-gray-500" };
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cfg.cls}`}>
+      {cfg.label}
     </span>
   );
 }
@@ -22,7 +38,7 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
 
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
     || candidate.title
-    || "Anonymous";
+    || "Аноним";
 
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
@@ -33,6 +49,7 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
       className="group cursor-pointer hover:bg-gray-50 transition-colors"
       onClick={() => router.push(`/candidates/${candidate.id}`)}
     >
+      {/* Name + source badge + phone */}
       <td className="py-3 pl-4 pr-3">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-gray-100">
@@ -44,16 +61,32 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
               </div>
             )}
           </div>
-          <span className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-            {name}
-          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors truncate">
+                {name}
+              </span>
+              <SourceBadge source={candidate.source} />
+            </div>
+            {candidate.phone && (
+              <p className="mt-0.5 text-xs text-gray-400">{candidate.phone}</p>
+            )}
+          </div>
         </div>
       </td>
+
+      {/* Position */}
       <td className="px-3 py-3 text-sm text-gray-500 max-w-[180px] truncate">
         {candidate.title || "—"}
       </td>
+
+      {/* Area */}
       <td className="px-3 py-3 text-sm text-gray-500">{candidate.area || "—"}</td>
+
+      {/* Salary */}
       <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{salary || "—"}</td>
+
+      {/* Skills */}
       <td className="px-3 py-3">
         <div className="flex flex-wrap gap-1">
           {candidate.skills.slice(0, 3).map((s) => (
@@ -66,6 +99,13 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
           )}
         </div>
       </td>
+
+      {/* Score */}
+      <td className="px-3 py-3">
+        <RelevanceBadge score={candidate.relevance_score} />
+      </td>
+
+      {/* Resume */}
       <td className="px-3 py-3 pr-4">
         {candidate.resume_url ? (
           <a

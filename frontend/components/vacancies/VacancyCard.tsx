@@ -24,7 +24,7 @@ export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
     >
       <td className="py-3 pl-4 pr-3">
         <span className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-          {vacancy.title || <span className="text-gray-400 italic">Untitled</span>}
+          {vacancy.title || <span className="text-gray-400 italic">Без названия</span>}
         </span>
       </td>
       <td className="px-3 py-3">
@@ -48,7 +48,7 @@ export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
         </div>
       </td>
       <td className="px-3 py-3 pr-4 text-sm text-gray-400 whitespace-nowrap">
-        {new Date(vacancy.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+        {new Date(vacancy.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
       </td>
     </tr>
   );

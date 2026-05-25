@@ -21,7 +21,7 @@ export function FileUploadZone({ onExtracted }: Props) {
       const res = await aiApi.extractFromFile(file);
       onExtracted(res.data);
     } catch {
-      setError("Could not extract fields. Try again or fill manually.");
+      setError("Не удалось извлечь поля. Попробуйте снова или заполните вручную.");
     } finally {
       setLoading(false);
     }
@@ -53,21 +53,21 @@ export function FileUploadZone({ onExtracted }: Props) {
       {loading ? (
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-          <p className="text-sm text-gray-500">Extracting fields with AI...</p>
+          <p className="text-sm text-gray-500">ИИ извлекает поля...</p>
         </div>
       ) : (
         <>
           <div className="mb-3 text-4xl">📄</div>
-          <p className="font-medium text-gray-700">Drop a PDF or DOCX file here</p>
-          <p className="mt-1 text-sm text-gray-400">or</p>
+          <p className="font-medium text-gray-700">Перетащите PDF или DOCX файл сюда</p>
+          <p className="mt-1 text-sm text-gray-400">или</p>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             className="mt-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline"
           >
-            browse files
+            выбрать файл
           </button>
-          <p className="mt-3 text-xs text-gray-400">AI will auto-fill the vacancy fields</p>
+          <p className="mt-3 text-xs text-gray-400">ИИ автоматически заполнит поля вакансии</p>
         </>
       )}
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}

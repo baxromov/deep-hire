@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from typing import Any
 from pydantic import BaseModel
 
 
@@ -21,9 +22,16 @@ class CandidateResponse(BaseModel):
     resume_url: Optional[str]
     relevance_score: Optional[int]
     matched_at: datetime
+    # Extra fields extracted from raw_resume_json for easy access
+    source: Optional[str] = None           # "xlsx" | "file" | "hh"
+    phone: Optional[str] = None
+    comment: Optional[str] = None
+    score_reasoning: Optional[str] = None        # AI summary explanation
+    score_criteria: Optional[List[Any]] = None   # [{name, weight, score, comment}, ...]
 
     @classmethod
     def from_doc(cls, doc) -> "CandidateResponse":
+        raw: dict = doc.raw_resume_json or {}
         return cls(
             id=str(doc.id),
             vacancy_id=str(doc.vacancy_id),
@@ -41,6 +49,11 @@ class CandidateResponse(BaseModel):
             resume_url=doc.resume_url,
             relevance_score=doc.relevance_score,
             matched_at=doc.matched_at,
+            source=raw.get("source"),
+            phone=raw.get("phone"),
+            comment=raw.get("comment"),
+            score_reasoning=raw.get("score_reasoning"),
+            score_criteria=raw.get("score_criteria"),
         )
 
 

@@ -19,6 +19,7 @@ class VacancyUpdate(BaseModel):
     schedule: Optional[str] = None
     description: Optional[str] = None
     raw_description: Optional[str] = None
+    score_criteria: Optional[List[dict]] = None
 
 
 class VacancyResponse(BaseModel):
@@ -40,9 +41,15 @@ class VacancyResponse(BaseModel):
     last_matched_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    score_criteria: List[dict]
 
     @classmethod
     def from_doc(cls, doc) -> "VacancyResponse":
+        _default_criteria = [
+            {"name": "Соответствие должности", "weight": 45},
+            {"name": "Навыки и инструменты",   "weight": 40},
+            {"name": "Уровень опыта",          "weight": 15},
+        ]
         return cls(
             id=str(doc.id),
             title=doc.title,
@@ -62,6 +69,8 @@ class VacancyResponse(BaseModel):
             last_matched_at=doc.last_matched_at,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
+            score_criteria=doc.score_criteria if isinstance(doc.score_criteria, list) and doc.score_criteria
+                           else _default_criteria,
         )
 
 

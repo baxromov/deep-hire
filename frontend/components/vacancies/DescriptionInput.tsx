@@ -23,7 +23,7 @@ export function DescriptionInput({ onExtracted }: Props) {
       const res = await aiApi.extractFromText(text);
       onExtracted(res.data);
     } catch {
-      setError("Could not extract fields. Try again or fill manually.");
+      setError("Не удалось извлечь поля. Попробуйте снова или заполните вручную.");
     } finally {
       setLoading(false);
     }
@@ -33,7 +33,7 @@ export function DescriptionInput({ onExtracted }: Props) {
     <div className="space-y-3">
       <Textarea
         rows={8}
-        placeholder="Paste or type the vacancy description here. AI will extract the structured fields automatically."
+        placeholder="Вставьте или напечатайте описание вакансии. ИИ автоматически извлечёт структурированные поля."
         value={text}
         onChange={(e) => setText(e.target.value)}
         className="resize-none"
@@ -41,7 +41,7 @@ export function DescriptionInput({ onExtracted }: Props) {
       {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-end">
         <Button onClick={extract} disabled={loading || !text.trim()}>
-          {loading ? "Extracting..." : "Extract with AI"}
+          {loading ? "Извлечение..." : "Извлечь с помощью ИИ"}
         </Button>
       </div>
     </div>

@@ -10,11 +10,11 @@ import { Vacancy } from "@/types/vacancy";
 import useSWR from "swr";
 
 const TABS = [
-  { label: "All", value: undefined },
-  { label: "Draft", value: "draft" },
-  { label: "Approved", value: "approved" },
-  { label: "Closed", value: "closed" },
-  { label: "Archived", value: "archived" },
+  { label: "Все", value: undefined },
+  { label: "Черновик", value: "draft" },
+  { label: "Опубликовано", value: "approved" },
+  { label: "Закрыто", value: "closed" },
+  { label: "Архив", value: "archived" },
 ];
 
 const PAGE_SIZE = 20;
@@ -44,15 +44,15 @@ export default function VacanciesPage() {
       const res = await vacancyApi.create();
       router.push(`/vacancies/${res.data.id}/edit`);
     } catch {
-      toast.error("Failed to create vacancy");
+      toast.error("Не удалось создать вакансию");
     }
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Vacancies</h1>
-        <Button onClick={createNew} size="sm">+ New Vacancy</Button>
+        <h1 className="text-xl font-semibold text-gray-900">Вакансии</h1>
+        <Button onClick={createNew} size="sm">+ Новая вакансия</Button>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-gray-100 p-1 w-fit mb-5">
@@ -77,8 +77,8 @@ export default function VacanciesPage() {
         </div>
       ) : vacancies.length === 0 ? (
         <div className="pt-16 text-center text-gray-400">
-          <p>No vacancies yet</p>
-          <p className="mt-1 text-sm">Click "+ New Vacancy" to get started</p>
+          <p>Вакансий пока нет</p>
+          <p className="mt-1 text-sm">Нажмите «+ Новая вакансия», чтобы начать</p>
         </div>
       ) : (
         <>
@@ -86,13 +86,13 @@ export default function VacanciesPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Title</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Status</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Area</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Salary</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Experience</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Skills</th>
-                  <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">Created</th>
+                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Название</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Статус</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Город</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Зарплата</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Опыт</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Навыки</th>
+                  <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">Создано</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -105,14 +105,14 @@ export default function VacanciesPage() {
 
           {pageCount > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-              <span>{total} vacancies</span>
+              <span>{total} вакансий</span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => p - 1)}
                   disabled={page === 0}
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  ← Prev
+                  ← Назад
                 </button>
                 <span className="text-gray-400">
                   {page + 1} / {pageCount}
@@ -122,7 +122,7 @@ export default function VacanciesPage() {
                   disabled={page + 1 >= pageCount}
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Next →
+                  Вперёд →
                 </button>
               </div>
             </div>

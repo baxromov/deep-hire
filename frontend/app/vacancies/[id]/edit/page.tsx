@@ -27,7 +27,7 @@ export default function EditVacancyPage({ params }: Props) {
   const onExtracted = (fields: AIFields) => {
     setAiFields(fields);
     setMode("form");
-    toast.success("Fields extracted! Review and save.");
+    toast.success("Поля извлечены! Проверьте и сохраните.");
   };
 
   const save = async (data: Record<string, unknown>, approve = false) => {
@@ -36,14 +36,14 @@ export default function EditVacancyPage({ params }: Props) {
       await vacancyApi.update(id, data);
       if (approve) {
         await vacancyApi.approve(id);
-        toast.success("Vacancy approved!");
+        toast.success("Вакансия опубликована!");
       } else {
-        toast.success("Saved as draft");
+        toast.success("Сохранено как черновик");
       }
       router.push(`/vacancies/${id}`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail || "Save failed";
+        ?.response?.data?.detail || "Не удалось сохранить";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -62,10 +62,10 @@ export default function EditVacancyPage({ params }: Props) {
     <div className="max-w-2xl">
       <div className="mb-6 flex items-center justify-between">
         <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700">
-          ← Back
+          ← Назад
         </button>
         <h1 className="text-xl font-semibold text-gray-900">
-          {vacancy.title || "New Vacancy"}
+          {vacancy.title || "Новая вакансия"}
         </h1>
         <div />
       </div>
@@ -77,7 +77,7 @@ export default function EditVacancyPage({ params }: Props) {
             onClick={() => setMode("form")}
             className="mt-3 text-sm text-gray-500 underline"
           >
-            Skip, fill manually
+            Пропустить, заполнить вручную
           </button>
         </div>
       )}
@@ -89,7 +89,7 @@ export default function EditVacancyPage({ params }: Props) {
             onClick={() => setMode("form")}
             className="mt-3 text-sm text-gray-500 underline"
           >
-            Skip, fill manually
+            Пропустить, заполнить вручную
           </button>
         </div>
       )}
@@ -101,16 +101,16 @@ export default function EditVacancyPage({ params }: Props) {
             className="flex flex-1 flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 p-6 text-center hover:border-blue-300 hover:bg-blue-50 transition"
           >
             <span className="text-2xl">📄</span>
-            <span className="text-sm font-medium text-gray-700">Upload File</span>
-            <span className="text-xs text-gray-400">PDF or DOCX</span>
+            <span className="text-sm font-medium text-gray-700">Загрузить файл</span>
+            <span className="text-xs text-gray-400">PDF или DOCX</span>
           </button>
           <button
             onClick={() => setMode("text")}
             className="flex flex-1 flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 p-6 text-center hover:border-blue-300 hover:bg-blue-50 transition"
           >
             <span className="text-2xl">✏️</span>
-            <span className="text-sm font-medium text-gray-700">Write Description</span>
-            <span className="text-xs text-gray-400">AI extracts fields</span>
+            <span className="text-sm font-medium text-gray-700">Написать описание</span>
+            <span className="text-xs text-gray-400">ИИ извлечёт поля</span>
           </button>
         </div>
       )}
