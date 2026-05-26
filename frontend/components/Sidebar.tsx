@@ -1,18 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { authApi } from "@/lib/api";
-
-
-
-interface Profile {
-  id: string;
-  name: string;
-  email: string;
-  employer_name: string;
-}
+import { useAuth } from "@/lib/auth-context";
 
 const NAV_LINKS = [
   { href: "/vacancies", label: "Вакансии" },
@@ -22,19 +13,21 @@ const NAV_LINKS = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { user, loading, logout } = useAuth();
 
+  // Redirect unauthenticated users away from protected pages
   useEffect(() => {
-    if (pathname.startsWith("/auth")) return;
-    authApi.me()
-      .then((res) => setProfile(res.data))
-      .catch(() => router.replace("/auth/login"));
-  }, [pathname, router]);
+    if (loading) return;
+    if (!user && !pathname.startsWith("/auth")) {
+      router.replace("/auth/login");
+    }
+  }, [user, loading, pathname, router]);
 
   if (pathname.startsWith("/auth")) return null;
+  if (loading || !user) return null;
 
-  const logout = async () => {
-    await authApi.logout().catch(() => {});
+  const handleLogout = () => {
+    logout();
     router.replace("/auth/login");
   };
 
@@ -59,25 +52,49 @@ export function Sidebar() {
             {link.label}
           </Link>
         ))}
+
+        {/* Divider */}
+        <div className="my-2 border-t border-gray-100" />
+
+        <Link
+          href="/settings/integrations"
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            pathname.startsWith("/settings")
+              ? "bg-gray-100 text-gray-900"
+              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+          }`}
+        >
+          Интеграции
+        </Link>
+
+        {user.role === "admin" && (
+          <Link
+            href="/admin/users"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              pathname.startsWith("/admin")
+                ? "bg-gray-100 text-gray-900"
+                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+            }`}
+          >
+            Пользователи
+          </Link>
+        )}
       </nav>
 
       <div className="border-t border-gray-100 pt-4 mt-4 space-y-3">
-        {profile && (
-          <Link
-            href="/profile"
-            className="block rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors space-y-0.5"
-          >
-            <p className="text-sm font-medium text-gray-900 truncate">{profile.name}</p>
-            {profile.email && (
-              <p className="text-xs text-gray-400 truncate">{profile.email}</p>
-            )}
-            {profile.employer_name && (
-              <p className="text-xs text-gray-400 truncate">{profile.employer_name}</p>
-            )}
-          </Link>
-        )}
+        <div className="rounded-lg px-3 py-2 space-y-0.5">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {user.full_name || user.username}
+          </p>
+          {user.email && (
+            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+          )}
+          <p className="text-xs text-gray-400">
+            {user.role === "admin" ? "Администратор" : "Сотрудник"}
+          </p>
+        </div>
         <button
-          onClick={logout}
+          onClick={handleLogout}
           className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
         >
           Выйти

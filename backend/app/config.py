@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:3001"
 
+    # JWT auth
+    jwt_secret: str = "change-me-in-production-very-long-secret-key-32chars"
+    jwt_expire_minutes: int = 60 * 24 * 7   # 7 days
+
     # Required by HH API: "AppName/1.0 (your-contact)"
     app_user_agent: str = "DeepHire/1.0"
 

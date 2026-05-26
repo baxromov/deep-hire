@@ -5,12 +5,62 @@ const BASE = API_BASE;
 
 export const api = axios.create({ baseURL: BASE });
 
+// Attach JWT from localStorage on every request
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("dh_token");
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
+// Redirect to login on 401
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401 && typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (!path.startsWith("/auth")) {
+        window.location.href = "/auth/login";
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
 // --- Auth ---
 export const authApi = {
-  loginUrl: () => api.get<{ auth_url: string }>("/api/auth/hh/login"),
-  callback: (code: string) => api.get(`/api/auth/hh/callback?code=${code}`),
-  logout: () => api.delete("/api/auth/hh/logout"),
-  me: () => api.get("/api/auth/me"),
+  login: (username: string, password: string) =>
+    api.post<{ access_token: string; token_type: string; user: { id: string; username: string; email: string; role: string; full_name: string; is_active: boolean } }>(
+      "/api/auth/login",
+      { username, password }
+    ),
+  me: (token?: string) =>
+    api.get("/api/auth/me", token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
+  logout: () => {
+    localStorage.removeItem("dh_token");
+    return Promise.resolve();
+  },
+  changePassword: (current_password: string, new_password: string) =>
+    api.post("/api/auth/change-password", { current_password, new_password }),
+  // Admin: user management
+  listUsers: () => api.get("/api/auth/users"),
+  createUser: (data: { username: string; email?: string; password: string; role: string; full_name?: string }) =>
+    api.post("/api/auth/users", data),
+  updateUser: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/api/auth/users/${id}`, data),
+  deleteUser: (id: string) =>
+    api.delete(`/api/auth/users/${id}`),
+};
+
+// --- HH Integrations ---
+export const integrationApi = {
+  listHH: () => api.get("/api/integrations/hh"),
+  getHHConnectUrl: () => api.get<{ auth_url: string }>("/api/integrations/hh/connect-url"),
+  disconnectHH: (tokenId: string) => api.delete(`/api/integrations/hh/${tokenId}`),
 };
 
 // --- Vacancies ---

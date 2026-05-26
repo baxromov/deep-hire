@@ -118,10 +118,6 @@ async def upload_and_auto_match(file: UploadFile = File(...)):
     best_score, best_reasoning, best_criteria = results[best_idx]
 
     file_hash = hashlib.md5(file_bytes).hexdigest()[:16]
-    await Candidate.find({
-        "vacancy_id": best_vacancy.id,
-        "hh_resume_id": f"file:{file_hash}",
-    }).delete()
 
     minio_key = None
     try:
@@ -129,11 +125,11 @@ async def upload_and_auto_match(file: UploadFile = File(...)):
     except Exception:
         pass
 
-    candidate = Candidate(
-        vacancy_id=best_vacancy.id,
-        hh_resume_id=f"file:{file_hash}",
-        relevance_score=best_score,
-        raw_resume_json={
+    candidate_data = {
+        "vacancy_id": best_vacancy.id,
+        "hh_resume_id": f"file:{file_hash}",
+        "relevance_score": best_score,
+        "raw_resume_json": {
             "source": "file",
             "filename": file.filename,
             "extracted": fields,
@@ -141,20 +137,27 @@ async def upload_and_auto_match(file: UploadFile = File(...)):
             "score_reasoning": best_reasoning,
             "score_criteria": best_criteria,
         },
-        matched_at=datetime.now(timezone.utc),
+        "matched_at": datetime.now(timezone.utc),
         **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
                                    "salary_amount", "salary_currency", "skills")
            if fields.get(k)},
-    )
-    await candidate.insert()
+    }
+
+    # Atomic upsert — avoids delete+insert race condition that caused duplicates
+    col = Candidate.get_motor_collection()
+    upsert_filter = {"vacancy_id": best_vacancy.id, "hh_resume_id": f"file:{file_hash}"}
+    result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
+    candidate_oid = result.upserted_id or (
+        await col.find_one(upsert_filter, {"_id": 1})
+    )["_id"]
 
     if minio_key:
-        candidate.resume_url = f"/api/candidates/{candidate.id}/resume"
-        await candidate.save()
+        resume_url = f"/api/candidates/{candidate_oid}/resume"
+        await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
 
     name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown"
     return {
-        "id": str(candidate.id),
+        "id": str(candidate_oid),
         "name": name,
         "score": best_score,
         "vacancy_title": best_vacancy.title,
@@ -217,6 +220,7 @@ async def import_from_xlsx(file: UploadFile = File(...)):
     now = datetime.now(timezone.utc)
     imported = 0
     skipped = 0
+    col = Candidate.get_motor_collection()
 
     for row in rows:
         internship = row["internship_name"] or ""
@@ -224,22 +228,14 @@ async def import_from_xlsx(file: UploadFile = File(...)):
         best_vacancy = vacancies[best_idx]
 
         hh_id = f"xlsx:{row['row_id']}"
-        existing = await Candidate.find_one({
+        candidate_data = {
             "vacancy_id": best_vacancy.id,
             "hh_resume_id": hh_id,
-        })
-        if existing:
-            skipped += 1
-            continue
-
-        candidate = Candidate(
-            vacancy_id=best_vacancy.id,
-            hh_resume_id=hh_id,
-            first_name=row["first_name"],
-            last_name=row["last_name"],
-            title=internship or None,
-            relevance_score=best_score,
-            raw_resume_json={
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "title": internship or None,
+            "relevance_score": best_score,
+            "raw_resume_json": {
                 "source": "xlsx",
                 "phone": row["phone"],
                 "internship_name": internship,
@@ -247,10 +243,19 @@ async def import_from_xlsx(file: UploadFile = File(...)):
                 "score_reasoning": best_reasoning,
                 "score_criteria": best_criteria,
             },
-            matched_at=now,
+            "matched_at": now,
+        }
+
+        # Atomic upsert — replaces non-atomic find_one+insert that caused duplicates
+        result = await col.update_one(
+            {"vacancy_id": best_vacancy.id, "hh_resume_id": hh_id},
+            {"$set": candidate_data},
+            upsert=True,
         )
-        await candidate.insert()
-        imported += 1
+        if result.upserted_id:
+            imported += 1
+        else:
+            skipped += 1
 
     return {"imported": imported, "skipped": skipped, "total": len(rows)}
 

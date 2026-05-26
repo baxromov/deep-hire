@@ -202,12 +202,6 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
     from app.models.candidate import Candidate
     from beanie import PydanticObjectId
 
-    # Remove existing candidate with same file hash for this vacancy (re-upload)
-    await Candidate.find({
-        "vacancy_id": vacancy.id,
-        "hh_resume_id": f"file:{file_hash}",
-    }).delete()
-
     # Upload file to MinIO for later retrieval
     minio_key = None
     try:
@@ -215,25 +209,32 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
     except Exception:
         pass
 
-    candidate = Candidate(
-        vacancy_id=vacancy.id,
-        hh_resume_id=f"file:{file_hash}",
-        first_name=fields.get("first_name"),
-        last_name=fields.get("last_name"),
-        title=fields.get("title"),
-        area=fields.get("area"),
-        salary_amount=fields.get("salary_amount"),
-        salary_currency=fields.get("salary_currency"),
-        skills=fields.get("skills", []),
-        relevance_score=score,
-        raw_resume_json={"source": "file", "filename": file.filename, "extracted": fields, "minio_key": minio_key},
-        matched_at=datetime.now(timezone.utc),
-    )
-    await candidate.insert()
+    candidate_data = {
+        "vacancy_id": vacancy.id,
+        "hh_resume_id": f"file:{file_hash}",
+        "first_name": fields.get("first_name"),
+        "last_name": fields.get("last_name"),
+        "title": fields.get("title"),
+        "area": fields.get("area"),
+        "salary_amount": fields.get("salary_amount"),
+        "salary_currency": fields.get("salary_currency"),
+        "skills": fields.get("skills", []),
+        "relevance_score": score,
+        "raw_resume_json": {"source": "file", "filename": file.filename, "extracted": fields, "minio_key": minio_key},
+        "matched_at": datetime.now(timezone.utc),
+    }
+
+    # Atomic upsert — avoids delete+insert race condition that caused duplicates
+    col = Candidate.get_motor_collection()
+    upsert_filter = {"vacancy_id": vacancy.id, "hh_resume_id": f"file:{file_hash}"}
+    result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
+    candidate_oid = result.upserted_id or (
+        await col.find_one(upsert_filter, {"_id": 1})
+    )["_id"]
 
     if minio_key:
-        candidate.resume_url = f"/api/candidates/{str(candidate.id)}/resume"
-        await candidate.save()
+        resume_url = f"/api/candidates/{candidate_oid}/resume"
+        await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
 
     # Also search Qdrant pool using the file text as query — find similar candidates
     pool_count = 0
@@ -265,7 +266,7 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
     total = 1 + pool_count
     logger.info("match_from_file: saved candidate score=%d + %d pool for vacancy %s", score, pool_count, vacancy_id)
     return {
-        "id": str(candidate.id),
+        "id": str(candidate_oid),
         "name": " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown",
         "score": score,
         "total": total,
@@ -934,7 +935,13 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                     {"$match": {"raw_resume_json.source": "xlsx"}},
                     {"$group": {
                         "_id": "$raw_resume_json.internship_name",
-                        "candidate_ids": {"$push": {"$toString": "$_id"}},
+                        # Include original hh_resume_id to avoid synthetic IDs
+                        "candidates": {"$push": {
+                            "id": {"$toString": "$_id"},
+                            "hh_resume_id": "$hh_resume_id",
+                            "first_name": "$first_name",
+                            "last_name": "$last_name",
+                        }},
                         "skills": {"$first": "$skills"},
                         "first_name": {"$first": "$first_name"},
                         "last_name": {"$first": "$last_name"},
@@ -986,20 +993,21 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         )
 
                     if sc >= min_score:
-                        for cid in group["candidate_ids"]:
-                            uid = f"db_xlsx:{cid}"
-                            # Use only dotted paths to avoid $set/$setOnInsert path conflict
+                        # Use original hh_resume_id (not synthetic db_xlsx: prefix)
+                        # so re-runs update existing records instead of creating duplicates
+                        for cand in group["candidates"]:
+                            orig_hh_id = cand["hh_resume_id"]
                             await col.update_one(
-                                {"vacancy_id": vacancy.id, "hh_resume_id": uid},
+                                {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
                                 {"$set": {
                                     "relevance_score": sc,
                                     "raw_resume_json.score_reasoning": rs,
                                     "raw_resume_json.score_criteria": cr,
                                 }, "$setOnInsert": {
                                     "vacancy_id": vacancy.id,
-                                    "hh_resume_id": uid,
-                                    "first_name": group.get("first_name"),
-                                    "last_name": group.get("last_name"),
+                                    "hh_resume_id": orig_hh_id,
+                                    "first_name": cand.get("first_name") or group.get("first_name"),
+                                    "last_name": cand.get("last_name") or group.get("last_name"),
                                     "title": internship or None,
                                     "skills": skills,
                                     "matched_at": now,
@@ -1010,7 +1018,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                                 }},
                                 upsert=True,
                             )
-                        matched += len(group["candidate_ids"])
+                        matched += len(group["candidates"])
 
                     await emit({
                         "step": "scoring",
@@ -1041,16 +1049,18 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         )
 
                     if sc >= min_score:
-                        uid = f"db:{doc.hh_resume_id}"
+                        # Use original hh_resume_id (not synthetic db: prefix)
+                        # so re-runs update existing records instead of creating duplicates
+                        orig_hh_id = doc.hh_resume_id
                         await col.update_one(
-                            {"vacancy_id": vacancy.id, "hh_resume_id": uid},
+                            {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
                             {"$set": {
                                 "relevance_score": sc,
                                 "raw_resume_json.score_reasoning": rs,
                                 "raw_resume_json.score_criteria": cr,
                             }, "$setOnInsert": {
                                 "vacancy_id": vacancy.id,
-                                "hh_resume_id": uid,
+                                "hh_resume_id": orig_hh_id,
                                 "first_name": doc.first_name,
                                 "last_name": doc.last_name,
                                 "title": doc.title,
