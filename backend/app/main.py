@@ -32,7 +32,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3001",
         "http://localhost:3000",
-        "http://localhost:8085",
+        "http://localhost:8385",
         "https://proaristocratic-sylvatic-kerstin.ngrok-free.dev",
     ],
     allow_credentials=True,

@@ -31,7 +31,7 @@ $RemotePath = "/home/$ServerUser/$ProjectName"
 $LocalPath  = $PSScriptRoot
 
 # Faqat nginx host portini ochadi - backend/frontend ichki (conflict yo'q)
-$NginxPort = 8085
+$NginxPort = 8385
 
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
