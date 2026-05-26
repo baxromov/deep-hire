@@ -42,9 +42,10 @@ Write-Host "  Path    : $RemotePath" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# -------- STEP 1: Containerlarni to'xtatish --------
+# -------- STEP 1: Containerlarni to'xtatish + eski volumelarni tozalash --------
 Write-Host ">>> [1/7] Containerlarni to'xtatish..." -ForegroundColor Yellow
-ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose down 2>/dev/null; true"
+# --volumes: backend_venv volumeni ham o'chiradi - yangi deploy da fresh Python deps
+ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose down --volumes 2>/dev/null; true"
 
 # -------- STEP 2: Eski deploy ni backup qilish --------
 Write-Host ">>> [2/7] Eski versiyani backup qilish..." -ForegroundColor Yellow
@@ -117,9 +118,11 @@ ssh "${ServerUser}@${ServerIP}" "docker network inspect shared_services_shared-s
 
 # -------- STEP 6: Docker build --------
 Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." -ForegroundColor Yellow
-ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose build"
+# --no-cache: har safar fresh build - buzilgan cache sabab "har xil xato" muammosini hal qiladi
+# --progress=plain: to'liq log (muammo bo'lsa aniq ko'rish uchun)
+ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose build --no-cache --progress=plain 2>&1 | tee ~/build_log.txt; exit ${PIPESTATUS[0]}"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Docker build muvaffaqiyatsiz!"
+    Write-Error "Docker build muvaffaqiyatsiz! Log: ~/build_log.txt"
     exit 1
 }
 

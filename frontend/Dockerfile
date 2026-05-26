@@ -16,6 +16,8 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
+# OOM himoyasi: Node.js max heap 2 GB ga cheklanadi
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN npm run build
 
