@@ -84,12 +84,32 @@ Remove-Item $TempArchive -ErrorAction SilentlyContinue
 
 # -------- STEP 4: .env faylni serverga yuklash --------
 Write-Host ">>> [4/7] .env faylni serverga yuklash..." -ForegroundColor Yellow
-scp $EnvFile "${ServerUser}@${ServerIP}:~/$ProjectName/.env"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error ".env faylini serverga yuklashda xato!"
-    exit 1
+
+# Lokal .env mavjudligini tekshiramiz (skript boshida $EnvFile allaqachon aniqlangan)
+if (Test-Path $EnvFile) {
+    scp $EnvFile "${ServerUser}@${ServerIP}:~/$ProjectName/.env"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error ".env faylini serverga yuklashda xato (scp)!"
+        exit 1
+    }
+    Write-Host "    .env yuklandi: $EnvFile" -ForegroundColor Green
+} else {
+    Write-Warning "  [!]  Lokal .env topilmadi — .env.example dan nusxa olinyapti..."
+    ssh "${ServerUser}@${ServerIP}" "cp ~/$ProjectName/.env.example ~/$ProjectName/.env"
+    Write-Warning ""
+    Write-Warning "  MUHIM: Serverda ~/$ProjectName/.env ni to'ldiring:"
+    Write-Warning "     ssh ${ServerUser}@${ServerIP}"
+    Write-Warning "     nano ~/$ProjectName/.env"
+    Write-Warning ""
+    Write-Warning "  Kerakli qiymatlar:"
+    Write-Warning "    MONGO_PASSWORD  (haqiqiy MongoDB paroli)"
+    Write-Warning "    JWT_SECRET      (32+ tasodifiy belgi)"
+    Write-Warning "    MINIO_ACCESS/SECRET_KEY"
+    Write-Warning "    HH_CLIENT_ID, HH_CLIENT_SECRET"
+    Write-Warning "    FRONTEND_URL, NEXT_PUBLIC_API_URL"
+    Write-Warning ""
+    Write-Warning "  To'ldirgach qayta deploy qiling: .\deploy.ps1"
 }
-Write-Host "    .env muvaffaqiyatli yuklandi: $EnvFile -> ~/$ProjectName/.env" -ForegroundColor Green
 
 # -------- STEP 5: Shared Docker network --------
 Write-Host ">>> [5/7] Shared Docker network tekshirish..." -ForegroundColor Yellow
