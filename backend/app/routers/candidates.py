@@ -76,93 +76,123 @@ async def candidates_by_vacancy(vacancy_id: str):
     return [CandidateResponse.from_doc(d) for d in docs]
 
 
-async def upload_and_auto_match(file: UploadFile = File(...)):
-    """Upload a resume, extract candidate info via AI, and auto-match to the best vacancy."""
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
+async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
+    """Process a single uploaded resume file against pre-fetched vacancies.
 
-    file_bytes = await file.read()
-    if len(file_bytes) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+    Returns a result dict on success, or None if the file could not be processed.
+    Errors are logged but never propagated so that sibling files still succeed.
+    """
+    try:
+        if not file.filename:
+            logger.warning("_process_one_file: skipping file with no filename")
+            return None
 
-    logger.warning("upload_and_auto_match: filename=%r size=%d", file.filename, len(file_bytes))
-    text = file_service.extract_text(file.filename, file_bytes)
-    logger.warning("upload_and_auto_match: extracted text length=%s", len(text) if text else None)
-    if not text:
-        raise HTTPException(status_code=422, detail="Could not extract text from file")
+        file_bytes = await file.read()
+        if len(file_bytes) > 10 * 1024 * 1024:
+            logger.warning("_process_one_file: %r exceeds 10 MB limit, skipping", file.filename)
+            return None
 
-    fields = await ai_service.extract_resume_fields(text)
+        logger.warning("_process_one_file: filename=%r size=%d", file.filename, len(file_bytes))
+        text = file_service.extract_text(file.filename, file_bytes)
+        logger.warning("_process_one_file: extracted text length=%s", len(text) if text else None)
+        if not text:
+            logger.warning("_process_one_file: could not extract text from %r, skipping", file.filename)
+            return None
+
+        fields = await ai_service.extract_resume_fields(text)
+
+        sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+
+        async def score_one(v: Vacancy) -> tuple[int, str, list]:
+            async with sem:
+                return await ai_service.score_candidate(
+                    vacancy_title=v.title or "",
+                    required_skills=v.skills,
+                    experience=v.experience or "",
+                    candidate_title=fields.get("title", ""),
+                    candidate_skills=fields.get("skills", []),
+                    vacancy_description=v.description or "",
+                    criteria=v.score_criteria,
+                )
+
+        results = await asyncio.gather(*[score_one(v) for v in vacancies])
+        scores = [r[0] for r in results]
+        best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
+        best_vacancy = vacancies[best_idx]
+        best_score, best_reasoning, best_criteria = results[best_idx]
+
+        file_hash = hashlib.md5(file_bytes).hexdigest()[:16]
+
+        minio_key = None
+        try:
+            minio_key = await minio_service.upload_file(file_bytes, file.filename)
+        except Exception:
+            pass
+
+        candidate_data = {
+            "vacancy_id": best_vacancy.id,
+            "hh_resume_id": f"file:{file_hash}",
+            "relevance_score": best_score,
+            "raw_resume_json": {
+                "source": "file",
+                "filename": file.filename,
+                "extracted": fields,
+                "minio_key": minio_key,
+                "score_reasoning": best_reasoning,
+                "score_criteria": best_criteria,
+            },
+            "matched_at": datetime.now(timezone.utc),
+            **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
+                                       "salary_amount", "salary_currency", "skills")
+               if fields.get(k)},
+        }
+
+        # Atomic upsert — avoids delete+insert race condition that caused duplicates
+        col = Candidate.get_motor_collection()
+        upsert_filter = {"vacancy_id": best_vacancy.id, "hh_resume_id": f"file:{file_hash}"}
+        upsert_result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
+        candidate_oid = upsert_result.upserted_id or (
+            await col.find_one(upsert_filter, {"_id": 1})
+        )["_id"]
+
+        if minio_key:
+            resume_url = f"/api/candidates/{candidate_oid}/resume"
+            await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
+
+        name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown"
+        return {
+            "id": str(candidate_oid),
+            "name": name,
+            "score": best_score,
+            "vacancy_title": best_vacancy.title,
+            "vacancy_id": str(best_vacancy.id),
+        }
+
+    except Exception:
+        logger.exception("_process_one_file: unexpected error processing %r", getattr(file, "filename", "<unknown>"))
+        return None
+
+
+async def upload_and_auto_match(files: list[UploadFile] = File(...)) -> list[dict]:
+    """Upload one or more resumes, extract candidate info via AI, and auto-match each to the best vacancy.
+
+    Vacancies are fetched once and shared across all files. Files are processed
+    concurrently. If a single file fails (e.g. text extraction error) it is
+    skipped and the remaining files still produce results.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
 
     vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
     if not vacancies:
         raise HTTPException(status_code=422, detail="No approved vacancies to match against")
 
-    sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+    raw_results = await asyncio.gather(*[_process_one_file(f, vacancies) for f in files])
 
-    async def score_one(v: Vacancy) -> tuple[int, str, list]:
-        async with sem:
-            return await ai_service.score_candidate(
-                vacancy_title=v.title or "",
-                required_skills=v.skills,
-                experience=v.experience or "",
-                candidate_title=fields.get("title", ""),
-                candidate_skills=fields.get("skills", []),
-                vacancy_description=v.description or "",
-                criteria=v.score_criteria,
-            )
+    # Filter out None entries (failed / skipped files)
+    results = [r for r in raw_results if r is not None]
 
-    results = await asyncio.gather(*[score_one(v) for v in vacancies])
-    scores = [r[0] for r in results]
-    best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
-    best_vacancy = vacancies[best_idx]
-    best_score, best_reasoning, best_criteria = results[best_idx]
-
-    file_hash = hashlib.md5(file_bytes).hexdigest()[:16]
-
-    minio_key = None
-    try:
-        minio_key = await minio_service.upload_file(file_bytes, file.filename)
-    except Exception:
-        pass
-
-    candidate_data = {
-        "vacancy_id": best_vacancy.id,
-        "hh_resume_id": f"file:{file_hash}",
-        "relevance_score": best_score,
-        "raw_resume_json": {
-            "source": "file",
-            "filename": file.filename,
-            "extracted": fields,
-            "minio_key": minio_key,
-            "score_reasoning": best_reasoning,
-            "score_criteria": best_criteria,
-        },
-        "matched_at": datetime.now(timezone.utc),
-        **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
-                                   "salary_amount", "salary_currency", "skills")
-           if fields.get(k)},
-    }
-
-    # Atomic upsert — avoids delete+insert race condition that caused duplicates
-    col = Candidate.get_motor_collection()
-    upsert_filter = {"vacancy_id": best_vacancy.id, "hh_resume_id": f"file:{file_hash}"}
-    result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
-    candidate_oid = result.upserted_id or (
-        await col.find_one(upsert_filter, {"_id": 1})
-    )["_id"]
-
-    if minio_key:
-        resume_url = f"/api/candidates/{candidate_oid}/resume"
-        await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
-
-    name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown"
-    return {
-        "id": str(candidate_oid),
-        "name": name,
-        "score": best_score,
-        "vacancy_title": best_vacancy.title,
-        "vacancy_id": str(best_vacancy.id),
-    }
+    return results
 
 
 async def import_from_xlsx(file: UploadFile = File(...)):

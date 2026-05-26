@@ -37,6 +37,7 @@ export default function CandidatesPage() {
   const [sortBy, setSortBy]   = useState("score");
   const [source, setSource]   = useState("");
   const [uploading, setUploading]   = useState(false);
+  const [uploadCount, setUploadCount] = useState(0);
   const [importing, setImporting]   = useState(false);
   const [rescoring, setRescoring]   = useState(false);
   const [rescoreJob, setRescoreJob] = useState<{ status: string; total: number; processed: number; updated: number; can_resume?: boolean; error?: string | null } | null>(null);
@@ -133,19 +134,26 @@ export default function CandidatesPage() {
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
     e.target.value = "";
+    setUploadCount(files.length);
     setUploading(true);
     try {
-      const res = await candidateApi.upload(file);
-      const { name, score, vacancy_title } = res.data;
-      toast.success(`${name} — "${vacancy_title}" — ${score}%`);
+      const res = await candidateApi.upload(files);
+      res.data.forEach(({ name, score, vacancy_title }) => {
+        toast.success(`${name} — "${vacancy_title}" — ${score}%`);
+      });
+      if (res.data.length === 0) {
+        toast.error("Hech qaysi resume qayta ishlanmadi");
+      }
       mutate();
     } catch {
-      toast.error("Не удалось обработать резюме");
+      toast.error("Resume(lar)ni qayta ishlashda xato");
     } finally {
       setUploading(false);
+      setUploadCount(0);
     }
   };
 
@@ -239,9 +247,9 @@ export default function CandidatesPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
             )}
-            {uploading ? "Анализ…" : "Загрузить резюме"}
+            {uploading ? `${uploadCount} ta tahlil qilinmoqda…` : "Resume yuklash"}
           </button>
-          <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={onFileChange} />
+          <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" multiple className="hidden" onChange={onFileChange} />
 
           {/* Search */}
           <div className="relative">

@@ -146,10 +146,10 @@ export const candidateApi = {
   byVacancy: (vacancyId: string) =>
     api.get(`/api/candidates/vacancy/${vacancyId}`),
   get: (id: string) => api.get(`/api/candidates/${id}`),
-  upload: (file: File) => {
+  upload: (files: File[]) => {
     const fd = new FormData();
-    fd.append("file", file);
-    return api.post<{ id: string; name: string; score: number; vacancy_title: string; vacancy_id: string }>(
+    files.forEach(f => fd.append("files", f));
+    return api.post<Array<{ id: string; name: string; score: number; vacancy_title: string; vacancy_id: string }>>(
       "/api/candidates/upload",
       fd
     );
