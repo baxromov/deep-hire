@@ -1,43 +1,45 @@
 PS C:\Users\bakhromovshb\Projects\deep-hire> .\deploy.ps1
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:118 знак:5
-+     && echo "Network mavjud" \
-+     ~~
-Лексема "&&" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:119 знак:5
-+     || (docker network create shared_services_shared-services-net &&  ...
-+     ~~
-Лексема "||" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:119 знак:67
-+ ... (docker network create shared_services_shared-services-net && echo "N ...
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:116 знак:109
++ ... nspect shared_services_shared-services-net >/dev/null 2>&1 && echo 'N ...
 +                                                                ~~
 Лексема "&&" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:123 знак:15
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:116 знак:134
++ ... ared-services-net >/dev/null 2>&1 && echo 'Network mavjud' || (docker ...
++                                                                ~~
+Лексема "||" не является допустимым разделителем операторов в этой версии.
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:116 знак:196
++ ... (docker network create shared_services_shared-services-net && echo 'N ...
++                                                                ~~
+Лексема "&&" не является допустимым разделителем операторов в этой версии.
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:116 знак:137
++ ...  mavjud' || (docker network create shared_services_shared-services-ne ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Выражения допускаются только в качестве первого элемента конвейера.
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:116 знак:224
++ ... ate shared_services_shared-services-net && echo 'Network yaratildi')"
++                                                                         ~
+Непредвиденная лексема ""
+# -------- STEP 6: Docker build --------
+Write-Host "" в выражении или операторе.
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:119 знак:15
 + Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." ...
 +               ~
 Отсутствует спецификация файла после оператора перенаправления.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:123 знак:15
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:119 знак:15
 + Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." ...
 +               ~~~~~~~
 выходной поток для этой команды уже перенаправлен.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:123 знак:23
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:119 знак:23
 + Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." ...
 +                       ~~~~~~
 Непредвиденная лексема "Docker" в выражении или операторе.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:124 знак:52
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:120 знак:52
 + ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose  ...
 +                                                    ~~
 Лексема "&&" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:132 знак:52
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:128 знак:52
 + ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose  ...
 +                                                    ~~
-Лексема "&&" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:151 знак:52
-+ ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose  ...
-+                                                    ~~
-Лексема "&&" не является допустимым разделителем операторов в этой версии.
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1:154 знак:66
-+ ... Host "    ssh ${ServerUser}@${ServerIP} 'cd ~/$ProjectName && docker  ...
-+                                                                ~~
 Лексема "&&" не является допустимым разделителем операторов в этой версии.
 Выданы сообщения не обо всех ошибках синтаксического анализа.  Исправьте перечисленные в сообщениях ошибки и повторите попытку.
     + CategoryInfo          : ParserError: (:) [], ParseException
