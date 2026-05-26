@@ -48,12 +48,7 @@ ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose down 2>/dev
 
 # -------- STEP 2: Eski deploy ni backup qilish --------
 Write-Host ">>> [2/7] Eski versiyani backup qilish..." -ForegroundColor Yellow
-ssh "${ServerUser}@${ServerIP}" @"
-if [ -d ~/$ProjectName ]; then
-    mv ~/$ProjectName ~/${ProjectName}_backup_`$(date +%Y%m%d_%H%M)
-    echo "Backup yaratildi: ${ProjectName}_backup_`$(date +%Y%m%d_%H%M)"
-fi
-"@
+ssh "${ServerUser}@${ServerIP}" "if [ -d ~/$ProjectName ]; then mv ~/$ProjectName ~/${ProjectName}_backup_`$(date +%Y%m%d_%H%M) && echo 'Backup yaratildi'; fi"
 
 # -------- STEP 3: Fayllarni arxivlash va yuklash --------
 Write-Host ">>> [3/7] Fayllarni yuklash..." -ForegroundColor Yellow
@@ -82,12 +77,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-ssh "${ServerUser}@${ServerIP}" @"
-mkdir -p ~/$ProjectName
-tar xzf ~/${ProjectName}_deploy.tar.gz -C ~/$ProjectName
-rm ~/${ProjectName}_deploy.tar.gz
-echo "Fayllar muvaffaqiyatli ko'chirildi"
-"@
+ssh "${ServerUser}@${ServerIP}" "mkdir -p ~/$ProjectName && tar xzf ~/${ProjectName}_deploy.tar.gz -C ~/$ProjectName && rm ~/${ProjectName}_deploy.tar.gz && echo 'Fayllar muvaffaqiyatli kochiriildi'"
 
 Remove-Item $TempArchive -ErrorAction SilentlyContinue
 
