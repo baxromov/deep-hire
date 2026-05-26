@@ -63,7 +63,8 @@ async def get_auth_url(state: str = "") -> str:
     return f"{settings.hh_oauth_url}?{urlencode(params)}"
 
 
-async def exchange_code(code: str) -> HHToken:
+async def _exchange_code_raw(code: str) -> tuple[dict, dict]:
+    """Exchange OAuth code for token data. Returns (token_data, user_info)."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             settings.hh_token_url,
@@ -79,23 +80,36 @@ async def exchange_code(code: str) -> HHToken:
         resp.raise_for_status()
         data = resp.json()
 
-    expires_at = _utcnow() + timedelta(seconds=data["expires_in"])
-
-    # Fetch user info (best-effort — don't fail login if /me is unreachable)
     try:
         user_info = await _fetch_me(data["access_token"])
     except Exception:
         user_info = {}
 
-    # Remove any existing token
-    await HHToken.find_all().delete()
+    return data, user_info
 
+
+async def exchange_code_for_user(code: str, user_id: str) -> HHToken:
+    """Exchange OAuth code and link the resulting token to a specific user.
+    If a token for the same HH account already exists for this user, it is replaced.
+    """
+    data, user_info = await _exchange_code_raw(code)
+    expires_at = _utcnow() + timedelta(seconds=data["expires_in"])
     employer = user_info.get("employer") or {}
+    hh_user_id = str(user_info.get("id") or "")
+
+    # Replace existing token for same HH account (avoid duplicates)
+    if hh_user_id:
+        await HHToken.find(
+            HHToken.user_id == user_id,
+            HHToken.hh_user_id == hh_user_id,
+        ).delete()
+
     token = HHToken(
+        user_id=user_id,
         access_token=data["access_token"],
         refresh_token=data["refresh_token"],
         expires_at=expires_at,
-        hh_user_id=str(user_info.get("id") or ""),
+        hh_user_id=hh_user_id,
         hh_user_name=f"{user_info.get('first_name') or ''} {user_info.get('last_name') or ''}".strip(),
         email=user_info.get("email") or "",
         phone=user_info.get("phone") or "",
@@ -105,11 +119,17 @@ async def exchange_code(code: str) -> HHToken:
     )
     await token.insert()
 
+    # Cache under user-scoped key
     redis = await get_redis()
     ttl = max(1, int((expires_at - _utcnow()).total_seconds()) - 300)
-    await redis.set(REDIS_TOKEN_KEY, data["access_token"], ex=ttl)
+    await redis.set(f"hh:token:{user_id}", data["access_token"], ex=ttl)
 
     return token
+
+
+async def exchange_code(code: str) -> HHToken:
+    """Legacy — kept for backward compat. Uses system user_id='system'."""
+    return await exchange_code_for_user(code, "system")
 
 
 async def _refresh_token(token: HHToken) -> HHToken:
@@ -139,13 +159,30 @@ async def _refresh_token(token: HHToken) -> HHToken:
     return token
 
 
-async def get_valid_token() -> Optional[str]:
+async def get_valid_token(user_id: Optional[str] = None) -> Optional[str]:
+    """Return a valid access token.
+
+    If user_id is given, prefer a token owned by that user.
+    Falls back to any available token (for legacy callers that don't pass user_id).
+    """
     redis = await get_redis()
+    # Try user-scoped cache first
+    if user_id:
+        cached = await redis.get(f"hh:token:{user_id}")
+        if cached:
+            return cached
+
+    # Legacy global cache
     cached = await redis.get(REDIS_TOKEN_KEY)
     if cached:
         return cached
 
-    token = await HHToken.find_one()
+    # Load from DB
+    if user_id:
+        token = await HHToken.find_one(HHToken.user_id == user_id)
+    else:
+        token = await HHToken.find_one()
+
     if not token:
         return None
 

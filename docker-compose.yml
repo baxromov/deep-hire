@@ -1,8 +1,10 @@
 services:
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    # Port host ga ochilmaydi — faqat Docker ichki network orqali nginx ga ko'rinadi
+    # Bu boshqa backend servislar bilan port conflict ni oldini oladi
+    expose:
+      - "8000"
     env_file: ./backend/.env
     environment:
       MONGO_URI: "mongodb://admin:password123@host.docker.internal:27017"
@@ -15,16 +17,21 @@ services:
       QDRANT_API_KEY: "supersecret123"
       QDRANT_COLLECTION: "uzbek_candidates"
       EMBED_MODEL: "nomic-embed-text"
+      JWT_SECRET: "deephire-super-secret-jwt-key-change-in-production-2024"
+      JWT_EXPIRE_MINUTES: "10080"
+      HH_REDIRECT_URI: "https://proaristocratic-sylvatic-kerstin.ngrok-free.dev/callback"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
+      - backend_venv:/app/.venv   # keep container's venv, don't override with local
     command: .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
-    ports:
-      - "3001:3001"
+    # Port host ga ochilmaydi — faqat nginx orqali
+    expose:
+      - "3001"
     environment:
       PORT: "3001"
       NEXT_PUBLIC_API_URL: "https://proaristocratic-sylvatic-kerstin.ngrok-free.dev"
@@ -37,9 +44,12 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "8085:8085"
+      - "8085:8085"   # Yagona ochiq port — barcha traffic shu orqali
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - backend
       - frontend
+
+volumes:
+  backend_venv:
