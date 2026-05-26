@@ -94,7 +94,7 @@ if (Test-Path $EnvFile) {
     }
     Write-Host "    .env yuklandi: $EnvFile" -ForegroundColor Green
 } else {
-    Write-Warning "  [!]  Lokal .env topilmadi — .env.example dan nusxa olinyapti..."
+    Write-Warning "  [!]  Lokal .env topilmadi - .env.example dan nusxa olinyapti..."
     ssh "${ServerUser}@${ServerIP}" "cp ~/$ProjectName/.env.example ~/$ProjectName/.env"
     Write-Warning ""
     Write-Warning "  MUHIM: Serverda ~/$ProjectName/.env ni to'ldiring:"
