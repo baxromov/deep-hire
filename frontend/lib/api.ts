@@ -34,12 +34,15 @@ api.interceptors.response.use(
 // --- Auth ---
 export const authApi = {
   login: (username: string, password: string) =>
-    api.post<{ access_token: string; token_type: string; user: { id: string; username: string; email: string; role: string; full_name: string; is_active: boolean } }>(
+    api.post<{ access_token: string; token_type: string; user: { id: string; username: string; email: string; role: "admin" | "staff"; full_name: string; is_active: boolean } }>(
       "/api/auth/login",
       { username, password }
     ),
   me: (token?: string) =>
-    api.get("/api/auth/me", token ? { headers: { Authorization: `Bearer ${token}` } } : undefined),
+    api.get<{ id: string; username: string; email: string; role: "admin" | "staff"; full_name: string; is_active: boolean }>(
+      "/api/auth/me",
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+    ),
   logout: () => {
     localStorage.removeItem("dh_token");
     return Promise.resolve();
