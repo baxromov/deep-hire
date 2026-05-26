@@ -166,7 +166,7 @@ export default function AdminUsersPage() {
               <Label>Роль</Label>
               <Select
                 value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: v })}
+                onValueChange={(v) => setForm({ ...form, role: v ?? form.role })}
               >
                 <SelectTrigger>
                   <SelectValue />
