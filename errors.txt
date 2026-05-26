@@ -1,45 +1,130 @@
-#23 11.80 Export encountered an error on /settings/integrations/page: /settings/integrations, exiting the build.
-#23 11.83 ⨯ Next.js build worker exited with code: 1 and signal: null
-#23 11.86 npm notice
-#23 11.86 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-#23 11.86 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-#23 11.86 npm notice To update run: npm install -g npm@11.15.0
-#23 11.86 npm notice
-#23 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-------
- > [frontend builder 5/5] RUN npm run build:
-11.80     at ai (/app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86135)
-11.80     at ai (/app/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104615)
-11.80 Error occurred prerendering page "/settings/integrations". Read more: https://nextjs.org/docs/messages/prerender-error
-11.80 Export encountered an error on /settings/integrations/page: /settings/integrations, exiting the build.
-11.83 ⨯ Next.js build worker exited with code: 1 and signal: null
-11.86 npm notice
-11.86 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-11.86 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-11.86 npm notice To update run: npm install -g npm@11.15.0
-11.86 npm notice
-------
-Dockerfile:20
+bakhromovshb@genai-tst-jupiterhub01:~$ docker logs b2a826f0b746
+INFO:     Will watch for changes in these directories: ['/app']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [1] using WatchFiles
+INFO:     Started server process [71]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/app/.venv/lib/python3.12/site-packages/starlette/routing.py", line 638, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 21, in lifespan
+    await init_db()
+  File "/app/app/database.py", line 18, in init_db
+    await init_beanie(
+  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 789, in init_beanie
+    await Initializer(
+  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 137, in __await__
+    yield from self.init_class(model).__await__()
+  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 749, in init_class
+    await self.init_document(cls)
+  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 580, in init_document
+    build_info = await self.database.command({"buildInfo": 1})
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/_csot.py", line 120, in csot_wrapper
+    return func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/database.py", line 906, in command
+    with self._client._conn_for_reads(read_preference, session, operation=command_name) as (
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/mongo_client.py", line 1683, in _conn_from_server
+    with self._checkout(server, session) as conn:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/mongo_client.py", line 1593, in _checkout
+    with server.checkout(handler=err_handler) as conn:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1336, in checkout
+    conn = self._get_conn(checkout_started_time, handler=handler)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1495, in _get_conn
+    conn = self.connect(handler=handler)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1296, in connect
+    conn.authenticate()
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 648, in authenticate
+    auth.authenticate(creds, self, reauthenticate=reauthenticate)
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 452, in authenticate
+    auth_func(credentials, conn)
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 354, in _authenticate_default
+    return _authenticate_scram(credentials, conn, "SCRAM-SHA-256")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 134, in _authenticate_scram
+    res = conn.command(source, cmd)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/helpers.py", line 45, in inner
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 538, in command
+    return command(
+           ^^^^^^^^
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/network.py", line 218, in command
+    helpers_shared._check_command_response(
+  File "/app/.venv/lib/python3.12/site-packages/pymongo/helpers_shared.py", line 247, in _check_command_response
+    raise OperationFailure(errmsg, code, response, max_wire_version)
+pymongo.errors.OperationFailure: Authentication failed., full error: {'ok': 0.0, 'errmsg': 'Authentication failed.', 'code': 18, 'codeName': 'AuthenticationFailed'}
 
---------------------
-
-  18 |     ENV NEXT_TELEMETRY_DISABLED=1
-
-  19 |
-
-  20 | >>> RUN npm run build
-
-  21 |
-
-  22 |     # ── Stage 3: Production runner ──────────────────────────────────
-
---------------------
-
-target frontend: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1 : Docker build muvaffaqiyatsiz!
-строка:1 знак:1
-+ .\deploy.ps1
-+ ~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
-    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,deploy.ps1
+ERROR:    Application startup failed. Exiting.
+bakhromovshb@genai-tst-jupiterhub01:~$
