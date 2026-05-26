@@ -7,7 +7,7 @@ services:
     environment:
       # Docker ichida localhost o'rniga host.docker.internal ishlatiladi.
       # Bu qiymatlar .env dagi moslarini override qiladi.
-      MONGO_URI:       "mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD:-changeme}@host.docker.internal:27017"
+      MONGO_URI:       "mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD:-changeme}@host.docker.internal:27017/?authSource=admin"
       REDIS_URL:       "redis://host.docker.internal:6379"
       MINIO_ENDPOINT:  "host.docker.internal:9000"
       OLLAMA_BASE_URL: "http://host.docker.internal:11434"
