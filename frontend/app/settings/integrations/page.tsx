@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -17,7 +18,8 @@ interface HHAccount {
   is_employer: boolean;
 }
 
-export default function IntegrationsPage() {
+// useSearchParams() must be inside a <Suspense> boundary in Next.js 15+
+function IntegrationsContent() {
   const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState<HHAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,5 +142,20 @@ export default function IntegrationsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Wrap with Suspense — required by Next.js 15+ for useSearchParams()
+export default function IntegrationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center pt-20">
+          <span className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        </div>
+      }
+    >
+      <IntegrationsContent />
+    </Suspense>
   );
 }
