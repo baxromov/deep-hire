@@ -5,12 +5,11 @@ import useSWR from "swr";
 
 interface Profile {
   id: string;
-  name: string;
+  username: string;
   email: string;
-  phone: string;
-  is_employer: boolean;
-  employer_id: string;
-  employer_name: string;
+  role: "admin" | "staff";
+  full_name: string;
+  is_active: boolean;
 }
 
 function Row({ label, value }: { label: string; value?: string | boolean | null }) {
@@ -39,7 +38,8 @@ export default function ProfilePage() {
 
   if (!profile) return null;
 
-  const initials = profile.name
+  const displayName = profile.full_name || profile.username;
+  const initials = displayName
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -56,19 +56,18 @@ export default function ProfilePage() {
             {initials}
           </div>
           <div>
-            <p className="text-base font-semibold text-gray-900">{profile.name}</p>
-            {profile.employer_name && (
-              <p className="text-sm text-gray-400">{profile.employer_name}</p>
-            )}
+            <p className="text-base font-semibold text-gray-900">{displayName}</p>
+            <p className="text-sm text-gray-400">
+              {profile.role === "admin" ? "Администратор" : "Сотрудник"}
+            </p>
           </div>
         </div>
 
         <div>
-          <Row label="HH ID" value={profile.id} />
+          <Row label="Логин" value={profile.username} />
           <Row label="Email" value={profile.email} />
-          <Row label="Телефон" value={profile.phone} />
-          <Row label="Работодатель" value={profile.is_employer ? "Да" : undefined} />
-          <Row label="ID работодателя" value={profile.employer_id} />
+          <Row label="Роль" value={profile.role === "admin" ? "Администратор" : "Сотрудник"} />
+          <Row label="Активен" value={profile.is_active ? "Да" : "Нет"} />
         </div>
       </div>
     </div>

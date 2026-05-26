@@ -34,4 +34,3 @@ export interface CandidateDetail extends Candidate {
   raw_resume_json: Record<string, unknown>;
 }
 
-export type { ScoreCriterion };
