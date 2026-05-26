@@ -1,44 +1,18 @@
-PS C:\Users\bakhromovshb\Projects\deep-hire> .\deploy.ps1
-
-================================================
-  deep-hire deploy
-  Project : deep-hire
-  Server  : bakhromovshb@172.31.174.11
-  Path    : /home/bakhromovshb/deep-hire
-================================================
-
->>> [1/7] Containerlarni to'xtatish...
-bash: line 1: cd: /home/bakhromovshb/deep-hire: No such file or directory
->>> [2/7] Eski versiyani backup qilish...
-bash: -c: line 4: syntax error near unexpected token `fi'
-bash: -c: line 4: `fi'
->>> [3/7] Fayllarni yuklash...
-deep-hire_deploy.tar.gz                                                                                                                          100% 7525KB  72.8MB/s   00:00
-rm: cannot remove '/home/bakhromovshb/deep-hire_deploy.tar.gz'$'\r': No such file or directory
-bash: -c: line 4: unexpected EOF while looking for matching `''
->>> [4/7] .env faylni tekshirish...
-ПРЕДУПРЕЖДЕНИЕ: .env fayli serverda topilmadi - .env.example dan nusxa olinyapti...
-cp: cannot stat '/home/bakhromovshb/deep-hire/.env.example': No such file or directory
-ПРЕДУПРЕЖДЕНИЕ:
-ПРЕДУПРЕЖДЕНИЕ:   [!]  MUHIM: Serverda ~/deep-hire/.env ni to'ldiring:
-ПРЕДУПРЕЖДЕНИЕ:      ssh bakhromovshb@172.31.174.11 'nano ~/deep-hire/.env'
-ПРЕДУПРЕЖДЕНИЕ:
-ПРЕДУПРЕЖДЕНИЕ:   Kerakli qiymatlar:
-ПРЕДУПРЕЖДЕНИЕ:     MONGO_PASSWORD, MINIO_ACCESS/SECRET_KEY
-ПРЕДУПРЕЖДЕНИЕ:     HH_CLIENT_ID, HH_CLIENT_SECRET, HH_REDIRECT_URI
-ПРЕДУПРЕЖДЕНИЕ:     JWT_SECRET (32+ tasodifiy belgi)
-ПРЕДУПРЕЖДЕНИЕ:     FRONTEND_URL, NEXT_PUBLIC_API_URL
-ПРЕДУПРЕЖДЕНИЕ:
-ПРЕДУПРЕЖДЕНИЕ:   To'ldirgach qayta deploy qiling: .\deploy.ps1
->>> [5/7] Shared Docker network tekshirish...
-Network mavjud
->>> [6/7] Docker image build qilish (server tomonida)...
-bash: line 1: cd: /home/bakhromovshb/deep-hire: No such file or directory
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1 : Docker build muvaffaqiyatsiz!
-строка:1 знак:1
-+ .\deploy.ps1
-+ ~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
-    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,deploy.ps1
-
-PS C:\Users\bakhromovshb\Projects\deep-hire>
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
+web-socket.ts:50 WebSocket connection to 'ws://172.31.174.11:8385/_next/webpack-hmr?id=OK7vjyLY0K_FPsb7N8i5g' failed:
+init @ web-socket.ts:50
