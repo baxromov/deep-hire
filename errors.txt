@@ -1,125 +1,106 @@
+#8 [backend internal] load build context
+#8 transferring context: 4.74kB done
+#8 DONE 0.0s
+
+#9 [backend 1/6] FROM docker.io/library/python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203
+#9 resolve docker.io/library/python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203 0.0s done
+#9 DONE 0.0s
+
+#10 [backend 5/6] RUN uv sync --no-dev
+#10 CACHED
+
+#11 [backend 3/6] RUN pip install uv
+#11 CACHED
+
+#12 [backend 2/6] WORKDIR /app
+#12 CACHED
+
+#13 [backend 4/6] COPY pyproject.toml .
+#13 CACHED
+
+#14 [backend 6/6] COPY . .
+#14 CACHED
+
+#15 [frontend deps 1/4] FROM docker.io/library/node:22-alpine@sha256:968df39aedcea65eeb078fb336ed7191baf48f972b4479711397108be0966920
+#15 resolve docker.io/library/node:22-alpine@sha256:968df39aedcea65eeb078fb336ed7191baf48f972b4479711397108be0966920 0.0s done
+#15 DONE 0.0s
+
+#16 [frontend deps 2/4] WORKDIR /app
+#16 CACHED
+
+#17 [frontend internal] load build context
+#17 transferring context: 13.76kB done
+#17 DONE 0.0s
+
+#18 [frontend deps 4/4] RUN npm ci
+#18 CACHED
+
+#19 [frontend deps 3/4] COPY package*.json ./
+#19 CACHED
+
+#20 [frontend builder 3/5] COPY --from=deps /app/node_modules ./node_modules
+#20 CACHED
+
+#21 [frontend builder 4/5] COPY . .
+#21 DONE 0.1s
+
+#22 [backend] exporting to image
+#22 exporting layers done
+#22 exporting manifest sha256:aeea4002bdaca4fe603f0e3bf83160c5e699edf6d27e13b567083a90ae300ec9 done
+#22 exporting config sha256:1ea48d6ac65eb3ebb46b13c63a0157544777eb6ace772e31c34071522c07d38e done
+#22 exporting attestation manifest sha256:1ef1f1a020fae491b90fa62d441029d4a930832f5a19eb083eef9494b89c044d
+#22 exporting attestation manifest sha256:1ef1f1a020fae491b90fa62d441029d4a930832f5a19eb083eef9494b89c044d 0.1s done
+#22 exporting manifest list sha256:66006589d4925c3e7765890723375b85f57fd58ccf7f132ce975776ddb80c23c done
+#22 naming to docker.io/library/deep-hire-backend:latest done
+#22 unpacking to docker.io/library/deep-hire-backend:latest done
+#22 DONE 0.1s
 
 #23 [backend] resolving provenance for metadata file
 #23 DONE 0.0s
 
 #24 [frontend builder 5/5] RUN npm run build
-#24 0.561
-#24 0.561 > frontend@0.1.0 build
-#24 0.561 > next build
-#24 0.561
-#24 1.079 ▲ Next.js 16.2.4 (Turbopack)
-#24 1.079
-#24 1.111   Creating an optimized production build ...
-#24 5.594 ✓ Compiled successfully in 4.2s
-#24 5.598   Running TypeScript ...
-#24 10.06 Failed to type check.
-#24 10.06
-#24 10.06 ./lib/auth-context.tsx:62:13
-#24 10.06 Type error: Argument of type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to parameter of type 'SetStateAction<AuthUser | null>'.
-#24 10.06   Type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to type 'AuthUser'.
-#24 10.06     Types of property 'role' are incompatible.
-#24 10.06       Type 'string' is not assignable to type '"admin" | "staff"'.
-#24 10.06
-#24 10.06   60 |     localStorage.setItem(TOKEN_KEY, access_token);
-#24 10.06   61 |     setToken(access_token);
-#24 10.06 > 62 |     setUser(userData);
-#24 10.06      |             ^
-#24 10.06   63 |   }, []);
-#24 10.06   64 |
-#24 10.06   65 |   const logout = useCallback(() => {
-#24 10.12 Next.js build worker exited with code: 1 and signal: null
-#24 10.16 npm notice
-#24 10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-#24 10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-#24 10.16 npm notice To update run: npm install -g npm@11.15.0
-#24 10.16 npm notice
+#24 0.576
+#24 0.576 > frontend@0.1.0 build
+#24 0.576 > next build
+#24 0.576
+#24 1.082 ▲ Next.js 16.2.4 (Turbopack)
+#24 1.082
+#24 1.114   Creating an optimized production build ...
+#24 5.473 ✓ Compiled successfully in 4.1s
+#24 5.477   Running TypeScript ...
+#24 10.18 Failed to type check.
+#24 10.18
+#24 10.19 ./app/profile/page.tsx:29:5
+#24 10.19 Type error: No overload matches this call.
+#24 10.19   The last overload gave the following error.
+#24 10.19     Type '() => Promise<{ id: string; username: string; email: string; role: "admin" | "staff"; full_name: string; is_active: boolean; }>' has no properties in common with type 'SWRConfiguration<Profile, any, BareFetcher<Profile>>'.
+#24 10.19
+#24 10.19   27 |   const { data: profile, isLoading } = useSWR<Profile>(
+#24 10.19   28 |     "me",
+#24 10.19 > 29 |     () => authApi.me().then((r) => r.data)
+#24 10.19      |     ^
+#24 10.19   30 |   );
+#24 10.19   31 |
+#24 10.19   32 |   if (isLoading) {
+#24 10.25 Next.js build worker exited with code: 1 and signal: null
+#24 10.30 npm notice
+#24 10.30 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+#24 10.30 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+#24 10.30 npm notice To update run: npm install -g npm@11.15.0
+#24 10.30 npm notice
 #24 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
 ------
  > [frontend builder 5/5] RUN npm run build:
-10.06      |             ^
-10.06   63 |   }, []);
-10.06   64 |
-10.06   65 |   const logout = useCallback(() => {
-10.12 Next.js build worker exited with code: 1 and signal: null
-10.16 npm notice
-10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-10.16 npm notice To update run: npm install -g npm@11.15.0
-10.16 npm notice
-------
-Dockerfile:20
-
---------------------
-
-  18 |     ENV NEXT_TELEMETRY_DISABLED=1
-
-  19 |
-
-  20 | >>> RUN npm run build
-
-  21 |
-
-  22 |     # ── Stage 3: Production runner ──────────────────────────────────
-
---------------------
-
-target frontend: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-
-C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1 : Docker build muvaffaqiyatsiz!
-строка:1 знак:1
-+ .\deploy.ps1
-+ ~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
-    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,deploy.ps1
-
-PS C:\Users\bakhromovshb\Projects\deep-hire>
-#23 [backend] resolving provenance for metadata file
-#23 DONE 0.0s
-
-#24 [frontend builder 5/5] RUN npm run build
-#24 0.561
-#24 0.561 > frontend@0.1.0 build
-#24 0.561 > next build
-#24 0.561
-#24 1.079 ▲ Next.js 16.2.4 (Turbopack)
-#24 1.079
-#24 1.111   Creating an optimized production build ...
-#24 5.594 ✓ Compiled successfully in 4.2s
-#24 5.598   Running TypeScript ...
-#24 10.06 Failed to type check.
-#24 10.06
-#24 10.06 ./lib/auth-context.tsx:62:13
-#24 10.06 Type error: Argument of type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to parameter of type 'SetStateAction<AuthUser | null>'.
-#24 10.06   Type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to type 'AuthUser'.
-#24 10.06     Types of property 'role' are incompatible.
-#24 10.06       Type 'string' is not assignable to type '"admin" | "staff"'.
-#24 10.06
-#24 10.06   60 |     localStorage.setItem(TOKEN_KEY, access_token);
-#24 10.06   61 |     setToken(access_token);
-#24 10.06 > 62 |     setUser(userData);
-#24 10.06      |             ^
-#24 10.06   63 |   }, []);
-#24 10.06   64 |
-#24 10.06   65 |   const logout = useCallback(() => {
-#24 10.12 Next.js build worker exited with code: 1 and signal: null
-#24 10.16 npm notice
-#24 10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-#24 10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-#24 10.16 npm notice To update run: npm install -g npm@11.15.0
-#24 10.16 npm notice
-#24 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-------
- > [frontend builder 5/5] RUN npm run build:
-10.06      |             ^
-10.06   63 |   }, []);
-10.06   64 |
-10.06   65 |   const logout = useCallback(() => {
-10.12 Next.js build worker exited with code: 1 and signal: null
-10.16 npm notice
-10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-10.16 npm notice To update run: npm install -g npm@11.15.0
-10.16 npm notice
+10.19      |     ^
+10.19   30 |   );
+10.19   31 |
+10.19   32 |   if (isLoading) {
+10.25 Next.js build worker exited with code: 1 and signal: null
+10.30 npm notice
+10.30 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+10.30 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+10.30 npm notice To update run: npm install -g npm@11.15.0
+10.30 npm notice
 ------
 Dockerfile:20
 
