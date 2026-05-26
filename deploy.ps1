@@ -1,7 +1,12 @@
 # ============================================================
 #  deploy.ps1 - deep-hire loyihasini serverga yuklash
-#  Ishlatish: .\deploy.ps1
+#  Ishlatish:
+#    .\deploy.ps1              -- Docker cache ishlatadi (tez, ~2 daqiqa)
+#    .\deploy.ps1 -NoCache     -- To'liq fresh build (ishonchli, ~8-10 daqiqa)
 # ============================================================
+param(
+    [switch]$NoCache   # Muammo bo'lsa ishlatish uchun: .\deploy.ps1 -NoCache
+)
 
 # -------- SERVER CONFIG --------
 $ServerUser = "bakhromovshb"
@@ -118,11 +123,18 @@ ssh "${ServerUser}@${ServerIP}" "docker network inspect shared_services_shared-s
 
 # -------- STEP 6: Docker build --------
 Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." -ForegroundColor Yellow
-# --no-cache: har safar fresh build - buzilgan cache sabab "har xil xato" muammosini hal qiladi
-# --progress=plain: to'liq log (muammo bo'lsa aniq ko'rish uchun)
-ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose build --no-cache --progress=plain 2>&1 | tee ~/build_log.txt; exit ${PIPESTATUS[0]}"
+# --progress=plain: to'liq log (muammo bo'lsa aniq ko'rish uchun, ~/build_log.txt ga yoziladi)
+$BuildFlags = "--progress=plain"
+if ($NoCache) {
+    Write-Host "    [!] -NoCache rejimi: to'liq fresh build (~8-10 daqiqa)..." -ForegroundColor Magenta
+    $BuildFlags = "--no-cache --progress=plain"
+} else {
+    Write-Host "    Docker cache ishlatiladi (tez). Muammo bo'lsa: .\deploy.ps1 -NoCache" -ForegroundColor DarkGray
+}
+ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose build $BuildFlags 2>&1 | tee ~/build_log.txt; exit `${PIPESTATUS[0]}"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Docker build muvaffaqiyatsiz! Log: ~/build_log.txt"
+    Write-Error "Docker build muvaffaqiyatsiz! To'liq log: ~/build_log.txt"
+    Write-Host "  Qayta urinish: .\deploy.ps1 -NoCache" -ForegroundColor Yellow
     exit 1
 }
 
