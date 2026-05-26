@@ -91,25 +91,24 @@ echo "Fayllar muvaffaqiyatli ko'chirildi"
 
 Remove-Item $TempArchive -ErrorAction SilentlyContinue
 
-# -------- STEP 4: .env fayllarni tekshirish --------
-Write-Host ">>> [4/7] .env fayllarni tekshirish..." -ForegroundColor Yellow
-$EnvCheck = ssh "${ServerUser}@${ServerIP}" @"
-missing=""
-[ ! -f ~/$ProjectName/.env ]         && missing="\$missing  - ~/$ProjectName/.env"
-[ ! -f ~/$ProjectName/backend/.env ] && missing="\$missing  - ~/$ProjectName/backend/.env"
-echo "\$missing"
-"@
+# -------- STEP 4: .env faylni tekshirish --------
+Write-Host ">>> [4/7] .env faylni tekshirish..." -ForegroundColor Yellow
+$EnvExists = ssh "${ServerUser}@${ServerIP}" "[ -f ~/$ProjectName/.env ] && echo yes || echo no"
 
-if ($EnvCheck -match "\S") {
-    Write-Warning ".env fayllari serverdda topilmadi, nusxa olinmoqda..."
-    ssh "${ServerUser}@${ServerIP}" @"
-[ ! -f ~/$ProjectName/.env ]         && cp ~/$ProjectName/.env.example         ~/$ProjectName/.env
-[ ! -f ~/$ProjectName/backend/.env ] && cp ~/$ProjectName/backend/.env.example ~/$ProjectName/backend/.env
-echo "DIQQAT: ~/$ProjectName/.env va backend/.env fayllarini to'ldiring!"
-"@
-    Write-Warning "  ~/$ProjectName/.env"
-    Write-Warning "  ~/$ProjectName/backend/.env"
-    Write-Warning "Qiymatlarni to'ldirgach qayta deploy qiling."
+if ($EnvExists.Trim() -eq "no") {
+    Write-Warning ".env fayli serverda topilmadi — .env.example dan nusxa olinyapti..."
+    ssh "${ServerUser}@${ServerIP}" "cp ~/$ProjectName/.env.example ~/$ProjectName/.env"
+    Write-Warning ""
+    Write-Warning "  ⚠️  MUHIM: Serverda ~/$ProjectName/.env ni to'ldiring:"
+    Write-Warning "     ssh ${ServerUser}@${ServerIP} 'nano ~/$ProjectName/.env'"
+    Write-Warning ""
+    Write-Warning "  Kerakli qiymatlar:"
+    Write-Warning "    MONGO_PASSWORD, MINIO_ACCESS/SECRET_KEY"
+    Write-Warning "    HH_CLIENT_ID, HH_CLIENT_SECRET, HH_REDIRECT_URI"
+    Write-Warning "    JWT_SECRET (32+ tasodifiy belgi)"
+    Write-Warning "    FRONTEND_URL, NEXT_PUBLIC_API_URL"
+    Write-Warning ""
+    Write-Warning "  To'ldirgach qayta deploy qiling: .\deploy.ps1"
 }
 
 # -------- STEP 5: Shared Docker network --------

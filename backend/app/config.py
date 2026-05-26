@@ -2,7 +2,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Qidirish tartibi:
+    #   1. Muhit o'zgaruvchilari (Docker env_file / environment bloki)
+    #   2. backend/.env  — lokal ishga tushirishda backend/ papkasidagi .env
+    #   3. ../.env       — lokal ishga tushirishda project root dagi yagona .env
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_db: str = "deephire"
