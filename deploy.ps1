@@ -1,5 +1,5 @@
 # ============================================================
-#  deploy.ps1 — deep-hire loyihasini serverga yuklash
+#  deploy.ps1 - deep-hire loyihasini serverga yuklash
 #  Ishlatish: .\deploy.ps1
 # ============================================================
 
@@ -30,16 +30,16 @@ if (-not $ProjectName) {
 $RemotePath = "/home/$ServerUser/$ProjectName"
 $LocalPath  = $PSScriptRoot
 
-# Faqat nginx host portini ochadi — backend/frontend ichki (conflict yo'q)
+# Faqat nginx host portini ochadi - backend/frontend ichki (conflict yo'q)
 $NginxPort = 8085
 
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "  deep-hire deploy" -ForegroundColor Cyan
 Write-Host "  Project : $ProjectName" -ForegroundColor Cyan
 Write-Host "  Server  : ${ServerUser}@${ServerIP}" -ForegroundColor Cyan
 Write-Host "  Path    : $RemotePath" -ForegroundColor Cyan
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # -------- STEP 1: Containerlarni to'xtatish --------
@@ -96,10 +96,10 @@ Write-Host ">>> [4/7] .env faylni tekshirish..." -ForegroundColor Yellow
 $EnvExists = ssh "${ServerUser}@${ServerIP}" "[ -f ~/$ProjectName/.env ] && echo yes || echo no"
 
 if ($EnvExists.Trim() -eq "no") {
-    Write-Warning ".env fayli serverda topilmadi — .env.example dan nusxa olinyapti..."
+    Write-Warning ".env fayli serverda topilmadi - .env.example dan nusxa olinyapti..."
     ssh "${ServerUser}@${ServerIP}" "cp ~/$ProjectName/.env.example ~/$ProjectName/.env"
     Write-Warning ""
-    Write-Warning "  ⚠️  MUHIM: Serverda ~/$ProjectName/.env ni to'ldiring:"
+    Write-Warning "  [!]  MUHIM: Serverda ~/$ProjectName/.env ni to'ldiring:"
     Write-Warning "     ssh ${ServerUser}@${ServerIP} 'nano ~/$ProjectName/.env'"
     Write-Warning ""
     Write-Warning "  Kerakli qiymatlar:"
@@ -133,15 +133,15 @@ if ($LASTEXITCODE -ne 0) {
 
 # -------- NATIJA --------
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-Write-Host "  ✅  DEPLOY MUVAFFAQIYATLI YAKUNLANDI" -ForegroundColor Green
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+Write-Host "================================================" -ForegroundColor Green
+Write-Host "  [OK]  DEPLOY MUVAFFAQIYATLI YAKUNLANDI" -ForegroundColor Green
+Write-Host "================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Asosiy URL  : http://${ServerIP}:${NginxPort}"         -ForegroundColor Cyan
 Write-Host "  API docs    : http://${ServerIP}:${NginxPort}/api/docs" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Backend/Frontend portlari host ga ochilmagan (faqat Docker ichki)." -ForegroundColor DarkGray
-Write-Host "  Barcha traffic nginx:${NginxPort} orqali o'tadi — port conflict yo'q." -ForegroundColor DarkGray
+Write-Host "  Barcha traffic nginx:${NginxPort} orqali o'tadi - port conflict yo'q." -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Container holati:" -ForegroundColor White
 ssh "${ServerUser}@${ServerIP}" "cd ~/$ProjectName && docker compose ps"
