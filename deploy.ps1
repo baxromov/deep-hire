@@ -113,11 +113,7 @@ if ($EnvExists.Trim() -eq "no") {
 
 # -------- STEP 5: Shared Docker network --------
 Write-Host ">>> [5/7] Shared Docker network tekshirish..." -ForegroundColor Yellow
-ssh "${ServerUser}@${ServerIP}" @"
-docker network inspect shared_services_shared-services-net >/dev/null 2>&1 \
-    && echo "Network mavjud" \
-    || (docker network create shared_services_shared-services-net && echo "Network yaratildi")
-"@
+ssh "${ServerUser}@${ServerIP}" "docker network inspect shared_services_shared-services-net >/dev/null 2>&1 && echo 'Network mavjud' || (docker network create shared_services_shared-services-net && echo 'Network yaratildi')"
 
 # -------- STEP 6: Docker build --------
 Write-Host ">>> [6/7] Docker image build qilish (server tomonida)..." -ForegroundColor Yellow
