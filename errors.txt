@@ -1,51 +1,125 @@
-#22 [frontend builder 3/5] COPY --from=deps /app/node_modules ./node_modules
-#22 DONE 4.0s
 
-#23 [frontend builder 4/5] COPY . .
-#23 DONE 0.3s
+#23 [backend] resolving provenance for metadata file
+#23 DONE 0.0s
 
 #24 [frontend builder 5/5] RUN npm run build
-#24 0.577
-#24 0.577 > frontend@0.1.0 build
-#24 0.577 > next build
-#24 0.577
-#24 1.606 ▲ Next.js 16.2.4 (Turbopack)
-#24 1.606
-#24 1.638   Creating an optimized production build ...
-#24 6.132 ✓ Compiled successfully in 4.2s
-#24 6.139   Running TypeScript ...
-#24 11.08 Failed to type check.
-#24 11.08
-#24 11.08 ./app/admin/users/page.tsx:169:58
-#24 11.08 Type error: Type 'string | null' is not assignable to type 'string'.
-#24 11.08   Type 'null' is not assignable to type 'string'.
-#24 11.08
-#24 11.08   167 |               <Select
-#24 11.08   168 |                 value={form.role}
-#24 11.08 > 169 |                 onValueChange={(v) => setForm({ ...form, role: v })}
-#24 11.08       |                                                          ^
-#24 11.08   170 |               >
-#24 11.08   171 |                 <SelectTrigger>
-#24 11.08   172 |                   <SelectValue />
-#24 11.13 Next.js build worker exited with code: 1 and signal: null
-#24 11.16 npm notice
-#24 11.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-#24 11.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-#24 11.16 npm notice To update run: npm install -g npm@11.15.0
-#24 11.16 npm notice
+#24 0.561
+#24 0.561 > frontend@0.1.0 build
+#24 0.561 > next build
+#24 0.561
+#24 1.079 ▲ Next.js 16.2.4 (Turbopack)
+#24 1.079
+#24 1.111   Creating an optimized production build ...
+#24 5.594 ✓ Compiled successfully in 4.2s
+#24 5.598   Running TypeScript ...
+#24 10.06 Failed to type check.
+#24 10.06
+#24 10.06 ./lib/auth-context.tsx:62:13
+#24 10.06 Type error: Argument of type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to parameter of type 'SetStateAction<AuthUser | null>'.
+#24 10.06   Type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to type 'AuthUser'.
+#24 10.06     Types of property 'role' are incompatible.
+#24 10.06       Type 'string' is not assignable to type '"admin" | "staff"'.
+#24 10.06
+#24 10.06   60 |     localStorage.setItem(TOKEN_KEY, access_token);
+#24 10.06   61 |     setToken(access_token);
+#24 10.06 > 62 |     setUser(userData);
+#24 10.06      |             ^
+#24 10.06   63 |   }, []);
+#24 10.06   64 |
+#24 10.06   65 |   const logout = useCallback(() => {
+#24 10.12 Next.js build worker exited with code: 1 and signal: null
+#24 10.16 npm notice
+#24 10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+#24 10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+#24 10.16 npm notice To update run: npm install -g npm@11.15.0
+#24 10.16 npm notice
 #24 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
 ------
  > [frontend builder 5/5] RUN npm run build:
-11.08       |                                                          ^
-11.08   170 |               >
-11.08   171 |                 <SelectTrigger>
-11.08   172 |                   <SelectValue />
-11.13 Next.js build worker exited with code: 1 and signal: null
-11.16 npm notice
-11.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
-11.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
-11.16 npm notice To update run: npm install -g npm@11.15.0
-11.16 npm notice
+10.06      |             ^
+10.06   63 |   }, []);
+10.06   64 |
+10.06   65 |   const logout = useCallback(() => {
+10.12 Next.js build worker exited with code: 1 and signal: null
+10.16 npm notice
+10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+10.16 npm notice To update run: npm install -g npm@11.15.0
+10.16 npm notice
+------
+Dockerfile:20
+
+--------------------
+
+  18 |     ENV NEXT_TELEMETRY_DISABLED=1
+
+  19 |
+
+  20 | >>> RUN npm run build
+
+  21 |
+
+  22 |     # ── Stage 3: Production runner ──────────────────────────────────
+
+--------------------
+
+target frontend: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+
+C:\Users\bakhromovshb\Projects\deep-hire\deploy.ps1 : Docker build muvaffaqiyatsiz!
+строка:1 знак:1
++ .\deploy.ps1
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException,deploy.ps1
+
+PS C:\Users\bakhromovshb\Projects\deep-hire>
+#23 [backend] resolving provenance for metadata file
+#23 DONE 0.0s
+
+#24 [frontend builder 5/5] RUN npm run build
+#24 0.561
+#24 0.561 > frontend@0.1.0 build
+#24 0.561 > next build
+#24 0.561
+#24 1.079 ▲ Next.js 16.2.4 (Turbopack)
+#24 1.079
+#24 1.111   Creating an optimized production build ...
+#24 5.594 ✓ Compiled successfully in 4.2s
+#24 5.598   Running TypeScript ...
+#24 10.06 Failed to type check.
+#24 10.06
+#24 10.06 ./lib/auth-context.tsx:62:13
+#24 10.06 Type error: Argument of type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to parameter of type 'SetStateAction<AuthUser | null>'.
+#24 10.06   Type '{ id: string; username: string; email: string; role: string; full_name: string; is_active: boolean; }' is not assignable to type 'AuthUser'.
+#24 10.06     Types of property 'role' are incompatible.
+#24 10.06       Type 'string' is not assignable to type '"admin" | "staff"'.
+#24 10.06
+#24 10.06   60 |     localStorage.setItem(TOKEN_KEY, access_token);
+#24 10.06   61 |     setToken(access_token);
+#24 10.06 > 62 |     setUser(userData);
+#24 10.06      |             ^
+#24 10.06   63 |   }, []);
+#24 10.06   64 |
+#24 10.06   65 |   const logout = useCallback(() => {
+#24 10.12 Next.js build worker exited with code: 1 and signal: null
+#24 10.16 npm notice
+#24 10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+#24 10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+#24 10.16 npm notice To update run: npm install -g npm@11.15.0
+#24 10.16 npm notice
+#24 ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+------
+ > [frontend builder 5/5] RUN npm run build:
+10.06      |             ^
+10.06   63 |   }, []);
+10.06   64 |
+10.06   65 |   const logout = useCallback(() => {
+10.12 Next.js build worker exited with code: 1 and signal: null
+10.16 npm notice
+10.16 npm notice New major version of npm available! 10.9.8 -> 11.15.0
+10.16 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+10.16 npm notice To update run: npm install -g npm@11.15.0
+10.16 npm notice
 ------
 Dockerfile:20
 
