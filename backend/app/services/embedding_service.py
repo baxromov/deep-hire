@@ -16,7 +16,7 @@ async def embed(text: str) -> List[float]:
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{settings.ollama_base_url}/api/embed",
-            json={"model": settings.embed_model, "input": text},
+            json={"model": settings.ollama_embed_model, "input": text},
         )
         resp.raise_for_status()
         data = resp.json()

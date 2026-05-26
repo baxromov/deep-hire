@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     qdrant_collection: str = "uzbek_candidates"
 
     # Ollama embedding model for Qdrant indexing and vacancy embedding
-    embed_model: str = "nomic-embed-text"
+    # Same Ollama instance (ollama_base_url), separate lightweight embed model
+    ollama_embed_model: str = "nomic-embed-text"
 
     # Pool matching params
     pool_top_k: int = 50    # candidates retrieved from Qdrant before re-scoring
