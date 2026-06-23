@@ -134,6 +134,7 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
             "vacancy_id": best_vacancy.id,
             "hh_resume_id": f"file:{file_hash}",
             "relevance_score": best_score,
+            "skills": fields.get("skills") or [],  # always include, even if empty
             "raw_resume_json": {
                 "source": "file",
                 "filename": file.filename,
@@ -144,7 +145,7 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
             },
             "matched_at": datetime.now(timezone.utc),
             **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
-                                       "salary_amount", "salary_currency", "skills")
+                                       "salary_amount", "salary_currency")
                if fields.get(k)},
         }
 
@@ -189,7 +190,14 @@ async def upload_and_auto_match(files: list[UploadFile] = File(...)) -> list[dic
     if not vacancies:
         raise HTTPException(status_code=422, detail="No approved vacancies to match against")
 
-    raw_results = await asyncio.gather(*[_process_one_file(f, vacancies) for f in files])
+    # Limit concurrent Ollama calls to avoid overloading the cloud model
+    upload_sem = asyncio.Semaphore(3)
+
+    async def _process_with_sem(f):
+        async with upload_sem:
+            return await _process_one_file(f, vacancies)
+
+    raw_results = await asyncio.gather(*[_process_with_sem(f) for f in files])
 
     # Filter out None entries (failed / skipped files)
     results = [r for r in raw_results if r is not None]

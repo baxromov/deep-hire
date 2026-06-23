@@ -239,10 +239,15 @@ Text to extract from:
 
 RESUME_EXTRACT_PROMPT = """You are a recruitment assistant. Extract structured candidate information from the given resume text.
 
+IMPORTANT: Look carefully for the candidate's full name. In Russian/Uzbek/CIS resumes the name almost always appears in the first few lines, either:
+- As a standalone "Surname Firstname" line (e.g. "Иванов Иван" or "Ivanov Ivan")
+- After labels like "ФИО:", "Имя:", "Name:", "Фамилия Имя:"
+Try VERY hard to find a name — do NOT return null if any name-like text exists.
+
 Return ONLY a JSON object with these exact keys (use null for missing fields):
 {
-  "first_name": "First name",
-  "last_name": "Last name",
+  "first_name": "First name / Имя",
+  "last_name": "Last name / Фамилия",
   "title": "current or desired job title",
   "skills": ["skill1", "skill2"],
   "area": "city or region",
@@ -251,33 +256,83 @@ Return ONLY a JSON object with these exact keys (use null for missing fields):
 }
 
 Rules:
-- Return ONLY the JSON, no markdown, no explanation
-- salary_currency should be UZS, RUB, USD, or EUR
+- first_name / last_name: extract from ANY format (Cyrillic or Latin). Infer if possible.
+- skills: list ALL technical skills, tools, languages, frameworks. Return [] if none.
+- title: infer from skills/experience if not stated explicitly, never return null.
+- Return ONLY the JSON, no markdown, no explanation, no thinking.
+- salary_currency: UZS, RUB, USD, or EUR.
 
 Resume text:
 """
 
 
+def _heuristic_extract_name(text: str) -> tuple[str | None, str | None]:
+    """Regex fallback: extract first/last name when LLM returns nothing."""
+    # Label-prefixed: "ФИО: Иванов Иван" / "Name: Ivan Ivanov"
+    labeled = re.search(
+        r'(?:ФИО|Ф\.?И\.?О\.?|Имя и фамилия|Имя|Фамилия|Surname|Last\s*name|First\s*name|Full\s*name)[:\s]+'
+        r'([А-ЯЁA-Z][а-яёa-z\-]+)(?:\s+([А-ЯЁA-Z][а-яёa-z\-]+))?',
+        text[:1500], re.IGNORECASE,
+    )
+    if labeled:
+        return labeled.group(1), labeled.group(2)
+
+    # Standalone capitalized line in first 8 non-empty lines (2–3 words)
+    for line in text.strip().split('\n')[:8]:
+        line = line.strip()
+        if not line or len(line) > 50:
+            continue
+        parts = line.split()
+        if 2 <= len(parts) <= 3 and all(re.match(r'^[А-ЯЁA-Z]', p) for p in parts):
+            return parts[0], parts[-1]
+
+    return None, None
+
+
 async def extract_resume_fields(text: str) -> Dict[str, Any]:
     payload = {
         "model": settings.ollama_model,
-        "messages": [{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:4000]}],
+        "messages": [{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
         "stream": False,
         "format": "json",
     }
+    result: Dict[str, Any] = {}
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
             resp.raise_for_status()
             raw = resp.json().get("message", {}).get("content", "")
-            parsed = json.loads(_strip_fences(raw))
-            return {k: v for k, v in parsed.items() if v is not None}
-    except Exception:
-        return {}
+            cleaned = _strip_fences(raw)
+            parsed = json.loads(cleaned)
+            result = {k: v for k, v in parsed.items() if v is not None}
+    except Exception as e:
+        logger.warning("extract_resume_fields LLM failed: %s | text_preview=%r", e, text[:150])
+
+    # Ensure skills is always a list (never rely on falsy [] being filtered out)
+    if not isinstance(result.get("skills"), list):
+        result["skills"] = []
+
+    # Heuristic fallback when LLM didn't find a name
+    if not result.get("first_name") and not result.get("last_name"):
+        first, last = _heuristic_extract_name(text)
+        if first:
+            result["first_name"] = first
+        if last:
+            result["last_name"] = last
+        if first or last:
+            logger.info("extract_resume_fields: heuristic name found: %r %r", first, last)
+        else:
+            logger.warning("extract_resume_fields: no name found | text_preview=%r", text[:200])
+
+    return result
 
 
 def _strip_fences(raw: str) -> str:
     raw = raw.strip()
+    # Strip thinking/reasoning blocks from models that support thinking mode
+    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+    raw = raw.strip()
+    # Strip markdown code fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     return raw.strip()
