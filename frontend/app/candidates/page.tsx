@@ -41,14 +41,19 @@ export default function CandidatesPage() {
   const [importing, setImporting]   = useState(false);
   const [rescoring, setRescoring]   = useState(false);
   const [rescoreJob, setRescoreJob] = useState<{ status: string; total: number; processed: number; updated: number; can_resume?: boolean; error?: string | null } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const mutateRef    = useRef<() => void>(() => {});
   const debouncedSearch = useDebounce(search, 300);
 
-  // Reset to page 0 on filter/sort change
-  useEffect(() => { setPage(0); }, [debouncedSearch, sortBy, source]);
+  // Reset to page 0 and clear selection on filter/sort change
+  useEffect(() => {
+    setPage(0);
+    setSelectedIds(new Set());
+  }, [debouncedSearch, sortBy, source]);
 
   // Poll rescore status
   const stopPoll = useCallback(() => {
@@ -133,6 +138,45 @@ export default function CandidatesPage() {
   const total: number = data?.total ?? 0;
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
+  const allOnPageSelected = candidates.length > 0 && candidates.every((c) => selectedIds.has(c.id));
+  const someOnPageSelected = candidates.some((c) => selectedIds.has(c.id));
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) {
+        candidates.forEach((c) => next.delete(c.id));
+      } else {
+        candidates.forEach((c) => next.add(c.id));
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`${selectedIds.size} ta kandidatni o'chirmoqchimisiz?`)) return;
+    setDeleting(true);
+    try {
+      const res = await candidateApi.deleteMany(Array.from(selectedIds));
+      toast.success(`${res.data.deleted} ta kandidat o'chirildi`);
+      setSelectedIds(new Set());
+      mutate();
+    } catch {
+      toast.error("O'chirishda xatolik yuz berdi");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
@@ -145,8 +189,11 @@ export default function CandidatesPage() {
       res.data.forEach(({ name, score, vacancy_title }) => {
         toast.success(`${name} — "${vacancy_title}" — ${score}%`);
       });
+      const failed = files.length - res.data.length;
       if (res.data.length === 0) {
         toast.error("Ни одно резюме не удалось обработать");
+      } else if (failed > 0) {
+        toast.warning(`${failed} ta fayl qayta ishlanmadi (matn ajratib olinmadi yoki xatolik)`);
       }
       mutate();
     } catch {
@@ -186,6 +233,24 @@ export default function CandidatesPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          {/* Delete selected */}
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={deleting}
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {deleting ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+              ) : (
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+              O&apos;chirish ({selectedIds.size})
+            </button>
+          )}
+
           {/* Rescore All / Resume */}
           {rescoreJob?.can_resume ? (
             <button
@@ -375,7 +440,16 @@ export default function CandidatesPage() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Имя</th>
+                  <th className="py-2.5 pl-4 pr-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allOnPageSelected}
+                      ref={(el) => { if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected; }}
+                      onChange={toggleAll}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-2.5 pl-1 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Имя</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Должность</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Город</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Зарплата</th>
@@ -392,7 +466,12 @@ export default function CandidatesPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {candidates.map((c) => (
-                  <CandidateCard key={c.id} candidate={c} />
+                  <CandidateCard
+                    key={c.id}
+                    candidate={c}
+                    selected={selectedIds.has(c.id)}
+                    onToggle={toggleSelect}
+                  />
                 ))}
               </tbody>
             </table>

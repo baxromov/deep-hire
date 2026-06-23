@@ -33,7 +33,15 @@ function SourceBadge({ source }: { source: string | null }) {
   );
 }
 
-export function CandidateCard({ candidate }: { candidate: Candidate }) {
+export function CandidateCard({
+  candidate,
+  selected = false,
+  onToggle,
+}: {
+  candidate: Candidate;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
+}) {
   const router = useRouter();
 
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
@@ -46,11 +54,21 @@ export function CandidateCard({ candidate }: { candidate: Candidate }) {
 
   return (
     <tr
-      className="group cursor-pointer hover:bg-gray-50 transition-colors"
+      className={`group cursor-pointer hover:bg-gray-50 transition-colors ${selected ? "bg-blue-50 hover:bg-blue-50" : ""}`}
       onClick={() => router.push(`/candidates/${candidate.id}`)}
     >
+      {/* Checkbox */}
+      <td className="py-3 pl-4 pr-2 w-8" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggle?.(candidate.id)}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+        />
+      </td>
+
       {/* Name + source badge + phone */}
-      <td className="py-3 pl-4 pr-3">
+      <td className="py-3 pl-1 pr-3">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-gray-100">
             {candidate.photo_url ? (

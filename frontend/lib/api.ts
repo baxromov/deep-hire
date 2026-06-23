@@ -172,4 +172,8 @@ export const candidateApi = {
     api.get<{ status: string; total: number; processed: number; updated: number; error: string | null; can_resume: boolean }>(
       "/api/candidates/rescore-status"
     ),
+  delete: (id: string) =>
+    api.delete<{ ok: boolean }>(`/api/candidates/${id}`),
+  deleteMany: (ids: string[]) =>
+    api.delete<{ deleted: number }>("/api/candidates/bulk", { data: { ids } }),
 };

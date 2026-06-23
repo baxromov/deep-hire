@@ -2,11 +2,12 @@ import asyncio
 import hashlib
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import quote as urlquote
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,8 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
             resume_url = f"/api/candidates/{candidate_oid}/resume"
             await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
 
-        name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or "Unknown"
+        filename_base = file.filename.rsplit(".", 1)[0] if file.filename else "Unknown"
+        name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or filename_base
         return {
             "id": str(candidate_oid),
             "name": name,
@@ -489,12 +491,34 @@ async def rescore_status():
     }
 
 
+class BulkDeleteBody(BaseModel):
+    ids: List[str]
+
+
+async def delete_candidate(candidate_id: str):
+    doc = await candidate_service.get_candidate(candidate_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    await doc.delete()
+    return {"ok": True}
+
+
+async def delete_candidates_bulk(body: BulkDeleteBody):
+    from bson import ObjectId
+    col = Candidate.get_motor_collection()
+    oids = [ObjectId(cid) for cid in body.ids if cid]
+    result = await col.delete_many({"_id": {"$in": oids}})
+    return {"deleted": result.deleted_count}
+
+
 router.add_api_route("/", list_candidates, methods=["GET"])
 router.add_api_route("/rescore-all", rescore_all, methods=["POST"])
 router.add_api_route("/rescore-status", rescore_status, methods=["GET"])
 router.add_api_route("/upload", upload_and_auto_match, methods=["POST"])
 router.add_api_route("/import-xlsx", import_from_xlsx, methods=["POST"])
+router.add_api_route("/bulk", delete_candidates_bulk, methods=["DELETE"])
 router.add_api_route("/vacancy/{vacancy_id}", candidates_by_vacancy, methods=["GET"])
 router.add_api_route("/{candidate_id}/explain-score", explain_score, methods=["POST"])
 router.add_api_route("/{candidate_id}/resume", get_candidate_resume, methods=["GET"])
 router.add_api_route("/{candidate_id}", get_candidate, methods=["GET"])
+router.add_api_route("/{candidate_id}", delete_candidate, methods=["DELETE"])
