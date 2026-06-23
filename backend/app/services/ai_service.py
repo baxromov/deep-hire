@@ -329,8 +329,8 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
 
 def _strip_fences(raw: str) -> str:
     raw = raw.strip()
-    # Strip thinking/reasoning blocks from models that support thinking mode
-    raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
+    # Strip thinking/reasoning blocks — covers <think>, <thinking>, /think variants
+    raw = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", raw, flags=re.DOTALL)
     raw = raw.strip()
     # Strip markdown code fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
