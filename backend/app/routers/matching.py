@@ -975,11 +975,24 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 processed = 0
                 col = Candidate.get_motor_collection()
 
+                # Collect existing hh_resume_ids for this vacancy so stale records
+                # (scored below threshold on re-run) can be removed afterwards
+                existing_doc_ids: set[str] = set()
+                async for doc in Candidate.find({"vacancy_id": vacancy.id}):
+                    existing_doc_ids.add(doc.hh_resume_id)
+
+                passed_ids: set[str] = set()  # scored >= min_score this run
+                scored_ids: set[str] = set()  # all hh_resume_ids evaluated this run
+
                 # ── Score xlsx groups ──────────────────────────────────────────────
                 for group in xlsx_groups:
                     internship = group["_id"] or ""
                     skills = group.get("skills") or []
                     processed += 1
+
+                    # Mark all candidates in this group as scored
+                    for cand in group["candidates"]:
+                        scored_ids.add(cand["hh_resume_id"])
 
                     async with sem:
                         sc, rs, cr = await ai_service.score_candidate(
@@ -997,6 +1010,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         # so re-runs update existing records instead of creating duplicates
                         for cand in group["candidates"]:
                             orig_hh_id = cand["hh_resume_id"]
+                            passed_ids.add(orig_hh_id)
                             await col.update_one(
                                 {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
                                 {"$set": {
@@ -1037,6 +1051,9 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         skills = ext.get("skills") or skills
                     processed += 1
 
+                    orig_hh_id = doc.hh_resume_id
+                    scored_ids.add(orig_hh_id)
+
                     async with sem:
                         sc, rs, cr = await ai_service.score_candidate(
                             vacancy_title=vacancy.title or "",
@@ -1051,7 +1068,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                     if sc >= min_score:
                         # Use original hh_resume_id (not synthetic db: prefix)
                         # so re-runs update existing records instead of creating duplicates
-                        orig_hh_id = doc.hh_resume_id
+                        passed_ids.add(orig_hh_id)
                         await col.update_one(
                             {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
                             {"$set": {
@@ -1084,11 +1101,22 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         "count": processed, "total": total, "matched": matched,
                     })
 
+                # ── Remove stale matches that fell below threshold on re-run ────────
+                stale_ids = existing_doc_ids & (scored_ids - passed_ids)
+                stale_removed = 0
+                if stale_ids:
+                    result = await col.delete_many({
+                        "vacancy_id": vacancy.id,
+                        "hh_resume_id": {"$in": list(stale_ids)},
+                    })
+                    stale_removed = result.deleted_count
+
                 vacancy.last_matched_at = now
                 await vacancy.save()
                 await emit({
                     "step": "done",
-                    "message": f"Готово. Найдено {matched} подходящих из {processed} (порог ≥{min_score}%).",
+                    "message": f"Готово. Найдено {matched} подходящих из {processed} (порог ≥{min_score}%)."
+                               + (f" Удалено устаревших: {stale_removed}." if stale_removed else ""),
                     "matched": matched, "total": processed,
                 })
 

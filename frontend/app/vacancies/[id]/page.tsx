@@ -769,11 +769,15 @@ export default function VacancyDetailPage({ params }: Props) {
       setDbSteps((prev) => [...prev, event]);
       if (event.step === "done") {
         source.close(); dbSourceRef.current = null;
-        setDbMatching(false); mutateCandidates();
+        setDbMatching(false);
+        mutateCandidates();
         setDbResult(event.matched ?? 0);
         (event.matched ?? 0) > 0
           ? toast.success(`Найдено ${event.matched} подходящих из базы`)
           : toast.info("Подходящих кандидатов не найдено.");
+        setTimeout(() => {
+          document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
+        }, 400);
       }
       if (event.step === "error") {
         source.close(); dbSourceRef.current = null;
@@ -1049,7 +1053,7 @@ export default function VacancyDetailPage({ params }: Props) {
 
       {/* ── Candidates ──────────────────────────────────────────────────────── */}
       {candidates.length > 0 && (
-        <div className="mt-6">
+        <div id="candidates-section" className="mt-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
             Подходящие кандидаты ({candidates.length})
           </p>
