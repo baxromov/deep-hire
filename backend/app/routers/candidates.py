@@ -77,27 +77,18 @@ async def candidates_by_vacancy(vacancy_id: str):
     return [CandidateResponse.from_doc(d) for d in docs]
 
 
-async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
-    """Process a single uploaded resume file against pre-fetched vacancies.
+async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -> dict | None:
+    """Process a single resume (as raw bytes) against pre-fetched vacancies.
 
-    Returns a result dict on success, or None if the file could not be processed.
-    Errors are logged but never propagated so that sibling files still succeed.
+    Returns a result dict on success, or None on failure.
+    Errors are logged but never propagated so sibling files still succeed.
     """
     try:
-        if not file.filename:
-            logger.warning("_process_one_file: skipping file with no filename")
-            return None
-
-        file_bytes = await file.read()
-        if len(file_bytes) > 10 * 1024 * 1024:
-            logger.warning("_process_one_file: %r exceeds 10 MB limit, skipping", file.filename)
-            return None
-
-        logger.warning("_process_one_file: filename=%r size=%d", file.filename, len(file_bytes))
-        text = file_service.extract_text(file.filename, file_bytes)
+        logger.warning("_process_one_file: filename=%r size=%d", filename, len(file_bytes))
+        text = file_service.extract_text(filename, file_bytes)
         logger.warning("_process_one_file: extracted text length=%s", len(text) if text else None)
         if not text:
-            logger.warning("_process_one_file: could not extract text from %r, skipping", file.filename)
+            logger.warning("_process_one_file: could not extract text from %r, skipping", filename)
             return None
 
         fields = await ai_service.extract_resume_fields(text)
@@ -126,7 +117,7 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
 
         minio_key = None
         try:
-            minio_key = await minio_service.upload_file(file_bytes, file.filename)
+            minio_key = await minio_service.upload_file(file_bytes, filename)
         except Exception:
             pass
 
@@ -134,10 +125,10 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
             "vacancy_id": best_vacancy.id,
             "hh_resume_id": f"file:{file_hash}",
             "relevance_score": best_score,
-            "skills": fields.get("skills") or [],  # always include, even if empty
+            "skills": fields.get("skills") or [],
             "raw_resume_json": {
                 "source": "file",
-                "filename": file.filename,
+                "filename": filename,
                 "extracted": fields,
                 "minio_key": minio_key,
                 "score_reasoning": best_reasoning,
@@ -149,7 +140,6 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
                if fields.get(k)},
         }
 
-        # Atomic upsert — avoids delete+insert race condition that caused duplicates
         col = Candidate.get_motor_collection()
         upsert_filter = {"vacancy_id": best_vacancy.id, "hh_resume_id": f"file:{file_hash}"}
         upsert_result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
@@ -161,7 +151,7 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
             resume_url = f"/api/candidates/{candidate_oid}/resume"
             await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
 
-        filename_base = file.filename.rsplit(".", 1)[0] if file.filename else "Unknown"
+        filename_base = filename.rsplit(".", 1)[0] if filename else "Unknown"
         name = " ".join(filter(None, [fields.get("first_name"), fields.get("last_name")])) or fields.get("title") or filename_base
         return {
             "id": str(candidate_oid),
@@ -172,37 +162,96 @@ async def _process_one_file(file: UploadFile, vacancies: list) -> dict | None:
         }
 
     except Exception:
-        logger.exception("_process_one_file: unexpected error processing %r", getattr(file, "filename", "<unknown>"))
+        logger.exception("_process_one_file: unexpected error processing %r", filename)
         return None
 
 
-async def upload_and_auto_match(files: list[UploadFile] = File(...)) -> list[dict]:
-    """Upload one or more resumes, extract candidate info via AI, and auto-match each to the best vacancy.
+# ── Background upload job state ──────────────────────────────────────────────
+_upload_job: dict = {
+    "status": "idle",   # "idle" | "processing" | "done" | "error"
+    "total": 0,
+    "processed": 0,
+    "results": [],      # list of {id, name, score, vacancy_title, vacancy_id}
+    "errors": 0,
+    "error": None,
+}
 
-    Vacancies are fetched once and shared across all files. Files are processed
-    concurrently. If a single file fails (e.g. text extraction error) it is
-    skipped and the remaining files still produce results.
+
+async def _run_upload(file_data: list[tuple[str, bytes]], vacancies: list) -> None:
+    global _upload_job
+    sem = asyncio.Semaphore(3)
+
+    async def process_one(filename: str, file_bytes: bytes) -> None:
+        async with sem:
+            result = await _process_one_file(filename, file_bytes, vacancies)
+            _upload_job["processed"] += 1
+            if result:
+                _upload_job["results"].append(result)
+            else:
+                _upload_job["errors"] += 1
+
+    try:
+        await asyncio.gather(*[process_one(fn, fb) for fn, fb in file_data])
+        _upload_job["status"] = "done"
+    except Exception as e:
+        logger.exception("Background upload job failed")
+        _upload_job.update({"status": "error", "error": str(e)})
+
+
+async def upload_and_auto_match(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+) -> dict:
+    """Accept resume files, start background processing, return immediately.
+
+    Clients should poll /upload-status for progress and results.
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+    if _upload_job["status"] == "processing":
+        raise HTTPException(status_code=409, detail="Upload already in progress")
 
     vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
     if not vacancies:
         raise HTTPException(status_code=422, detail="No approved vacancies to match against")
 
-    # Limit concurrent Ollama calls to avoid overloading the cloud model
-    upload_sem = asyncio.Semaphore(3)
+    # Read all bytes NOW — UploadFile stream closes after response is sent
+    file_data: list[tuple[str, bytes]] = []
+    for f in files:
+        if not f.filename:
+            continue
+        fb = await f.read()
+        if 0 < len(fb) <= 10 * 1024 * 1024:
+            file_data.append((f.filename, fb))
+        else:
+            logger.warning("upload: skipping %r (size=%d)", f.filename, len(fb))
 
-    async def _process_with_sem(f):
-        async with upload_sem:
-            return await _process_one_file(f, vacancies)
+    if not file_data:
+        raise HTTPException(status_code=400, detail="No valid files to process (empty or >10 MB)")
 
-    raw_results = await asyncio.gather(*[_process_with_sem(f) for f in files])
+    _upload_job.update({
+        "status": "processing",
+        "total": len(file_data),
+        "processed": 0,
+        "results": [],
+        "errors": 0,
+        "error": None,
+    })
 
-    # Filter out None entries (failed / skipped files)
-    results = [r for r in raw_results if r is not None]
+    background_tasks.add_task(_run_upload, file_data, vacancies)
+    return {"status": "started", "total": len(file_data)}
 
-    return results
+
+async def upload_status() -> dict:
+    """Return current background upload job status."""
+    return {
+        "status":    _upload_job["status"],
+        "total":     _upload_job["total"],
+        "processed": _upload_job["processed"],
+        "results":   _upload_job["results"],
+        "errors":    _upload_job["errors"],
+        "error":     _upload_job["error"],
+    }
 
 
 async def import_from_xlsx(file: UploadFile = File(...)):
@@ -523,6 +572,7 @@ router.add_api_route("/", list_candidates, methods=["GET"])
 router.add_api_route("/rescore-all", rescore_all, methods=["POST"])
 router.add_api_route("/rescore-status", rescore_status, methods=["GET"])
 router.add_api_route("/upload", upload_and_auto_match, methods=["POST"])
+router.add_api_route("/upload-status", upload_status, methods=["GET"])
 router.add_api_route("/import-xlsx", import_from_xlsx, methods=["POST"])
 router.add_api_route("/bulk", delete_candidates_bulk, methods=["DELETE"])
 router.add_api_route("/vacancy/{vacancy_id}", candidates_by_vacancy, methods=["GET"])

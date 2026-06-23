@@ -149,11 +149,20 @@ export const candidateApi = {
   upload: (files: File[]) => {
     const fd = new FormData();
     files.forEach(f => fd.append("files", f));
-    return api.post<Array<{ id: string; name: string; score: number; vacancy_title: string; vacancy_id: string }>>(
+    return api.post<{ status: string; total: number }>(
       "/api/candidates/upload",
       fd
     );
   },
+  uploadStatus: () =>
+    api.get<{
+      status: string;
+      total: number;
+      processed: number;
+      results: Array<{ id: string; name: string; score: number; vacancy_title: string; vacancy_id: string }>;
+      errors: number;
+      error: string | null;
+    }>("/api/candidates/upload-status"),
   importXlsx: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
