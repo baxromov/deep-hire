@@ -37,8 +37,9 @@ async def embed(text: str) -> List[float]:
     if not text or not text.strip():
         return []
     client = _get_client()
+    embed_base_url = settings.ollama_embed_base_url or settings.ollama_base_url
     resp = await client.post(
-        f"{settings.ollama_base_url}/v1/embeddings",
+        f"{embed_base_url}/v1/embeddings",
         json={"model": settings.ollama_embed_model, "input": text},
     )
     resp.raise_for_status()
