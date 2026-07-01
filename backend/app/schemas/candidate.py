@@ -21,6 +21,7 @@ class CandidateResponse(BaseModel):
     photo_url: Optional[str]
     resume_url: Optional[str]
     relevance_score: Optional[int]
+    is_vectorized: bool = False
     matched_at: datetime
     # Extra fields extracted from raw_resume_json for easy access
     source: Optional[str] = None           # "xlsx" | "file" | "hh"
@@ -48,6 +49,7 @@ class CandidateResponse(BaseModel):
             photo_url=doc.photo_url,
             resume_url=doc.resume_url,
             relevance_score=doc.relevance_score,
+            is_vectorized=doc.is_vectorized,
             matched_at=doc.matched_at,
             source=raw.get("source"),
             phone=raw.get("phone"),

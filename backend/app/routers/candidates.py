@@ -568,9 +568,101 @@ async def delete_candidates_bulk(body: BulkDeleteBody):
     return {"deleted": result.deleted_count}
 
 
+_vectorize_job: dict = {"status": "idle", "total": 0, "processed": 0, "vectorized": 0, "error": None}
+
+
+async def vectorize_all():
+    """Embed all MongoDB candidates and upsert to permanent Qdrant collection."""
+    global _vectorize_job
+    if _vectorize_job["status"] == "running":
+        raise HTTPException(status_code=409, detail="Vectorize already running")
+
+    _vectorize_job = {"status": "running", "total": 0, "processed": 0, "vectorized": 0, "error": None}
+
+    async def _run() -> None:
+        global _vectorize_job
+        try:
+            from app.database import get_qdrant
+            from app.config import settings
+            from app.services.embedding_service import embed_batch
+            from app.services.qdrant_service import upsert_items_to_temp_collection
+
+            all_docs = await Candidate.find().to_list()
+            seen: set[str] = set()
+            unique: list = []
+            for c in all_docs:
+                if c.hh_resume_id not in seen:
+                    seen.add(c.hh_resume_id)
+                    unique.append(c)
+
+            _vectorize_job["total"] = len(unique)
+
+            texts: list[str] = []
+            for c in unique:
+                title = c.title or ""
+                skills = c.skills or []
+                raw = c.raw_resume_json or {}
+                if raw.get("source") == "file":
+                    ext = raw.get("extracted") or {}
+                    title = ext.get("title") or title
+                    skills = ext.get("skills") or skills
+                text = f"{title}. Skills: {', '.join(skills[:15])}" if title else ", ".join(skills[:15])
+                texts.append(text)
+
+            vectors = await embed_batch(texts, concurrency=8)
+
+            qdrant_items: list[dict] = []
+            valid_vectors: list[list[float]] = []
+            valid_resume_ids: list[str] = []
+            for c, vector in zip(unique, vectors):
+                if not vector:
+                    continue
+                qdrant_items.append({
+                    "id": f"db:{c.hh_resume_id}",
+                    "hh_resume_id": c.hh_resume_id,
+                    "title": c.title or "",
+                    "skills": c.skills or [],
+                    "area": c.area or "",
+                    "salary_amount": c.salary_amount,
+                    "salary_currency": c.salary_currency or "",
+                    "source": "db",
+                    "first_name": c.first_name or "",
+                    "last_name": c.last_name or "",
+                })
+                valid_vectors.append(vector)
+                valid_resume_ids.append(c.hh_resume_id)
+
+            qdrant = get_qdrant()
+            await upsert_items_to_temp_collection(qdrant, settings.qdrant_collection, qdrant_items, valid_vectors)
+
+            col = Candidate.get_motor_collection()
+            for rid in valid_resume_ids:
+                await col.update_many(
+                    {"hh_resume_id": rid},
+                    {"$set": {"is_vectorized": True}},
+                )
+                _vectorize_job["vectorized"] += 1
+            _vectorize_job["processed"] = len(unique)
+            _vectorize_job["status"] = "done"
+
+        except Exception as exc:
+            logger.error("vectorize_all error: %s", exc, exc_info=True)
+            _vectorize_job["status"] = "error"
+            _vectorize_job["error"] = str(exc)
+
+    asyncio.create_task(_run())
+    return {"status": "started"}
+
+
+async def vectorize_status():
+    return dict(_vectorize_job)
+
+
 router.add_api_route("/", list_candidates, methods=["GET"])
 router.add_api_route("/rescore-all", rescore_all, methods=["POST"])
 router.add_api_route("/rescore-status", rescore_status, methods=["GET"])
+router.add_api_route("/vectorize-all", vectorize_all, methods=["POST"])
+router.add_api_route("/vectorize-status", vectorize_status, methods=["GET"])
 router.add_api_route("/upload", upload_and_auto_match, methods=["POST"])
 router.add_api_route("/upload-status", upload_status, methods=["GET"])
 router.add_api_route("/import-xlsx", import_from_xlsx, methods=["POST"])

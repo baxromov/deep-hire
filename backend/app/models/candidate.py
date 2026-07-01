@@ -21,6 +21,7 @@ class Candidate(Document):
     photo_url: Optional[str] = None
     resume_url: Optional[str] = None
     relevance_score: Optional[int] = None
+    is_vectorized: bool = False
     raw_resume_json: Dict = Field(default_factory=dict)
     matched_at: datetime = Field(default_factory=datetime.utcnow)
 

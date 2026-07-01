@@ -48,13 +48,16 @@ export default function CandidatesPage() {
   const [importing, setImporting]   = useState(false);
   const [rescoring, setRescoring]   = useState(false);
   const [rescoreJob, setRescoreJob] = useState<{ status: string; total: number; processed: number; updated: number; can_resume?: boolean; error?: string | null } | null>(null);
+  const [vectorizing, setVectorizing] = useState(false);
+  const [vectorizeJob, setVectorizeJob] = useState<{ status: string; total: number; processed: number; vectorized: number; error?: string | null } | null>(null);
   const [uploadJob, setUploadJob]   = useState<UploadJobState>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const xlsxInputRef  = useRef<HTMLInputElement>(null);
-  const pollRef       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const uploadPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef          = useRef<ReturnType<typeof setInterval> | null>(null);
+  const uploadPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const vectorizePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mutateRef     = useRef<() => void>(() => {});
   const debouncedSearch = useDebounce(search, 300);
 
@@ -91,6 +94,53 @@ export default function CandidatesPage() {
   }, [stopPoll]);
 
   useEffect(() => () => stopPoll(), [stopPoll]);
+
+  // ── Vectorize polling ──────────────────────────────────────────────────────
+  const stopVectorizePoll = useCallback(() => {
+    if (vectorizePollRef.current) { clearInterval(vectorizePollRef.current); vectorizePollRef.current = null; }
+  }, []);
+
+  const startVectorizePoll = useCallback(() => {
+    stopVectorizePoll();
+    vectorizePollRef.current = setInterval(async () => {
+      try {
+        const res = await candidateApi.vectorizeStatus();
+        const job = res.data;
+        setVectorizeJob(job);
+        if (job.status === "done") {
+          stopVectorizePoll();
+          setVectorizing(false);
+          toast.success(`✅ Vektorlash yakunlandi — ${job.vectorized} ta kandidat Qdrant'ga qo'shildi`);
+          mutateRef.current();
+        } else if (job.status === "error") {
+          stopVectorizePoll();
+          setVectorizing(false);
+          toast.error(`Vektorlash xatoligi: ${job.error}`);
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+  }, [stopVectorizePoll]);
+
+  useEffect(() => () => stopVectorizePoll(), [stopVectorizePoll]);
+
+  const handleVectorizeAll = async () => {
+    try {
+      await candidateApi.vectorizeAll();
+      setVectorizing(true);
+      setVectorizeJob({ status: "running", total: 0, processed: 0, vectorized: 0 });
+      toast.info("Vektorlash boshlandi…");
+      startVectorizePoll();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      if (err?.response?.data?.detail === "Vectorize already running") {
+        toast.warning("Vektorlash allaqachon davom etmoqda");
+        setVectorizing(true);
+        startVectorizePoll();
+      } else {
+        toast.error("Vektorlashni boshlashda xatolik");
+      }
+    }
+  };
 
   // ── Upload polling ─────────────────────────────────────────────────────────
   const stopUploadPoll = useCallback(() => {
@@ -319,6 +369,16 @@ export default function CandidatesPage() {
             </button>
           )}
 
+          {/* Vectorize All */}
+          <button onClick={handleVectorizeAll} disabled={vectorizing || uploading || importing}
+            className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {vectorizing
+              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+              : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            }
+            {vectorizing ? "Vektorlash…" : "Vektorlashtirish"}
+          </button>
+
           {/* Import Excel */}
           <button onClick={() => xlsxInputRef.current?.click()} disabled={importing || uploading}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -434,6 +494,42 @@ export default function CandidatesPage() {
         </div>
       )}
 
+      {/* Vectorize progress banner */}
+      {vectorizeJob && vectorizeJob.status !== "idle" && (
+        <div className={`mb-4 rounded-xl border px-4 py-3 ${
+          vectorizeJob.status === "running" ? "border-violet-200 bg-violet-50"
+          : vectorizeJob.status === "done"  ? "border-green-200 bg-green-50"
+          : "border-red-200 bg-red-50"
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-sm font-medium ${
+              vectorizeJob.status === "running" ? "text-violet-700"
+              : vectorizeJob.status === "done"  ? "text-green-700" : "text-red-700"
+            }`}>
+              {vectorizeJob.status === "running" && `⏳ Qdrant'ga vektorlar yuklanmoqda… ${vectorizeJob.total > 0 ? `(${vectorizeJob.vectorized} / ${vectorizeJob.total})` : ""}`}
+              {vectorizeJob.status === "done"    && `✅ Vektorlash yakunlandi`}
+              {vectorizeJob.status === "error"   && `❌ Vektorlash xatoligi`}
+            </span>
+            {vectorizeJob.status !== "error" && (
+              <span className={`text-xs font-semibold ${vectorizeJob.status === "done" ? "text-green-600" : "text-violet-600"}`}>
+                {vectorizeJob.vectorized}{vectorizeJob.total > 0 && ` / ${vectorizeJob.total}`} ta
+              </span>
+            )}
+          </div>
+          {vectorizeJob.status === "running" && (
+            <div className="h-2 w-full rounded-full bg-violet-100 overflow-hidden">
+              <div className="h-full rounded-full bg-violet-400 transition-all duration-500"
+                style={{ width: vectorizeJob.total > 0 ? `${Math.round((vectorizeJob.vectorized / vectorizeJob.total) * 100)}%` : "3%" }} />
+            </div>
+          )}
+          {vectorizeJob.status === "done" && (
+            <div className="h-2 w-full rounded-full bg-green-100 overflow-hidden">
+              <div className="h-full w-full rounded-full bg-green-400" />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex items-center justify-between mb-4 gap-3">
         <div className="flex items-center gap-1.5">
@@ -487,10 +583,7 @@ export default function CandidatesPage() {
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Город</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Зарплата</th>
                   <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Навыки</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide cursor-pointer select-none transition-colors text-blue-500"
-                    onClick={() => setSortBy(sortBy === "score" ? "date" : "score")} title="Нажмите для смены сортировки">
-                    Балл {sortBy === "score" ? "↓" : ""}
-                  </th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Вектор</th>
                   <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">CV</th>
                 </tr>
               </thead>
