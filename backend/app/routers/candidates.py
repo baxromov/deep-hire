@@ -585,7 +585,7 @@ async def vectorize_all():
             from app.database import get_qdrant
             from app.config import settings
             from app.services.embedding_service import embed_batch
-            from app.services.qdrant_service import upsert_items_to_temp_collection
+            from app.services.qdrant_service import ensure_collection, upsert_items_to_temp_collection
 
             all_docs = await Candidate.find().to_list()
             seen: set[str] = set()
@@ -633,6 +633,7 @@ async def vectorize_all():
                 valid_resume_ids.append(c.hh_resume_id)
 
             qdrant = await get_qdrant()
+            await ensure_collection(qdrant)
             await upsert_items_to_temp_collection(qdrant, settings.qdrant_collection, qdrant_items, valid_vectors)
 
             col = Candidate.get_motor_collection()
