@@ -67,10 +67,13 @@ def build_resume_text(resume: dict) -> str:
     title = resume.get("title") or ""
     if title:
         parts.append(title)
+        parts.append(title)
 
     skills = resume.get("skill_set") or []
     if skills:
-        parts.append("Skills: " + ", ".join(skills))
+        skills_str = "Skills: " + ", ".join(skills[:25])
+        parts.append(skills_str)
+        parts.append(skills_str)
 
     for exp in resume.get("experience") or []:
         if not isinstance(exp, dict):
@@ -81,10 +84,8 @@ def build_resume_text(resume: dict) -> str:
         company = (company_raw.get("name") if isinstance(company_raw, dict) else (company_raw or "")) or exp.get("company_name") or ""
         if position:
             parts.append(position)
-        if company:
-            parts.append(company)
         if description:
-            parts.append(description[:500])
+            parts.append(description[:400])
 
     return ". ".join(filter(None, parts))
 
@@ -94,8 +95,11 @@ def build_vacancy_text(vacancy) -> str:
     parts = []
     if vacancy.title:
         parts.append(vacancy.title)
+        parts.append(vacancy.title)
     if vacancy.skills:
-        parts.append("Required skills: " + ", ".join(vacancy.skills))
+        skills_str = "Required skills: " + ", ".join(vacancy.skills)
+        parts.append(skills_str)
+        parts.append(skills_str)
     if vacancy.description:
-        parts.append(vacancy.description[:1000])
+        parts.append(vacancy.description[:800])
     return ". ".join(filter(None, parts))

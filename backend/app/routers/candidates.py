@@ -606,7 +606,8 @@ async def vectorize_all():
                     ext = raw.get("extracted") or {}
                     title = ext.get("title") or title
                     skills = ext.get("skills") or skills
-                text = f"{title}. Skills: {', '.join(skills[:15])}" if title else ", ".join(skills[:15])
+                skills_str = ", ".join(skills[:25])
+                text = f"{title}. {title}. Skills: {skills_str}. {skills_str}" if title else f"{skills_str}. {skills_str}"
                 texts.append(text)
 
             vectors = await embed_batch(texts, concurrency=8)
