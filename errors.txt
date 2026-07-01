@@ -1,39 +1,6 @@
-backend-1   | INFO:     172.26.0.4:35652 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
-backend-1   | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
-backend-1   |   _qdrant_client = AsyncQdrantClient(
-backend-1   | vectorize_all error: Unexpected Response: 404 (Not Found)
-backend-1   | Raw response content:
-backend-1   | b'{"status":{"error":"Not found: Collection `hr-resume` doesn\'t exist!"},"time":0.000051547}'
-backend-1   | Traceback (most recent call last):
-backend-1   |   File "/app/app/routers/candidates.py", line 636, in _run
-backend-1   |     await upsert_items_to_temp_collection(qdrant, settings.qdrant_collection, qdrant_items, valid_vectors)
-nginx-1     | 10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
-nginx-1     | 10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf differs from the packaged version
-nginx-1     | /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
-nginx-1     | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
-nginx-1     | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
-nginx-1     | /docker-entrypoint.sh: Configuration complete; ready for start up
-backend-1   |   File "/app/app/services/qdrant_service.py", line 288, in upsert_items_to_temp_collection
-backend-1   |     await client.upsert(collection_name=collection_name, points=points[i:i + batch_size])
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_client.py", line 903, in upsert
-backend-1   |     return await self._client.upsert(
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_remote.py", line 1037, in upsert
-backend-1   |     await self.openapi_client.points_api.upsert_points(
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api/points_api.py", line 800, in upsert_points
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: using the "epoll" event method
-backend-1   |     return await self._build_for_upsert_points(
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: nginx/1.31.1
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: built by gcc 15.2.0 (Alpine 15.2.0)
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api_client.py", line 184, in request
-backend-1   |     return await self.send(request, type_)
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api_client.py", line 219, in send
-backend-1   |     raise UnexpectedResponse.for_response(response)
-backend-1   | qdrant_client.http.exceptions.UnexpectedResponse: Unexpected Response: 404 (Not Found)
-backend-1   | Raw response content:
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: OS: Linux 6.12.0-55.39.1.el10_0.x86_64
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1024:524288
-nginx-1     | 2026/07/01 06:57:34 [notice] 1#1: start worker processes
-Vektorlash xatoligi: Unexpected Response: 404 (Not Found) Raw response content: b'{"status":{"error":"Not found: Collection `hr-resume` doesn\'t exist!"},"time":0.000051547}'
+OLLAMA_BASE_URL=http://172.31.230.3:8080
+OLLAMA_MODEL=gpt-oss-120b
+LITELLM_API_KEY=sk-KPQ614MDhDfwfFD691n4zg
+USE_LLM_SCORING=false
+# Embed model — RAG indexing & vacancy/resume similarity (same Ollama instance)
+OLLAMA_EMBED_MODEL=bge-m3:latest
