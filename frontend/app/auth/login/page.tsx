@@ -9,15 +9,13 @@ import { Label } from "@/components/ui/label";
 function IpotekaBankLogo({ size = 40 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#00A651"/>
-      <circle cx="20" cy="20" r="14" fill="white" fillOpacity="0.15"/>
+      <circle cx="20" cy="20" r="20" fill="#00A651" />
       <path
-        d="M20 8C20 8 11 13 11 22C11 27.5 15 32 20 32C25 32 29 27.5 29 22C29 13 20 8 20 8Z"
+        d="M20 8C20 8 11 13.5 11 22C11 27.5 15 32 20 32C25 32 29 27.5 29 22C29 13.5 20 8 20 8Z"
         fill="white"
-        fillOpacity="0.95"
       />
-      <path d="M20 18V32" stroke="#00A651" strokeWidth="1.8" strokeLinecap="round"/>
-      <path d="M20 25C20 25 16.5 21 16.5 17.5" stroke="#00A651" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="20" y1="19" x2="20" y2="32" stroke="#00A651" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M20 26C20 26 16.5 22 16.5 18.5" stroke="#00A651" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -46,59 +44,67 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
-      {/* Left brand panel */}
-      <div className="hidden lg:flex w-[420px] shrink-0 flex-col justify-between bg-gradient-to-br from-green-700 to-green-900 p-10 relative overflow-hidden">
-        {/* subtle pattern */}
-        <div className="absolute inset-0 opacity-5" style={{backgroundImage:"radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize:"24px 24px"}} />
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Left brand panel – green gradient stays as bank identity */}
+      <div className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between bg-gradient-to-br from-green-600 to-green-800 p-10 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }}
+        />
 
+        {/* Bank logo */}
         <div className="relative flex items-center gap-3">
-          <IpotekaBankLogo size={44} />
+          <IpotekaBankLogo size={48} />
           <div>
-            <p className="text-white font-bold text-base leading-tight">Ipoteka Bank</p>
+            <p className="text-white font-bold text-lg leading-tight">Ipoteka Bank</p>
             <p className="text-green-200 text-xs tracking-widest uppercase">OTP Group</p>
           </div>
         </div>
 
         <div className="relative">
-          <p className="text-white/40 text-xs font-semibold uppercase tracking-widest mb-4">Кадровая платформа</p>
-          <blockquote className="text-white text-2xl font-semibold leading-snug mb-4">
+          <p className="text-green-300 text-xs font-semibold uppercase tracking-widest mb-3">
+            Кадровая платформа
+          </p>
+          <h2 className="text-white text-2xl font-bold leading-snug mb-4">
             Подбор кадров для&nbsp;лидера ипотечного рынка
-          </blockquote>
-          <p className="text-green-200/70 text-sm leading-relaxed">
+          </h2>
+          <p className="text-green-100/70 text-sm leading-relaxed">
             Внутренняя платформа управления вакансиями и&nbsp;кандидатами с&nbsp;AI-ранжированием резюме.
           </p>
         </div>
 
         <div className="relative flex flex-wrap gap-2">
           {["AI Scoring", "HH интеграция", "Excel импорт", "On-premise"].map((tag) => (
-            <span key={tag} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-white/70">
+            <span key={tag} className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs text-white/75">
               {tag}
             </span>
           ))}
         </div>
       </div>
 
-      {/* Right form panel */}
+      {/* Right form panel – light */}
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="w-full max-w-sm">
-          <div className="mb-8">
-            {/* Mobile logo */}
-            <div className="mb-4 flex items-center gap-2.5 lg:hidden">
-              <IpotekaBankLogo size={36} />
-              <div>
-                <p className="text-white font-bold text-sm">Ipoteka Bank</p>
-                <p className="text-slate-500 text-[10px] uppercase tracking-wide">OTP Group</p>
-              </div>
+
+          {/* Mobile: show bank logo */}
+          <div className="mb-6 flex items-center gap-3 lg:hidden">
+            <IpotekaBankLogo size={36} />
+            <div>
+              <p className="text-sm font-bold text-gray-900">Ipoteka Bank</p>
+              <p className="text-xs text-gray-400">OTP Group</p>
             </div>
-            <h1 className="text-2xl font-bold text-white">Добро пожаловать</h1>
-            <p className="mt-1 text-sm text-slate-400">Войдите в корпоративный аккаунт</p>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Deep <span className="text-green-600">Hire</span>
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">Войдите в корпоративный аккаунт</p>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1.5">
-                <Label htmlFor="username" className="text-slate-300 text-sm font-medium">
+                <Label htmlFor="username" className="text-gray-700 text-sm font-medium">
                   Логин
                 </Label>
                 <Input
@@ -109,12 +115,12 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-green-500 focus:ring-green-500/20 h-11"
+                  className="h-11 border-gray-300 focus:border-green-500 focus:ring-green-500/20"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-slate-300 text-sm font-medium">
+                <Label htmlFor="password" className="text-gray-700 text-sm font-medium">
                   Пароль
                 </Label>
                 <Input
@@ -125,20 +131,20 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-green-500 focus:ring-green-500/20 h-11"
+                  className="h-11 border-gray-300 focus:border-green-500 focus:ring-green-500/20"
                 />
               </div>
 
               {error && (
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2.5">
-                  <p className="text-sm text-red-400 text-center">{error}</p>
+                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5">
+                  <p className="text-sm text-red-600 text-center">{error}</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full h-11 rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full h-11 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
               >
                 {loading ? (
                   <>
@@ -152,7 +158,7 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <p className="mt-6 text-center text-xs text-slate-600">
+          <p className="mt-6 text-center text-xs text-gray-400">
             © {new Date().getFullYear()} Ipoteka Bank OTP Group. Все права защищены.
           </p>
         </div>

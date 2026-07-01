@@ -6,35 +6,23 @@ import Link from "next/link";
 import { Briefcase, Users, Plug, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-function IpotekaBankIcon({ className }: { className?: string }) {
+function IpotekaBankLogo({ size = 32 }: { size?: number }) {
   return (
-    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Ipoteka Bank logo: circular leaf/sprout mark */}
-      <circle cx="16" cy="16" r="14" fill="white" fillOpacity="0.15"/>
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="20" fill="#00A651" />
       <path
-        d="M16 6C16 6 8 10 8 18C8 22.4 11.6 26 16 26C20.4 26 24 22.4 24 18C24 10 16 6 16 6Z"
+        d="M20 8C20 8 11 13.5 11 22C11 27.5 15 32 20 32C25 32 29 27.5 29 22C29 13.5 20 8 20 8Z"
         fill="white"
-        fillOpacity="0.9"
       />
-      <path
-        d="M16 14V26"
-        stroke="#00A651"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16 20C16 20 13 17 13 14"
-        stroke="#00A651"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
+      <line x1="20" y1="19" x2="20" y2="32" stroke="#00A651" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M20 26C20 26 16.5 22 16.5 18.5" stroke="#00A651" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
 
 const NAV_LINKS = [
-  { href: "/vacancies",  label: "Вакансии",   icon: Briefcase },
-  { href: "/candidates", label: "Кандидаты",  icon: Users },
+  { href: "/vacancies",  label: "Вакансии",  icon: Briefcase },
+  { href: "/candidates", label: "Кандидаты", icon: Users },
 ];
 
 export function Sidebar() {
@@ -65,15 +53,13 @@ export function Sidebar() {
     .toUpperCase();
 
   return (
-    <aside className="w-56 shrink-0 flex flex-col bg-slate-900 min-h-screen">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800">
-        <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
-          <IpotekaBankIcon className="h-5 w-5" />
-        </div>
+    <aside className="w-56 shrink-0 flex flex-col bg-white border-r border-gray-200 min-h-screen">
+      {/* Header: logo + app name */}
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-100">
+        <IpotekaBankLogo size={32} />
         <div className="leading-tight min-w-0">
-          <p className="text-sm font-bold text-white truncate">Ipoteka Bank</p>
-          <p className="text-[10px] text-slate-500 tracking-wide uppercase">OTP Group</p>
+          <p className="text-sm font-bold text-gray-900 truncate">Deep Hire</p>
+          <p className="text-[10px] text-gray-400 truncate">Ipoteka Bank · OTP Group</p>
         </div>
       </div>
 
@@ -88,7 +74,7 @@ export function Sidebar() {
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
                   ? "bg-green-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -97,7 +83,7 @@ export function Sidebar() {
           );
         })}
 
-        <div className="my-3 border-t border-slate-800" />
+        <div className="my-3 border-t border-gray-100" />
 
         {(() => {
           const active = pathname.startsWith("/settings");
@@ -107,7 +93,7 @@ export function Sidebar() {
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
                   ? "bg-green-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
               <Plug className="h-4 w-4 shrink-0" />
@@ -124,7 +110,7 @@ export function Sidebar() {
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
                   ? "bg-green-600 text-white"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
               <ShieldCheck className="h-4 w-4 shrink-0" />
@@ -134,24 +120,24 @@ export function Sidebar() {
         })()}
       </nav>
 
-      {/* User */}
-      <div className="border-t border-slate-800 p-3">
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2 mb-1">
-          <div className="h-8 w-8 rounded-full bg-green-600/20 border border-green-500/40 flex items-center justify-center shrink-0">
-            <span className="text-xs font-semibold text-green-300">{initials}</span>
+      {/* User section */}
+      <div className="border-t border-gray-100 p-3">
+        <div className="flex items-center gap-3 px-2 py-2 mb-1">
+          <div className="h-8 w-8 rounded-full bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+            <span className="text-xs font-semibold text-green-700">{initials}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-200 truncate">
+            <p className="text-sm font-semibold text-gray-900 truncate">
               {user.full_name || user.username}
             </p>
-            <p className="text-xs text-slate-500 truncate">
+            <p className="text-xs text-gray-400 truncate">
               {user.role === "admin" ? "Администратор" : "Сотрудник"}
             </p>
           </div>
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition-colors"
         >
           <LogOut className="h-4 w-4 shrink-0" />
           Выйти
