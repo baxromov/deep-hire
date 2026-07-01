@@ -10,7 +10,7 @@ from app.database import close_qdrant, close_redis, init_db
 from app.models.user import User
 from app.routers import ai, areas, candidates, matching, talent_pool, vacancies
 from app.routers import auth, integrations
-from app.services import hh_service
+from app.services import ai_service, embedding_service, hh_service
 from app.services.auth_service import ensure_admin_exists
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,8 @@ async def lifespan(app: FastAPI):
     yield
     await close_redis()
     await close_qdrant()
+    await ai_service.close_client()
+    await embedding_service.close_client()
 
 
 app = FastAPI(title="DeepHire API", version="1.0.0", lifespan=lifespan)

@@ -9,6 +9,25 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_llm_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _llm_client
+    if _llm_client is None or _llm_client.is_closed:
+        _llm_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=5.0),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _llm_client
+
+
+async def close_client() -> None:
+    global _llm_client
+    if _llm_client and not _llm_client.is_closed:
+        await _llm_client.aclose()
+        _llm_client = None
+
 _DEFAULT_CRITERIA = [
     {"name": "Соответствие должности", "weight": 45},
     {"name": "Навыки и инструменты",   "weight": 40},
@@ -116,30 +135,28 @@ async def score_candidate(
         "format": "json",
     }
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("message", {}).get("content", "")
-            cleaned = _strip_fences(raw)
+        client = _get_client()
+        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("message", {}).get("content", "")
+        cleaned = _strip_fences(raw)
 
-            # Primary: strict JSON parse
-            try:
-                parsed = json.loads(cleaned)
-            except json.JSONDecodeError:
-                # Fallback: extract score with regex, skip criteria
-                logger.warning("score_candidate: malformed JSON from LLM, using regex fallback. raw=%r", cleaned[:200])
-                m = re.search(r'"score"\s*:\s*(\d+)', cleaned)
-                score = max(0, min(100, int(m.group(1)))) if m else 0
-                r = re.search(r'"reasoning"\s*:\s*"([^"]*)"', cleaned)
-                reasoning = r.group(1).strip() if r else ""
-                return score, reasoning, []
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            logger.warning("score_candidate: malformed JSON from LLM, using regex fallback. raw=%r", cleaned[:200])
+            m = re.search(r'"score"\s*:\s*(\d+)', cleaned)
+            score = max(0, min(100, int(m.group(1)))) if m else 0
+            r = re.search(r'"reasoning"\s*:\s*"([^"]*)"', cleaned)
+            reasoning = r.group(1).strip() if r else ""
+            return score, reasoning, []
 
-            score = max(0, min(100, int(parsed.get("score", 0))))
-            reasoning = str(parsed.get("reasoning", "")).strip()
-            criteria = parsed.get("criteria", [])
-            if not isinstance(criteria, list):
-                criteria = []
-            return score, reasoning, criteria
+        score = max(0, min(100, int(parsed.get("score", 0))))
+        reasoning = str(parsed.get("reasoning", "")).strip()
+        criteria = parsed.get("criteria", [])
+        if not isinstance(criteria, list):
+            criteria = []
+        return score, reasoning, criteria
     except Exception as e:
         logger.warning("score_candidate failed: %s", e)
         return 0, "", []
@@ -190,21 +207,20 @@ async def generate_search_queries(
         "format": "json",
     }
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("message", {}).get("content", "")
-            parsed = json.loads(_strip_fences(raw))
-            queries = parsed.get("queries", [])
-            # Validate: must be non-empty strings, deduplicated
-            seen: set[str] = set()
-            result = []
-            for q in queries:
-                q = str(q).strip()
-                if q and q not in seen:
-                    seen.add(q)
-                    result.append(q)
-            return result
+        client = _get_client()
+        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("message", {}).get("content", "")
+        parsed = json.loads(_strip_fences(raw))
+        queries = parsed.get("queries", [])
+        seen: set[str] = set()
+        result = []
+        for q in queries:
+            q = str(q).strip()
+            if q and q not in seen:
+                seen.add(q)
+                result.append(q)
+        return result
     except Exception:
         return []
 
@@ -298,13 +314,13 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
     }
     result: Dict[str, Any] = {}
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("message", {}).get("content", "")
-            cleaned = _strip_fences(raw)
-            parsed = json.loads(cleaned)
-            result = {k: v for k, v in parsed.items() if v is not None}
+        client = _get_client()
+        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("message", {}).get("content", "")
+        cleaned = _strip_fences(raw)
+        parsed = json.loads(cleaned)
+        result = {k: v for k, v in parsed.items() if v is not None}
     except Exception as e:
         logger.warning("extract_resume_fields LLM failed: %s | text_preview=%r", e, text[:150])
 
@@ -353,13 +369,13 @@ async def _infer_title(text: str) -> str:
         "format": "json",
     }
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            raw = resp.json().get("message", {}).get("content", "")
-            parsed = json.loads(_strip_fences(raw))
-            title = str(parsed.get("title", "")).strip()
-            return title if title else ""
+        client = _get_client()
+        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("message", {}).get("content", "")
+        parsed = json.loads(_strip_fences(raw))
+        title = str(parsed.get("title", "")).strip()
+        return title if title else ""
     except Exception:
         return ""
 
@@ -373,24 +389,20 @@ async def extract_fields(text: str) -> Dict[str, Any]:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/chat",
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            raw_content = data.get("message", {}).get("content", "")
-            cleaned = _strip_fences(raw_content)
-            parsed = json.loads(cleaned)
-            fields = {k: v for k, v in parsed.items() if v is not None}
+        client = _get_client()
+        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        raw_content = data.get("message", {}).get("content", "")
+        cleaned = _strip_fences(raw_content)
+        parsed = json.loads(cleaned)
+        fields = {k: v for k, v in parsed.items() if v is not None}
 
-            # Safety net: if title still missing, infer it from the description
-            if not fields.get("title"):
-                inferred = await _infer_title(fields.get("description") or text)
-                if inferred:
-                    fields["title"] = inferred
+        if not fields.get("title"):
+            inferred = await _infer_title(fields.get("description") or text)
+            if inferred:
+                fields["title"] = inferred
 
-            return fields
+        return fields
     except Exception:
         return {}

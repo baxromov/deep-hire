@@ -259,3 +259,31 @@ async def delete_temp_collection(client: AsyncQdrantClient, collection_name: str
         logger.info("Deleted temp Qdrant collection '%s'", collection_name)
     except Exception as exc:
         logger.warning("delete_temp_collection '%s' failed: %s", collection_name, exc)
+
+
+async def upsert_items_to_temp_collection(
+    client: AsyncQdrantClient,
+    collection_name: str,
+    items: List[Dict[str, Any]],
+    vectors: List[List[float]],
+) -> int:
+    """Upsert generic items into a temp collection.
+
+    Each item must have an 'id' field (string) used to derive the Qdrant point ID.
+    All other fields are stored as payload.
+    """
+    points = []
+    for item, vector in zip(items, vectors):
+        item_id = str(item.get("id", ""))
+        if not item_id or not vector:
+            continue
+        point_id = int(hashlib.sha1(item_id.encode()).hexdigest(), 16) % (2**53)
+        points.append(qmodels.PointStruct(id=point_id, vector=vector, payload=item))
+
+    if not points:
+        return 0
+
+    batch_size = 200
+    for i in range(0, len(points), batch_size):
+        await client.upsert(collection_name=collection_name, points=points[i:i + batch_size])
+    return len(points)

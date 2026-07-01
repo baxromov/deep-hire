@@ -115,12 +115,49 @@ sekin, nazorat bilan HH’ga yuboradi
 
 
 Qisqa xulosa (senior summary)
-Agar sizda quyidagilar bo‘lsa:
+Agar sizda quyidagilar bo’lsa:
 ✅ Global queue
 ✅ 2–3 parallel limit
 ✅ Delay
 ✅ Cache
 ✅ Page limit
 ✅ Batch processing
-✅ To‘g‘ri retry
+✅ To’g’ri retry
 👉 429 deyarli 0 ga tushadi (real production tajriba).
+
+---
+
+Problem 8: Vacancy search qilganda LLM candidatlarni check qilgani uchun latency juda sekin
+Natija: 100 ta kandidat uchun 500+ soniya kutish → foydalanuvchi UX yomon
+✅ Solution
+
+**Qdrant vector pre-filter + parallel LLM scoring**
+
+Eski yondashuv (sekin):
+- MongoDB → barcha N kandidat
+- Har birini LLM bilan ketma-ket baholash (1 ta → 2 ta → 3 ta...)
+- N = 100 bo’lsa: ~500 soniya
+
+Yangi yondashuv (tez):
+1. MongoDB → barcha kandidatlarni fetch (tez)
+2. `embed_batch()` — barchasini bir vaqtda embedding (concurrency=8, millisekundlar)
+3. Temp Qdrant collection → vectorlarni upsert
+4. Vacancy embedding → Qdrant cosine search → **TOP 25**
+5. Faqat shu 25 ta ga LLM call (`asyncio.gather` + `Semaphore(10)` parallel)
+6. Temp collection o’chirish
+
+Natija:
+- LLM call soni: N → 25 (8x+ kamayish)
+- Parallel execution: 10 ta bir vaqtda
+- 100 kandidat: 500s → ~15-20s (**25x tezlashish**)
+
+Problem 9: Har LLM/embed call uchun yangi TCP connection ochiladi
+Natija: connection setup overhead, ayniqsa 10 parallel call birdaniga borganida
+✅ Solution
+
+**Persistent httpx.AsyncClient (connection pooling)**
+
+- `ai_service.py` va `embedding_service.py` da module-level singleton client
+- `max_connections=20`, `max_keepalive_connections=10`
+- FastAPI lifespan’da to’g’ri yopiladi (`aclose()`)
+- ~2x tezlashish, ayniqsa parallel scoring paytida

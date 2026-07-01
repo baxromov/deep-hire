@@ -8,23 +8,41 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_embed_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _embed_client
+    if _embed_client is None or _embed_client.is_closed:
+        _embed_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=5.0),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+    return _embed_client
+
+
+async def close_client() -> None:
+    global _embed_client
+    if _embed_client and not _embed_client.is_closed:
+        await _embed_client.aclose()
+        _embed_client = None
+
 
 async def embed(text: str) -> List[float]:
     """Return an embedding vector for a single text using Ollama."""
     if not text or not text.strip():
         return []
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            f"{settings.ollama_base_url}/api/embed",
-            json={"model": settings.ollama_embed_model, "input": text},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        # Ollama /api/embed returns {"embeddings": [[...]], ...}
-        embeddings = data.get("embeddings") or data.get("embedding")
-        if isinstance(embeddings[0], list):
-            return embeddings[0]
-        return embeddings
+    client = _get_client()
+    resp = await client.post(
+        f"{settings.ollama_base_url}/api/embed",
+        json={"model": settings.ollama_embed_model, "input": text},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    embeddings = data.get("embeddings") or data.get("embedding")
+    if isinstance(embeddings[0], list):
+        return embeddings[0]
+    return embeddings
 
 
 async def embed_batch(texts: List[str], concurrency: int = 5) -> List[List[float]]:
