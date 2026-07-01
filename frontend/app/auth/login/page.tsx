@@ -6,20 +6,6 @@ import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-function IpotekaBankLogo({ size = 40 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="20" fill="#00A651" />
-      <path
-        d="M20 8C20 8 11 13.5 11 22C11 27.5 15 32 20 32C25 32 29 27.5 29 22C29 13.5 20 8 20 8Z"
-        fill="white"
-      />
-      <line x1="20" y1="19" x2="20" y2="32" stroke="#00A651" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M20 26C20 26 16.5 22 16.5 18.5" stroke="#00A651" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -51,13 +37,15 @@ export default function LoginPage() {
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }}
         />
 
-        {/* Bank logo */}
-        <div className="relative flex items-center gap-3">
-          <IpotekaBankLogo size={48} />
-          <div>
-            <p className="text-white font-bold text-lg leading-tight">Ipoteka Bank</p>
-            <p className="text-green-200 text-xs tracking-widest uppercase">OTP Group</p>
-          </div>
+        {/* Bank logo – white filter so it shows on green bg */}
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/ipotekabank-logo.png"
+            alt="Ipoteka Bank OTP Group"
+            className="h-8 w-auto object-contain object-left"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
         </div>
 
         <div className="relative">
@@ -81,17 +69,18 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right form panel – light */}
-      <div className="flex flex-1 items-center justify-center px-6">
+      {/* Right form panel – light, vertically centered, no scroll */}
+      <div className="flex flex-1 items-center justify-center px-8 overflow-hidden">
         <div className="w-full max-w-sm">
 
           {/* Mobile: show bank logo */}
-          <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <IpotekaBankLogo size={36} />
-            <div>
-              <p className="text-sm font-bold text-gray-900">Ipoteka Bank</p>
-              <p className="text-xs text-gray-400">OTP Group</p>
-            </div>
+          <div className="mb-6 lg:hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/ipotekabank-logo.png"
+              alt="Ipoteka Bank OTP Group"
+              className="h-6 w-auto object-contain object-left"
+            />
           </div>
 
           <div className="mb-8">

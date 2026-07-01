@@ -6,20 +6,6 @@ import Link from "next/link";
 import { Briefcase, Users, Plug, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
-function IpotekaBankLogo({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="20" fill="#00A651" />
-      <path
-        d="M20 8C20 8 11 13.5 11 22C11 27.5 15 32 20 32C25 32 29 27.5 29 22C29 13.5 20 8 20 8Z"
-        fill="white"
-      />
-      <line x1="20" y1="19" x2="20" y2="32" stroke="#00A651" strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M20 26C20 26 16.5 22 16.5 18.5" stroke="#00A651" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 const NAV_LINKS = [
   { href: "/vacancies",  label: "Вакансии",  icon: Briefcase },
   { href: "/candidates", label: "Кандидаты", icon: Users },
@@ -54,13 +40,17 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-white border-r border-gray-200 min-h-screen">
-      {/* Header: logo + app name */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-100">
-        <IpotekaBankLogo size={32} />
-        <div className="leading-tight min-w-0">
-          <p className="text-sm font-bold text-gray-900 truncate">Deep Hire</p>
-          <p className="text-[10px] text-gray-400 truncate">Ipoteka Bank · OTP Group</p>
-        </div>
+      {/* Header: bank logo + app name */}
+      <div className="flex flex-col justify-center gap-1 px-4 h-16 border-b border-gray-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/ipotekabank-logo.png"
+          alt="Ipoteka Bank OTP Group"
+          className="h-5 w-auto object-contain object-left"
+        />
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest pl-0.5">
+          Deep Hire
+        </p>
       </div>
 
       {/* Nav */}
