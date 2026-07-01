@@ -15,7 +15,11 @@ _llm_client: httpx.AsyncClient | None = None
 def _get_client() -> httpx.AsyncClient:
     global _llm_client
     if _llm_client is None or _llm_client.is_closed:
+        headers = {}
+        if settings.litellm_api_key:
+            headers["Authorization"] = f"Bearer {settings.litellm_api_key}"
         _llm_client = httpx.AsyncClient(
+            headers=headers,
             timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=5.0),
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )

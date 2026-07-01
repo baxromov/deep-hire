@@ -14,7 +14,11 @@ _embed_client: httpx.AsyncClient | None = None
 def _get_client() -> httpx.AsyncClient:
     global _embed_client
     if _embed_client is None or _embed_client.is_closed:
+        headers = {}
+        if settings.litellm_api_key:
+            headers["Authorization"] = f"Bearer {settings.litellm_api_key}"
         _embed_client = httpx.AsyncClient(
+            headers=headers,
             timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=5.0),
             limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
         )
