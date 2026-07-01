@@ -308,6 +308,52 @@ def _heuristic_extract_name(text: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _heuristic_extract_skills(text: str) -> list[str]:
+    """Regex fallback: extract skills from resume text without LLM."""
+    skills: list[str] = []
+    seen: set[str] = set()
+
+    # Look for dedicated skills sections (Russian + English labels)
+    section_pattern = re.compile(
+        r'(?:Key\s+skills?|Skills?|Ключевые\s+навыки|Навыки|Технологии|Стек|'
+        r'Инструменты|Компетенции|Hard\s+skills?|Soft\s+skills?)'
+        r'\s*[:\-–—]?\s*(.+?)(?=\n{2,}|\Z)',
+        re.IGNORECASE | re.DOTALL,
+    )
+    for m in section_pattern.finditer(text[:6000]):
+        block = m.group(1)[:800]
+        # Split by comma, semicolon, bullet, newline
+        tokens = re.split(r'[,;•·\n]+', block)
+        for tok in tokens:
+            tok = tok.strip(' \t\r•–—-/')
+            if 2 <= len(tok) <= 40 and not re.search(r'\d{4}', tok):
+                key = tok.lower()
+                if key not in seen:
+                    seen.add(key)
+                    skills.append(tok)
+
+    # If section not found, scan whole text for inline skill patterns
+    if not skills:
+        inline = re.findall(
+            r'\b(Python|Java(?:Script)?|TypeScript|C\+\+|C#|Go|Rust|Swift|Kotlin|PHP|Ruby|Scala|'
+            r'React(?:\.js)?|Vue(?:\.js)?|Angular|Next\.js|Node\.js|Django|FastAPI|Flask|Spring|'
+            r'PostgreSQL|MySQL|MongoDB|Redis|Elasticsearch|Kafka|RabbitMQ|'
+            r'Docker|Kubernetes|Terraform|Ansible|Jenkins|GitLab\s*CI|GitHub\s*Actions|'
+            r'AWS|GCP|Azure|Linux|Git|REST(?:\s*API)?|GraphQL|gRPC|'
+            r'SQL|HTML|CSS|Sass|Tailwind|Bootstrap|'
+            r'TensorFlow|PyTorch|scikit-learn|pandas|numpy|'
+            r'Excel|Power\s*BI|Tableau|1C)\b',
+            text, re.IGNORECASE,
+        )
+        for s in inline:
+            key = s.lower()
+            if key not in seen:
+                seen.add(key)
+                skills.append(s.strip())
+
+    return skills[:30]
+
+
 async def extract_resume_fields(text: str) -> Dict[str, Any]:
     payload = {
         "model": settings.ollama_model,
@@ -329,6 +375,12 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
     # Ensure skills is always a list (never rely on falsy [] being filtered out)
     if not isinstance(result.get("skills"), list):
         result["skills"] = []
+
+    # Heuristic fallback for skills when LLM returned nothing
+    if not result["skills"]:
+        result["skills"] = _heuristic_extract_skills(text)
+        if result["skills"]:
+            logger.info("extract_resume_fields: heuristic skills found: %d items", len(result["skills"]))
 
     # Heuristic fallback when LLM didn't find a name
     if not result.get("first_name") and not result.get("last_name"):
