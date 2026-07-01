@@ -20,7 +20,7 @@ function RelevanceBadge({ score }: { score: number | null }) {
 const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
   xlsx:  { label: "Excel",    cls: "bg-green-50 text-green-700" },
   file:  { label: "Загрузка", cls: "bg-purple-50 text-purple-700" },
-  hh:    { label: "HH",       cls: "bg-indigo-50 text-indigo-600" },
+  hh:    { label: "HH",       cls: "bg-green-50 text-green-700" },
 };
 
 function SourceBadge({ source }: { source: string | null }) {
@@ -54,7 +54,7 @@ export function CandidateCard({
 
   return (
     <tr
-      className={`group cursor-pointer hover:bg-gray-50 transition-colors ${selected ? "bg-indigo-50 hover:bg-indigo-50" : ""}`}
+      className={`group cursor-pointer hover:bg-gray-50 transition-colors ${selected ? "bg-green-50 hover:bg-green-50" : ""}`}
       onClick={() => router.push(`/candidates/${candidate.id}`)}
     >
       {/* Checkbox */}
@@ -63,7 +63,7 @@ export function CandidateCard({
           type="checkbox"
           checked={selected}
           onChange={() => onToggle?.(candidate.id)}
-          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+          className="h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-500 cursor-pointer"
         />
       </td>
 
@@ -81,7 +81,7 @@ export function CandidateCard({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
+              <span className="font-medium text-gray-900 group-hover:text-green-700 transition-colors truncate">
                 {name}
               </span>
               <SourceBadge source={candidate.source} />
@@ -131,7 +131,7 @@ export function CandidateCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-green-400 hover:text-green-700 transition-colors"
           >
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

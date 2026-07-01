@@ -8,8 +8,8 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "deep-hire",
-  description: "Resume Matcher Platform",
+  title: "Ipoteka Bank | Кадровая платформа",
+  description: "Корпоративная платформа управления вакансиями и кандидатами — Ipoteka Bank OTP Group",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

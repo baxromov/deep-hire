@@ -19,11 +19,11 @@ export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
 
   return (
     <tr
-      className="group cursor-pointer hover:bg-indigo-50/50 transition-colors"
+      className="group cursor-pointer hover:bg-green-50/50 transition-colors"
       onClick={() => router.push(`/vacancies/${vacancy.id}`)}
     >
       <td className="py-3.5 pl-5 pr-3">
-        <span className="font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
+        <span className="font-semibold text-slate-800 group-hover:text-green-700 transition-colors">
           {vacancy.title || <span className="text-slate-300 italic font-normal">Без названия</span>}
         </span>
       </td>
@@ -38,7 +38,7 @@ export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
       <td className="px-3 py-3.5">
         <div className="flex flex-wrap gap-1">
           {(vacancy.skills ?? []).slice(0, 3).map((s) => (
-            <span key={s} className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
+            <span key={s} className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
               {s}
             </span>
           ))}

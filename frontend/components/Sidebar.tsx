@@ -6,6 +6,32 @@ import Link from "next/link";
 import { Briefcase, Users, Plug, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
+function IpotekaBankIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Ipoteka Bank logo: circular leaf/sprout mark */}
+      <circle cx="16" cy="16" r="14" fill="white" fillOpacity="0.15"/>
+      <path
+        d="M16 6C16 6 8 10 8 18C8 22.4 11.6 26 16 26C20.4 26 24 22.4 24 18C24 10 16 6 16 6Z"
+        fill="white"
+        fillOpacity="0.9"
+      />
+      <path
+        d="M16 14V26"
+        stroke="#00A651"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 20C16 20 13 17 13 14"
+        stroke="#00A651"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 const NAV_LINKS = [
   { href: "/vacancies",  label: "Вакансии",   icon: Briefcase },
   { href: "/candidates", label: "Кандидаты",  icon: Users },
@@ -41,13 +67,14 @@ export function Sidebar() {
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-slate-900 min-h-screen">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-slate-800">
-        <div className="h-7 w-7 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-          <span className="text-white text-xs font-bold">DH</span>
+      <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800">
+        <div className="h-8 w-8 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
+          <IpotekaBankIcon className="h-5 w-5" />
         </div>
-        <span className="text-sm font-semibold text-white tracking-tight">
-          Deep<span className="text-indigo-400">Hire</span>
-        </span>
+        <div className="leading-tight min-w-0">
+          <p className="text-sm font-bold text-white truncate">Ipoteka Bank</p>
+          <p className="text-[10px] text-slate-500 tracking-wide uppercase">OTP Group</p>
+        </div>
       </div>
 
       {/* Nav */}
@@ -60,7 +87,7 @@ export function Sidebar() {
               href={href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-green-600 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
               }`}
             >
@@ -79,7 +106,7 @@ export function Sidebar() {
               href="/settings/integrations"
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-green-600 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
               }`}
             >
@@ -96,7 +123,7 @@ export function Sidebar() {
               href="/admin/users"
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 active
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-green-600 text-white"
                   : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
               }`}
             >
@@ -110,8 +137,8 @@ export function Sidebar() {
       {/* User */}
       <div className="border-t border-slate-800 p-3">
         <div className="flex items-center gap-3 rounded-lg px-2 py-2 mb-1">
-          <div className="h-8 w-8 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0">
-            <span className="text-xs font-semibold text-indigo-300">{initials}</span>
+          <div className="h-8 w-8 rounded-full bg-green-600/20 border border-green-500/40 flex items-center justify-center shrink-0">
+            <span className="text-xs font-semibold text-green-300">{initials}</span>
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-slate-200 truncate">

@@ -58,7 +58,7 @@ export default function VacanciesPage() {
         </div>
         <button
           onClick={createNew}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 rounded-lg bg-green-600 hover:bg-green-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors shadow-sm"
         >
           <Plus className="h-4 w-4" />
           Новая вакансия
@@ -84,7 +84,7 @@ export default function VacanciesPage() {
 
       {isLoading ? (
         <div className="flex justify-center pt-20">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
         </div>
       ) : vacancies.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-20 text-center">
