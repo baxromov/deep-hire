@@ -30,7 +30,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="-mx-8 -my-8 flex h-screen overflow-hidden bg-gray-50">
       {/* Left brand panel – green gradient stays as bank identity */}
       <div className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between bg-gradient-to-br from-green-600 to-green-800 p-10 relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.07]"
