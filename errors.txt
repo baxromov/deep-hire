@@ -1,130 +1,16 @@
-bakhromovshb@genai-tst-jupiterhub01:~$ docker logs c3966d3279a8
-INFO:     Will watch for changes in these directories: ['/app']
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [1] using WatchFiles
-INFO:     Started server process [71]
-INFO:     Waiting for application startup.
-ERROR:    Traceback (most recent call last):
-  File "/app/.venv/lib/python3.12/site-packages/starlette/routing.py", line 638, in lifespan
-    async with self.lifespan_context(app) as maybe_state:
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 216, in merged_lifespan
-    async with original_context(app) as maybe_original_state:
-               ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 210, in __aenter__
-    return await anext(self.gen)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/app/main.py", line 21, in lifespan
-    await init_db()
-  File "/app/app/database.py", line 18, in init_db
-    await init_beanie(
-  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 789, in init_beanie
-    await Initializer(
-  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 137, in __await__
-    yield from self.init_class(model).__await__()
-  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 749, in init_class
-    await self.init_document(cls)
-  File "/app/.venv/lib/python3.12/site-packages/beanie/odm/utils/init.py", line 580, in init_document
-    build_info = await self.database.command({"buildInfo": 1})
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/concurrent/futures/thread.py", line 59, in run
-    result = self.fn(*self.args, **self.kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/_csot.py", line 120, in csot_wrapper
-    return func(self, *args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/database.py", line 906, in command
-    with self._client._conn_for_reads(read_preference, session, operation=command_name) as (
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
-    return next(self.gen)
-           ^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/mongo_client.py", line 1683, in _conn_from_server
-    with self._checkout(server, session) as conn:
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
-    return next(self.gen)
-           ^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/mongo_client.py", line 1593, in _checkout
-    with server.checkout(handler=err_handler) as conn:
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.12/contextlib.py", line 137, in __enter__
-    return next(self.gen)
-           ^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1336, in checkout
-    conn = self._get_conn(checkout_started_time, handler=handler)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1495, in _get_conn
-    conn = self.connect(handler=handler)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 1296, in connect
-    conn.authenticate()
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 648, in authenticate
-    auth.authenticate(creds, self, reauthenticate=reauthenticate)
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 452, in authenticate
-    auth_func(credentials, conn)
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 354, in _authenticate_default
-    return _authenticate_scram(credentials, conn, "SCRAM-SHA-256")
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/auth.py", line 134, in _authenticate_scram
-    res = conn.command(source, cmd)
-          ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/helpers.py", line 45, in inner
-    return func(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/pool.py", line 538, in command
-    return command(
-           ^^^^^^^^
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/synchronous/network.py", line 218, in command
-    helpers_shared._check_command_response(
-  File "/app/.venv/lib/python3.12/site-packages/pymongo/helpers_shared.py", line 247, in _check_command_response
-    raise OperationFailure(errmsg, code, response, max_wire_version)
-pymongo.errors.OperationFailure: Authentication failed., full error: {'ok': 0.0, 'errmsg': 'Authentication failed.', 'code': 18, 'codeName': 'AuthenticationFailed'}
+import openai
 
-ERROR:    Application startup failed. Exiting.
-bakhromovshb@genai-tst-jupiterhub01:~$
+client = openai.OpenAI(
+	api_key="sk-xS85CTjF5lSvPoVIYFlI2Q",
+	base_url="http://localhost:8080"
+)
+
+response = client.embeddings.create(
+	input="Your string here",
+	model="bge-m3:latest",
+	encoding_format="base64" # or "float"
+)
+
+print(response.data[0].embedding)
+####################################################
+bizda on prem model bor gpt-oss-120 va embedingdan bge-m3 shu shuni ishlataylik iloji bo'lsa
