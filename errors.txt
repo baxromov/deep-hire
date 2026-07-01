@@ -1,16 +1,9 @@
-import openai
-
-client = openai.OpenAI(
-	api_key="sk-xS85CTjF5lSvPoVIYFlI2Q",
-	base_url="http://localhost:8080"
-)
-
-response = client.embeddings.create(
-	input="Your string here",
-	model="bge-m3:latest",
-	encoding_format="base64" # or "float"
-)
-
-print(response.data[0].embedding)
-####################################################
-bizda on prem model bor gpt-oss-120 va embedingdan bge-m3 shu shuni ishlataylik iloji bo'lsa
+backend-1   |     await upsert_items_to_temp_collection(qdrant, settings.qdrant_collection, qdrant_items, valid_vectors)backend-1   |   File "/app/app/services/qdrant_service.py", line 288, in upsert_items_to_temp_collection
+backend-1   |     await client.upsert(collection_name=collection_name, points=points[i:i + batch_size])
+backend-1   |           ^^^^^^^^^^^^^
+backend-1   | AttributeError: 'coroutine' object has no attribute 'upsert'
+backend-1   | /usr/local/lib/python3.12/asyncio/runners.py:118: RuntimeWarning: coroutine 'get_qdrant' was never awaitedbackend-1   |   return self._loop.run_until_complete(task)
+backend-1   | RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+backend-1   | INFO:     172.26.0.4:49994 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
+❌ Vektorlash xatoligi
+Vektorlash xatoligi: 'coroutine' object has no attribute 'upsert
