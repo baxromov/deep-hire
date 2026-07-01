@@ -7,7 +7,7 @@ from pydantic import Field
 
 
 class Candidate(Document):
-    vacancy_id: PydanticObjectId
+    vacancy_id: Optional[PydanticObjectId] = None
     hh_resume_id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None

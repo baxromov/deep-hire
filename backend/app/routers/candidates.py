@@ -77,11 +77,10 @@ async def candidates_by_vacancy(vacancy_id: str):
     return [CandidateResponse.from_doc(d) for d in docs]
 
 
-async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -> dict | None:
-    """Process a single resume (as raw bytes) against pre-fetched vacancies.
+async def _process_one_file(filename: str, file_bytes: bytes) -> dict | None:
+    """Extract resume fields via LLM and save candidate without vacancy matching.
 
     Returns a result dict on success, or None on failure.
-    Errors are logged but never propagated so sibling files still succeed.
     """
     try:
         logger.warning("_process_one_file: filename=%r size=%d", filename, len(file_bytes))
@@ -93,26 +92,6 @@ async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -
 
         fields = await ai_service.extract_resume_fields(text)
 
-        sem = asyncio.Semaphore(SCORE_CONCURRENCY)
-
-        async def score_one(v: Vacancy) -> tuple[int, str, list]:
-            async with sem:
-                return await ai_service.score_candidate(
-                    vacancy_title=v.title or "",
-                    required_skills=v.skills,
-                    experience=v.experience or "",
-                    candidate_title=fields.get("title", ""),
-                    candidate_skills=fields.get("skills", []),
-                    vacancy_description=v.description or "",
-                    criteria=v.score_criteria,
-                )
-
-        results = await asyncio.gather(*[score_one(v) for v in vacancies])
-        scores = [r[0] for r in results]
-        best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
-        best_vacancy = vacancies[best_idx]
-        best_score, best_reasoning, best_criteria = results[best_idx]
-
         file_hash = hashlib.md5(file_bytes).hexdigest()[:16]
 
         minio_key = None
@@ -122,17 +101,13 @@ async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -
             pass
 
         candidate_data = {
-            "vacancy_id": best_vacancy.id,
             "hh_resume_id": f"file:{file_hash}",
-            "relevance_score": best_score,
             "skills": fields.get("skills") or [],
             "raw_resume_json": {
                 "source": "file",
                 "filename": filename,
                 "extracted": fields,
                 "minio_key": minio_key,
-                "score_reasoning": best_reasoning,
-                "score_criteria": best_criteria,
             },
             "matched_at": datetime.now(timezone.utc),
             **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
@@ -141,7 +116,7 @@ async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -
         }
 
         col = Candidate.get_motor_collection()
-        upsert_filter = {"vacancy_id": best_vacancy.id, "hh_resume_id": f"file:{file_hash}"}
+        upsert_filter = {"hh_resume_id": f"file:{file_hash}"}
         upsert_result = await col.update_one(upsert_filter, {"$set": candidate_data}, upsert=True)
         candidate_oid = upsert_result.upserted_id or (
             await col.find_one(upsert_filter, {"_id": 1})
@@ -156,9 +131,8 @@ async def _process_one_file(filename: str, file_bytes: bytes, vacancies: list) -
         return {
             "id": str(candidate_oid),
             "name": name,
-            "score": best_score,
-            "vacancy_title": best_vacancy.title,
-            "vacancy_id": str(best_vacancy.id),
+            "skills": fields.get("skills") or [],
+            "title": fields.get("title") or "",
         }
 
     except Exception:
@@ -177,13 +151,13 @@ _upload_job: dict = {
 }
 
 
-async def _run_upload(file_data: list[tuple[str, bytes]], vacancies: list) -> None:
+async def _run_upload(file_data: list[tuple[str, bytes]]) -> None:
     global _upload_job
     sem = asyncio.Semaphore(3)
 
     async def process_one(filename: str, file_bytes: bytes) -> None:
         async with sem:
-            result = await _process_one_file(filename, file_bytes, vacancies)
+            result = await _process_one_file(filename, file_bytes)
             _upload_job["processed"] += 1
             if result:
                 _upload_job["results"].append(result)
@@ -202,18 +176,11 @@ async def upload_and_auto_match(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
 ) -> dict:
-    """Accept resume files, start background processing, return immediately.
-
-    Clients should poll /upload-status for progress and results.
-    """
+    """Accept resume files, extract fields via LLM, save candidates without vacancy matching."""
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     if _upload_job["status"] == "processing":
         raise HTTPException(status_code=409, detail="Upload already in progress")
-
-    vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
-    if not vacancies:
-        raise HTTPException(status_code=422, detail="No approved vacancies to match against")
 
     # Read all bytes NOW — UploadFile stream closes after response is sent
     file_data: list[tuple[str, bytes]] = []
@@ -238,7 +205,7 @@ async def upload_and_auto_match(
         "error": None,
     })
 
-    background_tasks.add_task(_run_upload, file_data, vacancies)
+    background_tasks.add_task(_run_upload, file_data)
     return {"status": "started", "total": len(file_data)}
 
 
