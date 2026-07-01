@@ -19,35 +19,35 @@ export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
 
   return (
     <tr
-      className="group cursor-pointer hover:bg-gray-50 transition-colors"
+      className="group cursor-pointer hover:bg-indigo-50/50 transition-colors"
       onClick={() => router.push(`/vacancies/${vacancy.id}`)}
     >
-      <td className="py-3 pl-4 pr-3">
-        <span className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-          {vacancy.title || <span className="text-gray-400 italic">Без названия</span>}
+      <td className="py-3.5 pl-5 pr-3">
+        <span className="font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
+          {vacancy.title || <span className="text-slate-300 italic font-normal">Без названия</span>}
         </span>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3.5">
         <StatusBadge status={vacancy.status} />
       </td>
-      <td className="px-3 py-3 text-sm text-gray-500">{vacancy.area || "—"}</td>
-      <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">
+      <td className="px-3 py-3.5 text-sm text-slate-500">{vacancy.area || "—"}</td>
+      <td className="px-3 py-3.5 text-sm text-slate-500 whitespace-nowrap">
         {fmt(vacancy.salary_from, vacancy.salary_to, vacancy.currency) || "—"}
       </td>
-      <td className="px-3 py-3 text-sm text-gray-500">{expLabel(vacancy.experience) || "—"}</td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3.5 text-sm text-slate-500">{expLabel(vacancy.experience) || "—"}</td>
+      <td className="px-3 py-3.5">
         <div className="flex flex-wrap gap-1">
           {(vacancy.skills ?? []).slice(0, 3).map((s) => (
-            <span key={s} className="rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+            <span key={s} className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
               {s}
             </span>
           ))}
           {(vacancy.skills?.length ?? 0) > 3 && (
-            <span className="text-xs text-gray-400">+{(vacancy.skills?.length ?? 0) - 3}</span>
+            <span className="text-xs text-slate-400">+{(vacancy.skills?.length ?? 0) - 3}</span>
           )}
         </div>
       </td>
-      <td className="px-3 py-3 pr-4 text-sm text-gray-400 whitespace-nowrap">
+      <td className="px-3 py-3.5 pr-5 text-sm text-slate-400 whitespace-nowrap">
         {new Date(vacancy.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}
       </td>
     </tr>

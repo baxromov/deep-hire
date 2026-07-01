@@ -3,11 +3,12 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Briefcase, Users, Plug, ShieldCheck, LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 const NAV_LINKS = [
-  { href: "/vacancies", label: "Вакансии" },
-  { href: "/candidates", label: "Кандидаты" },
+  { href: "/vacancies",  label: "Вакансии",   icon: Briefcase },
+  { href: "/candidates", label: "Кандидаты",  icon: Users },
 ];
 
 export function Sidebar() {
@@ -15,7 +16,6 @@ export function Sidebar() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
 
-  // Redirect unauthenticated users away from protected pages
   useEffect(() => {
     if (loading) return;
     if (!user && !pathname.startsWith("/auth")) {
@@ -31,72 +31,102 @@ export function Sidebar() {
     router.replace("/auth/login");
   };
 
+  const initials = (user.full_name || user.username || "?")
+    .split(" ")
+    .map((w: string) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return (
-    <aside className="w-52 shrink-0 flex flex-col border-r border-gray-200 bg-white min-h-screen px-3 py-6">
-      <div className="px-3 mb-8">
-        <span className="text-base font-semibold tracking-tight text-gray-900">Deep</span>
-        <span className="text-base font-semibold tracking-tight text-blue-600">Hire</span>
+    <aside className="w-56 shrink-0 flex flex-col bg-slate-900 min-h-screen">
+      {/* Logo */}
+      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-slate-800">
+        <div className="h-7 w-7 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+          <span className="text-white text-xs font-bold">DH</span>
+        </div>
+        <span className="text-sm font-semibold text-white tracking-tight">
+          Deep<span className="text-indigo-400">Hire</span>
+        </span>
       </div>
 
-      <nav className="flex flex-col gap-1 flex-1">
-        {NAV_LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              pathname.startsWith(link.href)
-                ? "bg-gray-100 text-gray-900"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-            }`}
-          >
-            {link.label}
-          </Link>
-        ))}
+      {/* Nav */}
+      <nav className="flex flex-col gap-0.5 flex-1 px-3 pt-4">
+        {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+          const active = pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </Link>
+          );
+        })}
 
-        {/* Divider */}
-        <div className="my-2 border-t border-gray-100" />
+        <div className="my-3 border-t border-slate-800" />
 
-        <Link
-          href="/settings/integrations"
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            pathname.startsWith("/settings")
-              ? "bg-gray-100 text-gray-900"
-              : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-          }`}
-        >
-          Интеграции
-        </Link>
+        {(() => {
+          const active = pathname.startsWith("/settings");
+          return (
+            <Link
+              href="/settings/integrations"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+              }`}
+            >
+              <Plug className="h-4 w-4 shrink-0" />
+              Интеграции
+            </Link>
+          );
+        })()}
 
-        {user.role === "admin" && (
-          <Link
-            href="/admin/users"
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              pathname.startsWith("/admin")
-                ? "bg-gray-100 text-gray-900"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-            }`}
-          >
-            Пользователи
-          </Link>
-        )}
+        {user.role === "admin" && (() => {
+          const active = pathname.startsWith("/admin");
+          return (
+            <Link
+              href="/admin/users"
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+              }`}
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              Пользователи
+            </Link>
+          );
+        })()}
       </nav>
 
-      <div className="border-t border-gray-100 pt-4 mt-4 space-y-3">
-        <div className="rounded-lg px-3 py-2 space-y-0.5">
-          <p className="text-sm font-medium text-gray-900 truncate">
-            {user.full_name || user.username}
-          </p>
-          {user.email && (
-            <p className="text-xs text-gray-400 truncate">{user.email}</p>
-          )}
-          <p className="text-xs text-gray-400">
-            {user.role === "admin" ? "Администратор" : "Сотрудник"}
-          </p>
+      {/* User */}
+      <div className="border-t border-slate-800 p-3">
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2 mb-1">
+          <div className="h-8 w-8 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0">
+            <span className="text-xs font-semibold text-indigo-300">{initials}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-200 truncate">
+              {user.full_name || user.username}
+            </p>
+            <p className="text-xs text-slate-500 truncate">
+              {user.role === "admin" ? "Администратор" : "Сотрудник"}
+            </p>
+          </div>
         </div>
         <button
           onClick={handleLogout}
-          className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
         >
+          <LogOut className="h-4 w-4 shrink-0" />
           Выйти
         </button>
       </div>
