@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:8080"
     ollama_model: str = "gpt-oss-120"
     litellm_api_key: str = ""
+    use_llm_scoring: bool = False
 
     hh_client_id: str = ""
     hh_client_secret: str = ""

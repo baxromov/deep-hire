@@ -45,12 +45,15 @@ LIVE_POOL_PER_PAGE: int = settings.live_pool_per_page
 def _make_scorer(vacancy, sem: asyncio.Semaphore):
     """Return an async scoring function bound to a vacancy and semaphore."""
     async def _score(resume: dict) -> tuple[dict, int]:
+        if not settings.use_llm_scoring:
+            sc = int(resume.get("_qdrant_score", 0.0) * 100)
+            return resume, sc
         async with sem:
             skills = [
                 s if isinstance(s, str) else s.get("name", "")
                 for s in (resume.get("skill_set") or [])
             ]
-            score = await ai_service.score_candidate(
+            sc, _rs, _cr = await ai_service.score_candidate(
                 vacancy_title=vacancy.title or "",
                 vacancy_description=vacancy.description or "",
                 required_skills=vacancy.skills,
@@ -58,7 +61,7 @@ def _make_scorer(vacancy, sem: asyncio.Semaphore):
                 candidate_title=resume.get("title", ""),
                 candidate_skills=skills,
             )
-        return resume, score
+        return resume, sc
     return _score
 
 
@@ -1056,16 +1059,19 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         for cand in group["candidates"]:
                             scored_ids.add(cand["hh_resume_id"])
 
-                        async with sem:
-                            sc, rs, cr = await ai_service.score_candidate(
-                                vacancy_title=vacancy.title or "",
-                                required_skills=vacancy.skills,
-                                experience=vacancy.experience or "",
-                                candidate_title=internship,
-                                candidate_skills=skills,
-                                vacancy_description=vacancy.description or "",
-                                criteria=vacancy.score_criteria,
-                            )
+                        if not settings.use_llm_scoring:
+                            sc, rs, cr = int(_qdrant_score * 100), "", []
+                        else:
+                            async with sem:
+                                sc, rs, cr = await ai_service.score_candidate(
+                                    vacancy_title=vacancy.title or "",
+                                    required_skills=vacancy.skills,
+                                    experience=vacancy.experience or "",
+                                    candidate_title=internship,
+                                    candidate_skills=skills,
+                                    vacancy_description=vacancy.description or "",
+                                    criteria=vacancy.score_criteria,
+                                )
 
                         if sc >= min_score:
                             for cand in group["candidates"]:
@@ -1113,16 +1119,19 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                         orig_hh_id = doc.hh_resume_id
                         scored_ids.add(orig_hh_id)
 
-                        async with sem:
-                            sc, rs, cr = await ai_service.score_candidate(
-                                vacancy_title=vacancy.title or "",
-                                required_skills=vacancy.skills,
-                                experience=vacancy.experience or "",
-                                candidate_title=title,
-                                candidate_skills=skills,
-                                vacancy_description=vacancy.description or "",
-                                criteria=vacancy.score_criteria,
-                            )
+                        if not settings.use_llm_scoring:
+                            sc, rs, cr = int(_qdrant_score * 100), "", []
+                        else:
+                            async with sem:
+                                sc, rs, cr = await ai_service.score_candidate(
+                                    vacancy_title=vacancy.title or "",
+                                    required_skills=vacancy.skills,
+                                    experience=vacancy.experience or "",
+                                    candidate_title=title,
+                                    candidate_skills=skills,
+                                    vacancy_description=vacancy.description or "",
+                                    criteria=vacancy.score_criteria,
+                                )
 
                         if sc >= min_score:
                             passed_ids.add(orig_hh_id)

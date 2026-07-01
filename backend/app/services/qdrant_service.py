@@ -148,7 +148,13 @@ async def search_candidates(
         with_payload=True,
     )
 
-    return [hit.payload for hit in response.points if hit.payload]
+    results = []
+    for hit in response.points:
+        if hit.payload:
+            payload = dict(hit.payload)
+            payload["_qdrant_score"] = hit.score
+            results.append(payload)
+    return results
 
 
 async def collection_info(client: AsyncQdrantClient) -> Dict[str, Any]:
