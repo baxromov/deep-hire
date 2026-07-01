@@ -65,7 +65,7 @@ export default function LoginPage() {
             Кадровая платформа
           </p>
           <h2 className="text-white text-2xl font-bold leading-snug mb-4">
-            Подбор кадров для&nbsp;лидера ипотечного рынка
+            Находите лучших специалистов быстрее и точнее
           </h2>
           <p className="text-green-100/70 text-sm leading-relaxed">
             Внутренняя платформа управления вакансиями и&nbsp;кандидатами с&nbsp;AI-ранжированием резюме.
