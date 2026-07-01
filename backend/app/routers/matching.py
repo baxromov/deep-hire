@@ -1000,7 +1000,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 vectors = await embed_batch(texts, concurrency=8)
 
                 # ── 5. Temp Qdrant collection ─────────────────────────────────────
-                qdrant = get_qdrant()
+                qdrant = await get_qdrant()
                 temp_col = f"db_match_{vacancy_id}"
                 await delete_temp_collection(qdrant, temp_col)  # clear any crash residue
                 await ensure_temp_collection(qdrant, temp_col)
@@ -1188,7 +1188,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
             finally:
                 if temp_col:
                     try:
-                        await delete_temp_collection(get_qdrant(), temp_col)
+                        await delete_temp_collection(await get_qdrant(), temp_col)
                     except Exception:
                         pass
                 await queue.put(None)

@@ -632,7 +632,7 @@ async def vectorize_all():
                 valid_vectors.append(vector)
                 valid_resume_ids.append(c.hh_resume_id)
 
-            qdrant = get_qdrant()
+            qdrant = await get_qdrant()
             await upsert_items_to_temp_collection(qdrant, settings.qdrant_collection, qdrant_items, valid_vectors)
 
             col = Candidate.get_motor_collection()
