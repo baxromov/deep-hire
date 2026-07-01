@@ -56,9 +56,8 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     qdrant_collection: str = "uzbek_candidates"
 
-    # Ollama embedding model for Qdrant indexing and vacancy embedding
-    # ollama_embed_base_url: direct Ollama URL for embeddings (bypasses LiteLLM proxy).
-    # Defaults to ollama_base_url if not set.
+    # Embedding model — served via LiteLLM (same base URL).
+    # Set ollama_embed_base_url only to override with a different endpoint.
     ollama_embed_base_url: str = ""
     ollama_embed_model: str = "bge-m3:latest"
 

@@ -2,33 +2,30 @@ import asyncio
 import logging
 from typing import List
 
-import httpx
+from openai import AsyncOpenAI
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_embed_client: httpx.AsyncClient | None = None
+_embed_client: AsyncOpenAI | None = None
 
 
-def _get_client() -> httpx.AsyncClient:
+def _get_client() -> AsyncOpenAI:
     global _embed_client
-    if _embed_client is None or _embed_client.is_closed:
-        headers = {}
-        if settings.litellm_api_key:
-            headers["Authorization"] = f"Bearer {settings.litellm_api_key}"
-        _embed_client = httpx.AsyncClient(
-            headers=headers,
-            timeout=httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=5.0),
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    if _embed_client is None:
+        embed_base_url = settings.ollama_embed_base_url or settings.ollama_base_url
+        _embed_client = AsyncOpenAI(
+            base_url=f"{embed_base_url}/v1",
+            api_key=settings.litellm_api_key or "no-key",
         )
     return _embed_client
 
 
 async def close_client() -> None:
     global _embed_client
-    if _embed_client and not _embed_client.is_closed:
-        await _embed_client.aclose()
+    if _embed_client is not None:
+        await _embed_client.close()
         _embed_client = None
 
 
@@ -37,13 +34,11 @@ async def embed(text: str) -> List[float]:
     if not text or not text.strip():
         return []
     client = _get_client()
-    embed_base_url = settings.ollama_embed_base_url or settings.ollama_base_url
-    resp = await client.post(
-        f"{embed_base_url}/v1/embeddings",
-        json={"model": settings.ollama_embed_model, "input": text},
+    response = await client.embeddings.create(
+        model=settings.ollama_embed_model,
+        input=text,
     )
-    resp.raise_for_status()
-    return resp.json()["data"][0]["embedding"]
+    return response.data[0].embedding
 
 
 async def embed_batch(texts: List[str], concurrency: int = 5) -> List[List[float]]:

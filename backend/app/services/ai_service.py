@@ -3,33 +3,29 @@ import logging
 import re
 from typing import Any, Dict
 
-import httpx
+from openai import AsyncOpenAI
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_llm_client: httpx.AsyncClient | None = None
+_llm_client: AsyncOpenAI | None = None
 
 
-def _get_client() -> httpx.AsyncClient:
+def _get_client() -> AsyncOpenAI:
     global _llm_client
-    if _llm_client is None or _llm_client.is_closed:
-        headers = {}
-        if settings.litellm_api_key:
-            headers["Authorization"] = f"Bearer {settings.litellm_api_key}"
-        _llm_client = httpx.AsyncClient(
-            headers=headers,
-            timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=5.0),
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+    if _llm_client is None:
+        _llm_client = AsyncOpenAI(
+            base_url=f"{settings.ollama_base_url}/v1",
+            api_key=settings.litellm_api_key or "no-key",
         )
     return _llm_client
 
 
 async def close_client() -> None:
     global _llm_client
-    if _llm_client and not _llm_client.is_closed:
-        await _llm_client.aclose()
+    if _llm_client is not None:
+        await _llm_client.close()
         _llm_client = None
 
 _DEFAULT_CRITERIA = [
@@ -132,16 +128,13 @@ async def score_candidate(
         candidate_skills=candidate_skills,
         crit=crit,
     )
-    payload = {
-        "model": settings.ollama_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-    }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
+        response = await client.chat.completions.create(
+            model=settings.ollama_model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.choices[0].message.content or ""
         cleaned = _strip_fences(raw)
 
         try:
@@ -156,12 +149,12 @@ async def score_candidate(
 
         score = max(0, min(100, int(parsed.get("score", 0))))
         reasoning = str(parsed.get("reasoning", "")).strip()
-        criteria = parsed.get("criteria", [])
-        if not isinstance(criteria, list):
-            criteria = []
-        return score, reasoning, criteria
+        criteria_result = parsed.get("criteria", [])
+        if not isinstance(criteria_result, list):
+            criteria_result = []
+        return score, reasoning, criteria_result
     except Exception as e:
-        logger.error("score_candidate failed: %s | url=%s/v1/chat/completions | model=%s",
+        logger.error("score_candidate failed: %s | url=%s | model=%s",
                      e, settings.ollama_base_url, settings.ollama_model, exc_info=True)
         return 0, "", []
 
@@ -204,16 +197,13 @@ async def generate_search_queries(
         description=(description or "")[:800],
         skills=", ".join((skills or [])[:15]),
     )
-    payload = {
-        "model": settings.ollama_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-    }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
+        response = await client.chat.completions.create(
+            model=settings.ollama_model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.choices[0].message.content or ""
         parsed = json.loads(_strip_fences(raw))
         queries = parsed.get("queries", [])
         seen: set[str] = set()
@@ -287,7 +277,6 @@ Resume text:
 
 def _heuristic_extract_name(text: str) -> tuple[str | None, str | None]:
     """Regex fallback: extract first/last name when LLM returns nothing."""
-    # Label-prefixed: "ФИО: Иванов Иван" / "Name: Ivan Ivanov"
     labeled = re.search(
         r'(?:ФИО|Ф\.?И\.?О\.?|Имя и фамилия|Имя|Фамилия|Surname|Last\s*name|First\s*name|Full\s*name)[:\s]+'
         r'([А-ЯЁA-Z][а-яёa-z\-]+)(?:\s+([А-ЯЁA-Z][а-яёa-z\-]+))?',
@@ -296,7 +285,6 @@ def _heuristic_extract_name(text: str) -> tuple[str | None, str | None]:
     if labeled:
         return labeled.group(1), labeled.group(2)
 
-    # Standalone capitalized line in first 8 non-empty lines (2–3 words)
     for line in text.strip().split('\n')[:8]:
         line = line.strip()
         if not line or len(line) > 50:
@@ -313,7 +301,6 @@ def _heuristic_extract_skills(text: str) -> list[str]:
     skills: list[str] = []
     seen: set[str] = set()
 
-    # Look for dedicated skills sections (Russian + English labels)
     section_pattern = re.compile(
         r'(?:Key\s+skills?|Skills?|Ключевые\s+навыки|Навыки|Технологии|Стек|'
         r'Инструменты|Компетенции|Hard\s+skills?|Soft\s+skills?)'
@@ -322,7 +309,6 @@ def _heuristic_extract_skills(text: str) -> list[str]:
     )
     for m in section_pattern.finditer(text[:6000]):
         block = m.group(1)[:800]
-        # Split by comma, semicolon, bullet, newline
         tokens = re.split(r'[,;•·\n]+', block)
         for tok in tokens:
             tok = tok.strip(' \t\r•–—-/')
@@ -332,7 +318,6 @@ def _heuristic_extract_skills(text: str) -> list[str]:
                     seen.add(key)
                     skills.append(tok)
 
-    # If section not found, scan whole text for inline skill patterns
     if not skills:
         inline = re.findall(
             r'\b(Python|Java(?:Script)?|TypeScript|C\+\+|C#|Go|Rust|Swift|Kotlin|PHP|Ruby|Scala|'
@@ -355,34 +340,28 @@ def _heuristic_extract_skills(text: str) -> list[str]:
 
 
 async def extract_resume_fields(text: str) -> Dict[str, Any]:
-    payload = {
-        "model": settings.ollama_model,
-        "messages": [{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
-        "stream": False,
-    }
     result: Dict[str, Any] = {}
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
+        response = await client.chat.completions.create(
+            model=settings.ollama_model,
+            messages=[{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
+        )
+        raw = response.choices[0].message.content or ""
         cleaned = _strip_fences(raw)
         parsed = json.loads(cleaned)
         result = {k: v for k, v in parsed.items() if v is not None}
     except Exception as e:
         logger.warning("extract_resume_fields LLM failed: %s | text_preview=%r", e, text[:150])
 
-    # Ensure skills is always a list (never rely on falsy [] being filtered out)
     if not isinstance(result.get("skills"), list):
         result["skills"] = []
 
-    # Heuristic fallback for skills when LLM returned nothing
     if not result["skills"]:
         result["skills"] = _heuristic_extract_skills(text)
         if result["skills"]:
             logger.info("extract_resume_fields: heuristic skills found: %d items", len(result["skills"]))
 
-    # Heuristic fallback when LLM didn't find a name
     if not result.get("first_name") and not result.get("last_name"):
         first, last = _heuristic_extract_name(text)
         if first:
@@ -399,10 +378,8 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
 
 def _strip_fences(raw: str) -> str:
     raw = raw.strip()
-    # Strip thinking/reasoning blocks — covers <think>, <thinking>, /think variants
     raw = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", raw, flags=re.DOTALL)
     raw = raw.strip()
-    # Strip markdown code fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     return raw.strip()
@@ -410,22 +387,19 @@ def _strip_fences(raw: str) -> str:
 
 async def _infer_title(text: str) -> str:
     """Fallback: ask the model for just a job title when extraction returned none."""
-    payload = {
-        "model": settings.ollama_model,
-        "messages": [{
-            "role": "user",
-            "content": (
-                "Based on this job description, write a short job title (2-5 words). "
-                "Return ONLY JSON: {\"title\": \"...\"}.\n\n" + text[:2000]
-            ),
-        }],
-        "stream": False,
-    }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
+        response = await client.chat.completions.create(
+            model=settings.ollama_model,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Based on this job description, write a short job title (2-5 words). "
+                    "Return ONLY JSON: {\"title\": \"...\"}.\n\n" + text[:2000]
+                ),
+            }],
+        )
+        raw = response.choices[0].message.content or ""
         parsed = json.loads(_strip_fences(raw))
         title = str(parsed.get("title", "")).strip()
         return title if title else ""
@@ -434,19 +408,14 @@ async def _infer_title(text: str) -> str:
 
 
 async def extract_fields(text: str) -> Dict[str, Any]:
-    payload = {
-        "model": settings.ollama_model,
-        "messages": [{"role": "user", "content": EXTRACT_PROMPT + text[:4000]}],
-        "stream": False,
-    }
-
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        raw_content = data["choices"][0]["message"]["content"]
-        cleaned = _strip_fences(raw_content)
+        response = await client.chat.completions.create(
+            model=settings.ollama_model,
+            messages=[{"role": "user", "content": EXTRACT_PROMPT + text[:4000]}],
+        )
+        raw = response.choices[0].message.content or ""
+        cleaned = _strip_fences(raw)
         parsed = json.loads(cleaned)
         fields = {k: v for k, v in parsed.items() if v is not None}
 
