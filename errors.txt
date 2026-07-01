@@ -1,6 +1,33 @@
-OLLAMA_BASE_URL=http://172.31.230.3:8080
-OLLAMA_MODEL=gpt-oss-120b
-LITELLM_API_KEY=sk-KPQ614MDhDfwfFD691n4zg
-USE_LLM_SCORING=false
-# Embed model — RAG indexing & vacancy/resume similarity (same Ollama instance)
-OLLAMA_EMBED_MODEL=bge-m3:latest
+backend-1  | INFO:     Started server process [71]
+backend-1  | INFO:     Waiting for application startup.
+backend-1  | INFO:     Application startup complete.
+backend-1  | INFO:     172.26.0.4:60276 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39910 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39920 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39926 - "GET /api/candidates/rescore-status HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39940 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39942 - "GET /api/auth/me HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:39946 - "POST /api/candidates/vectorize-all HTTP/1.1" 200 OK
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
+backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+backend-1  | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
+backend-1  |   _qdrant_client = AsyncQdrantClient(
+backend-1  | INFO:     172.26.0.4:41836 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:41852 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1  | INFO:     172.26.0.4:42126 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
