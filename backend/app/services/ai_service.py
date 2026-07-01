@@ -136,7 +136,6 @@ async def score_candidate(
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
@@ -162,7 +161,8 @@ async def score_candidate(
             criteria = []
         return score, reasoning, criteria
     except Exception as e:
-        logger.warning("score_candidate failed: %s", e)
+        logger.error("score_candidate failed: %s | url=%s/v1/chat/completions | model=%s",
+                     e, settings.ollama_base_url, settings.ollama_model, exc_info=True)
         return 0, "", []
 
 
@@ -208,7 +208,6 @@ async def generate_search_queries(
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
@@ -314,7 +313,6 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
         "stream": False,
-        "response_format": {"type": "json_object"},
     }
     result: Dict[str, Any] = {}
     try:
@@ -370,7 +368,6 @@ async def _infer_title(text: str) -> str:
             ),
         }],
         "stream": False,
-        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
@@ -389,7 +386,6 @@ async def extract_fields(text: str) -> Dict[str, Any]:
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": EXTRACT_PROMPT + text[:4000]}],
         "stream": False,
-        "response_format": {"type": "json_object"},
     }
 
     try:
