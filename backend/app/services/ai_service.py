@@ -132,13 +132,13 @@ async def score_candidate(
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "format": "json",
+        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
         resp.raise_for_status()
-        raw = resp.json().get("message", {}).get("content", "")
+        raw = resp.json()["choices"][0]["message"]["content"]
         cleaned = _strip_fences(raw)
 
         try:
@@ -204,13 +204,13 @@ async def generate_search_queries(
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
-        "format": "json",
+        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
         resp.raise_for_status()
-        raw = resp.json().get("message", {}).get("content", "")
+        raw = resp.json()["choices"][0]["message"]["content"]
         parsed = json.loads(_strip_fences(raw))
         queries = parsed.get("queries", [])
         seen: set[str] = set()
@@ -310,14 +310,14 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
         "stream": False,
-        "format": "json",
+        "response_format": {"type": "json_object"},
     }
     result: Dict[str, Any] = {}
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
         resp.raise_for_status()
-        raw = resp.json().get("message", {}).get("content", "")
+        raw = resp.json()["choices"][0]["message"]["content"]
         cleaned = _strip_fences(raw)
         parsed = json.loads(cleaned)
         result = {k: v for k, v in parsed.items() if v is not None}
@@ -366,13 +366,13 @@ async def _infer_title(text: str) -> str:
             ),
         }],
         "stream": False,
-        "format": "json",
+        "response_format": {"type": "json_object"},
     }
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
         resp.raise_for_status()
-        raw = resp.json().get("message", {}).get("content", "")
+        raw = resp.json()["choices"][0]["message"]["content"]
         parsed = json.loads(_strip_fences(raw))
         title = str(parsed.get("title", "")).strip()
         return title if title else ""
@@ -385,15 +385,15 @@ async def extract_fields(text: str) -> Dict[str, Any]:
         "model": settings.ollama_model,
         "messages": [{"role": "user", "content": EXTRACT_PROMPT + text[:4000]}],
         "stream": False,
-        "format": "json",
+        "response_format": {"type": "json_object"},
     }
 
     try:
         client = _get_client()
-        resp = await client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
+        resp = await client.post(f"{settings.ollama_base_url}/v1/chat/completions", json=payload)
         resp.raise_for_status()
         data = resp.json()
-        raw_content = data.get("message", {}).get("content", "")
+        raw_content = data["choices"][0]["message"]["content"]
         cleaned = _strip_fences(raw_content)
         parsed = json.loads(cleaned)
         fields = {k: v for k, v in parsed.items() if v is not None}

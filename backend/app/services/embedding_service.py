@@ -29,20 +29,16 @@ async def close_client() -> None:
 
 
 async def embed(text: str) -> List[float]:
-    """Return an embedding vector for a single text using Ollama."""
+    """Return an embedding vector for a single text using the OpenAI-compatible embed API."""
     if not text or not text.strip():
         return []
     client = _get_client()
     resp = await client.post(
-        f"{settings.ollama_base_url}/api/embed",
+        f"{settings.ollama_base_url}/v1/embeddings",
         json={"model": settings.ollama_embed_model, "input": text},
     )
     resp.raise_for_status()
-    data = resp.json()
-    embeddings = data.get("embeddings") or data.get("embedding")
-    if isinstance(embeddings[0], list):
-        return embeddings[0]
-    return embeddings
+    return resp.json()["data"][0]["embedding"]
 
 
 async def embed_batch(texts: List[str], concurrency: int = 5) -> List[List[float]]:

@@ -10,7 +10,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-VECTOR_SIZE = 768
+VECTOR_SIZE = 1024
 DISTANCE = qmodels.Distance.COSINE
 
 

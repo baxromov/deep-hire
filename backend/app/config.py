@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     minio_bucket: str = "deephire-uploads"
     minio_secure: bool = False
 
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "gpt-oss:20b-cloud"
+    ollama_base_url: str = "http://localhost:8080"
+    ollama_model: str = "gpt-oss-120"
 
     hh_client_id: str = ""
     hh_client_secret: str = ""
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # Ollama embedding model for Qdrant indexing and vacancy embedding
     # Same Ollama instance (ollama_base_url), separate lightweight embed model
-    ollama_embed_model: str = "nomic-embed-text"
+    ollama_embed_model: str = "bge-m3:latest"
 
     # Pool matching params
     pool_top_k: int = 50    # candidates retrieved from Qdrant before re-scoring
