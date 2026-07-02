@@ -2,16 +2,43 @@ root@genai-tst-jupiterhub01:/home/bakhromovshb# cd deep-hire
 root@genai-tst-jupiterhub01:/home/bakhromovshb/deep-hire# ls
 backend  deploy.ps1  doc  docker-compose.yml  errors.txt  frontend  nginx.conf
 root@genai-tst-jupiterhub01:/home/bakhromovshb/deep-hire# docker compose logs -f --tail 1
-backend-1   | INFO:     Started reloader process [1] using WatchFiles
 frontend-1  | ✓ Ready in 0ms
-nginx-1     | 2026/07/02 06:25:57 [notice] 1#1: start worker process 92
+nginx-1     | 2026/07/02 06:29:17 [notice] 1#1: start worker process 92
+backend-1   | INFO:     Will watch for changes in these directories: ['/app']
+backend-1   | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+backend-1   | INFO:     Started reloader process [1] using WatchFiles
+nginx-1     | 2026/07/02 06:29:24 [error] 29#29: *1 connect() failed (111: Connection refused) while connecting to upstream, client: 192.168.41.32, server: , request: "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1", upstream: "http://10.10.0.2:8000/api/candidates/?skip=0&limit=20&sort_by=score", host: "172.31.174.11:8385", referrer: "http://172.31.174.11:8385/candidates"
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:29:24 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 502 559 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
 backend-1   | INFO:     Started server process [71]
 backend-1   | INFO:     Waiting for application startup.
 backend-1   | INFO:     Application startup complete.
-backend-1   | INFO:     10.10.0.4:36880 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:26:12 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 22 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:36890 - "POST /api/sync/cleverstaff HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.0.4:51218 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:29:28 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 22 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:48012 - "POST /api/sync/cleverstaff HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:29:29 +0000] "POST /api/sync/cleverstaff HTTP/1.1" 200 25 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
 backend-1   | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
 backend-1   |   _qdrant_client = AsyncQdrantClient(
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:26:13 +0000] "POST /api/sync/cleverstaff HTTP/1.1" 200 25 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | Cleverstaff MCP error at offset=0: Expecting value: line 1 column 1 (char 0)
+backend-1   | Task exception was never retrieved
+backend-1   | future: <Task finished name='Task-5' coro=<sync_cleverstaff() done, defined at /app/app/services/sync_service.py:45> exception=UnexpectedResponse()>
+backend-1   | Traceback (most recent call last):
+backend-1   |   File "/app/app/services/sync_service.py", line 88, in sync_cleverstaff
+backend-1   |     upserted = await _upsert_batch(qdrant, batch, vectors)
+backend-1   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1   |   File "/app/app/services/sync_service.py", line 38, in _upsert_batch
+backend-1   |     await qdrant.upsert(
+backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_client.py", line 903, in upsert
+backend-1   |     return await self._client.upsert(
+backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/async_qdrant_remote.py", line 1037, in upsert
+backend-1   |     await self.openapi_client.points_api.upsert_points(
+backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api/points_api.py", line 800, in upsert_points
+backend-1   |     return await self._build_for_upsert_points(
+backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api_client.py", line 184, in request
+backend-1   |     return await self.send(request, type_)
+backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1   |   File "/app/.venv/lib/python3.12/site-packages/qdrant_client/http/api_client.py", line 219, in send
+backend-1   |     raise UnexpectedResponse.for_response(response)
+backend-1   | qdrant_client.http.exceptions.UnexpectedResponse: Unexpected Response: 404 (Not Found)
+backend-1   | Raw response content:
+backend-1   | b'{"status":{"error":"Not found: Collection `hr-resume` doesn\'t exist!"},"time":0.000232395}'
