@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Candidate } from "@/types/candidate";
+import { API_BASE } from "@/lib/api";
 
 function VectorBadge({ isVectorized }: { isVectorized: boolean }) {
   if (isVectorized) {
@@ -128,7 +129,7 @@ export function CandidateCard({
       <td className="px-3 py-3 pr-4">
         {candidate.resume_url ? (
           <a
-            href={candidate.resume_url}
+            href={candidate.resume_url.startsWith("/api/") ? `${API_BASE}${candidate.resume_url}` : candidate.resume_url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}

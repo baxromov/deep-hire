@@ -1056,6 +1056,44 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                             scored.append(({**raw, "_source": "db_search"}, final_sc))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
+                    # LLM scoring on top candidates after reranker
+                    LLM_SCORE_LIMIT = 20
+                    to_llm = scored[:LLM_SCORE_LIMIT]
+                    if to_llm:
+                        await emit({
+                            "step": "llm_scoring",
+                            "total": len(to_llm),
+                            "message": f"LLM оценивает топ-{len(to_llm)} кандидатов после reranker…",
+                        })
+                        sem_llm = asyncio.Semaphore(SCORE_CONCURRENCY)
+
+                        async def _llm_score_one(item: tuple) -> tuple:
+                            resume, _reranker_sc = item
+                            async with sem_llm:
+                                cand_skills = [
+                                    s if isinstance(s, str) else s.get("name", "")
+                                    for s in (resume.get("skill_set") or [])
+                                ]
+                                sc, reasoning, criteria = await ai_service.score_candidate(
+                                    vacancy_title=vacancy.title or "",
+                                    vacancy_description=vacancy.description or "",
+                                    required_skills=vacancy.skills,
+                                    experience=vacancy.experience or "",
+                                    candidate_title=resume.get("title", ""),
+                                    candidate_skills=cand_skills,
+                                )
+                                enriched = {**resume, "score_reasoning": reasoning, "score_criteria": criteria}
+                                return enriched, sc
+
+                        llm_results = list(await asyncio.gather(*[_llm_score_one(t) for t in to_llm]))
+                        scored = [(r, s) for r, s in llm_results if s >= min_score]
+                        scored.sort(key=lambda x: x[1], reverse=True)
+                        await emit({
+                            "step": "llm_scored",
+                            "count": len(scored),
+                            "message": f"LLM оценка завершена — {len(scored)} кандидатов прошли порог ≥{min_score}%",
+                        })
+
                 else:
                     # ── No reranker: cosine score + skill bonus ───────────────────
                     scored = []

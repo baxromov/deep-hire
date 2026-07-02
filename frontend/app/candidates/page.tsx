@@ -81,12 +81,12 @@ export default function CandidatesPage() {
         if (job.status === "done") {
           stopVectorizePoll();
           setVectorizing(false);
-          toast.success(`✅ Vektorlash yakunlandi — ${job.vectorized} ta kandidat Qdrant'ga qo'shildi`);
+          toast.success(`✅ Векторизация завершена — ${job.vectorized} кандидатов добавлено в Qdrant`);
           mutateRef.current();
         } else if (job.status === "error") {
           stopVectorizePoll();
           setVectorizing(false);
-          toast.error(`Vektorlash xatoligi: ${job.error}`);
+          toast.error(`Ошибка векторизации: ${job.error}`);
         }
       } catch { /* ignore */ }
     }, 2000);
@@ -99,16 +99,16 @@ export default function CandidatesPage() {
       await candidateApi.vectorizeAll();
       setVectorizing(true);
       setVectorizeJob({ status: "running", total: 0, processed: 0, vectorized: 0 });
-      toast.info("Vektorlash boshlandi…");
+      toast.info("Векторизация запущена…");
       startVectorizePoll();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       if (err?.response?.data?.detail === "Vectorize already running") {
-        toast.warning("Vektorlash allaqachon davom etmoqda");
+        toast.warning("Векторизация уже запущена");
         setVectorizing(true);
         startVectorizePoll();
       } else {
-        toast.error("Vektorlashni boshlashda xatolik");
+        toast.error("Ошибка запуска векторизации");
       }
     }
   };
@@ -129,23 +129,37 @@ export default function CandidatesPage() {
           stopUploadPoll();
           setUploading(false);
           if (job.results.length > 0) {
-            toast.success(`✅ ${job.results.length} ta resume tahlil qilindi`);
+            toast.success(`✅ ${job.results.length} резюме проанализировано`);
+            // Auto-start vectorization after upload completes
+            try {
+              await candidateApi.vectorizeAll();
+              setVectorizing(true);
+              setVectorizeJob({ status: "running", total: 0, processed: 0, vectorized: 0 });
+              toast.info("Векторизация запущена автоматически…");
+              startVectorizePoll();
+            } catch (e: unknown) {
+              const err = e as { response?: { data?: { detail?: string } } };
+              if (err?.response?.data?.detail === "Vectorize already running") {
+                setVectorizing(true);
+                startVectorizePoll();
+              }
+            }
           }
           if (job.errors > 0) {
-            toast.warning(`${job.errors} ta fayl qayta ishlanmadi`);
+            toast.warning(`${job.errors} файлов не удалось обработать`);
           }
           if (job.results.length === 0 && job.errors === 0) {
-            toast.error("Hech qaysi resume qayta ishlanmadi");
+            toast.error("Ни одно резюме не обработано");
           }
           mutateRef.current();
         } else if (job.status === "error") {
           stopUploadPoll();
           setUploading(false);
-          toast.error(`Upload xatoligi: ${job.error}`);
+          toast.error(`Ошибка загрузки: ${job.error}`);
         }
       } catch { /* ignore */ }
     }, 2000);
-  }, [stopUploadPoll]);
+  }, [stopUploadPoll, startVectorizePoll]);
 
   useEffect(() => () => stopUploadPoll(), [stopUploadPoll]);
 
@@ -169,9 +183,9 @@ export default function CandidatesPage() {
     try {
       setCleverstaffSyncing(true);
       await candidateApi.cleverstaffSync();
-      toast.success("Cleverstaff sync boshlandi — fon rejimida davom etadi");
+      toast.success("Синхронизация Cleverstaff запущена — продолжается в фоне");
     } catch {
-      toast.error("Cleverstaff sync xatoligi");
+      toast.error("Ошибка синхронизации Cleverstaff");
     } finally {
       setCleverstaffSyncing(false);
     }
@@ -221,15 +235,15 @@ export default function CandidatesPage() {
 
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`${selectedIds.size} ta kandidatni o'chirmoqchimisiz?`)) return;
+    if (!confirm(`Удалить ${selectedIds.size} кандидатов?`)) return;
     setDeleting(true);
     try {
       const res = await candidateApi.deleteMany(Array.from(selectedIds));
-      toast.success(`${res.data.deleted} ta kandidat o'chirildi`);
+      toast.success(`${res.data.deleted} кандидатов удалено`);
       setSelectedIds(new Set());
       mutate();
     } catch {
-      toast.error("O'chirishda xatolik yuz berdi");
+      toast.error("Ошибка при удалении");
     } finally {
       setDeleting(false);
     }
@@ -245,15 +259,15 @@ export default function CandidatesPage() {
     setUploadJob({ status: "processing", total: files.length, processed: 0, errors: 0 });
     try {
       await candidateApi.upload(files);
-      toast.info(`${files.length} ta resume fon rejimida tahlil qilinmoqda…`);
+      toast.info(`${files.length} резюме анализируются в фоне…`);
       startUploadPoll();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       if (err?.response?.data?.detail === "Upload already in progress") {
-        toast.warning("Upload jarayoni allaqachon davom etmoqda");
+        toast.warning("Загрузка уже выполняется");
         startUploadPoll();
       } else {
-        toast.error("Fayllarni yuborishda xatolik");
+        toast.error("Ошибка отправки файлов");
         setUploading(false);
         setUploadJob(null);
       }
@@ -306,7 +320,7 @@ export default function CandidatesPage() {
                   ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                   : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 }
-                {vectorizing ? "Vektorlash…" : `Vektorlashtirish (${selectedIds.size})`}
+                {vectorizing ? "Векторизация…" : `Векторизовать (${selectedIds.size})`}
               </button>
               <button
                 onClick={handleDeleteSelected}
@@ -340,7 +354,7 @@ export default function CandidatesPage() {
                 ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                 : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               }
-              {vectorizing ? "Vektorlash…" : "Vektorlashtirish"}
+              {vectorizing ? "Векторизация…" : "Векторизовать"}
             </button>
           )}
 
@@ -362,7 +376,7 @@ export default function CandidatesPage() {
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             }
-            {uploading ? "Tahlil qilinmoqda…" : "Загрузить резюме"}
+            {uploading ? "Загружается…" : "Загрузить резюме"}
           </button>
           <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" multiple className="hidden" onChange={onFileChange} />
 
@@ -392,13 +406,13 @@ export default function CandidatesPage() {
               : uploadJob.status === "done"     ? "text-green-700"
               : "text-red-700"
             }`}>
-              {uploadJob.status === "processing" && `⏳ Resumelar tahlil qilinmoqda… (${uploadJob.processed} / ${uploadJob.total})`}
-              {uploadJob.status === "done"       && `✅ Tahlil yakunlandi`}
-              {uploadJob.status === "error"      && `❌ Xatolik yuz berdi`}
+              {uploadJob.status === "processing" && `⏳ Анализ резюме… (${uploadJob.processed} / ${uploadJob.total})`}
+              {uploadJob.status === "done"       && `✅ Анализ завершён`}
+              {uploadJob.status === "error"      && `❌ Произошла ошибка`}
             </span>
             <span className="text-xs text-gray-500">
               {uploadJob.status === "processing" && `${uploadPct}%`}
-              {uploadJob.status === "done"       && `${uploadJob.total - uploadJob.errors} / ${uploadJob.total} muvaffaqiyatli`}
+              {uploadJob.status === "done"       && `${uploadJob.total - uploadJob.errors} / ${uploadJob.total} успешно`}
             </span>
           </div>
 
@@ -409,7 +423,7 @@ export default function CandidatesPage() {
                   style={{ width: `${Math.max(uploadPct, 3)}%` }} />
               </div>
               <p className="mt-1.5 text-xs text-blue-400">
-                Sahifani yopsa bo&#39;ladi — jarayon serverda davom etadi
+                Можно закрыть страницу — процесс продолжается на сервере
               </p>
             </>
           )}
@@ -434,13 +448,13 @@ export default function CandidatesPage() {
               vectorizeJob.status === "running" ? "text-violet-700"
               : vectorizeJob.status === "done"  ? "text-green-700" : "text-red-700"
             }`}>
-              {vectorizeJob.status === "running" && `⏳ Qdrant'ga vektorlar yuklanmoqda… ${vectorizeJob.total > 0 ? `(${vectorizeJob.vectorized} / ${vectorizeJob.total})` : ""}`}
-              {vectorizeJob.status === "done"    && `✅ Vektorlash yakunlandi`}
-              {vectorizeJob.status === "error"   && `❌ Vektorlash xatoligi`}
+              {vectorizeJob.status === "running" && `⏳ Загрузка векторов в Qdrant… ${vectorizeJob.total > 0 ? `(${vectorizeJob.vectorized} / ${vectorizeJob.total})` : ""}`}
+              {vectorizeJob.status === "done"    && `✅ Векторизация завершена`}
+              {vectorizeJob.status === "error"   && `❌ Ошибка векторизации`}
             </span>
             {vectorizeJob.status !== "error" && (
               <span className={`text-xs font-semibold ${vectorizeJob.status === "done" ? "text-green-600" : "text-violet-600"}`}>
-                {vectorizeJob.vectorized}{vectorizeJob.total > 0 && ` / ${vectorizeJob.total}`} ta
+                {vectorizeJob.vectorized}{vectorizeJob.total > 0 && ` / ${vectorizeJob.total}`}
               </span>
             )}
           </div>

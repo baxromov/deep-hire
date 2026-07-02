@@ -1,11 +1,11 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CandidateDetail, ScoreCriterion } from "@/types/candidate";
-import { candidateApi } from "@/lib/api";
+import { candidateApi, API_BASE } from "@/lib/api";
 import useSWR from "swr";
 import { toast } from "sonner";
 
@@ -98,6 +98,14 @@ export default function CandidateDetailPage({ params }: Props) {
       setExplaining(false);
     }
   };
+  // Auto-load explanation when candidate has a score but no reasoning yet
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (candidate && score != null && !displayReasoning && !displayCriteria && !explaining) {
+      handleExplain();
+    }
+  }, [candidate?.id]);
+
   const matchedDate = new Date(candidate.matched_at).toLocaleDateString("ru-RU", {
     day: "numeric", month: "long", year: "numeric",
   });
@@ -444,22 +452,12 @@ export default function CandidateDetailPage({ params }: Props) {
                 </div>
               )}
 
-              {/* Explain button — shown when no data yet */}
-              {!displayReasoning && !displayCriteria && (
-                <button
-                  onClick={handleExplain}
-                  disabled={explaining}
-                  className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-50 w-full justify-center"
-                >
-                  {explaining ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-                      ИИ анализирует…
-                    </>
-                  ) : (
-                    <>✨ Почему именно {score}%? — Запросить объяснение у ИИ</>
-                  )}
-                </button>
+              {/* Auto-loading indicator — shown while explanation is being fetched */}
+              {!displayReasoning && !displayCriteria && explaining && (
+                <div className="flex items-center gap-2 rounded-lg border border-dashed border-blue-200 px-4 py-3 text-sm text-blue-500 w-full justify-center">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                  ИИ анализирует…
+                </div>
               )}
 
               {/* Regenerate link — shown when data already exists */}
@@ -552,7 +550,7 @@ export default function CandidateDetailPage({ params }: Props) {
                 </p>
               </div>
               <a
-                href={candidate.resume_url}
+                href={candidate.resume_url.startsWith("/api/") ? `${API_BASE}${candidate.resume_url}` : candidate.resume_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"

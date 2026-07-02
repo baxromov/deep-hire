@@ -668,11 +668,11 @@ export default function VacancyDetailPage({ params }: Props) {
                   </svg>
                 }
                 label="Из нашей базы"
-                description="Оценивает всех уже загруженных кандидатов (xlsx, резюме, HH) по критериям этой вакансии"
+                description="Ищет кандидатов по векторной базе Qdrant, переранжирует кросс-энкодером и оценивает через LLM"
                 steps={[
-                  "Берёт все уникальные профили из MongoDB",
-                  "Группирует xlsx по названию стажировки",
-                  `ИИ оценивает каждый профиль (0–100) по критериям вакансии`,
+                  "Embed вакансии → поиск top-N в Qdrant",
+                  "Кросс-энкодер переранжирует результаты",
+                  "LLM оценивает каждого кандидата (0–100)",
                   `Сохраняет кандидатов с баллом ≥ ${dbMinScore}%`,
                 ]}
                 badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{dbMinScore}%</span>}
