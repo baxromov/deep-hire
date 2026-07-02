@@ -7,6 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
+
+logging.basicConfig(
+    level=settings.log_level.upper(),
+    format="%(levelname)s: %(name)s: %(message)s",
+)
 from app.database import close_qdrant, close_redis, init_db
 from app.models.user import User
 from app.routers import ai, areas, candidates, matching, talent_pool, vacancies
