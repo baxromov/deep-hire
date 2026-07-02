@@ -49,9 +49,10 @@ async def _call_mcp(arguments: dict) -> dict:
         logger.debug("MCP notifications/initialized sent")
 
         # Call the tool
+        tool_headers = {**headers, "Accept": "application/json"}
         logger.debug("MCP tools/call search_candidates offset=%s limit=%s",
                      arguments.get("offset"), arguments.get("limit"))
-        r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
+        r = await client.post(settings.cleverstaff_mcp_url, headers=tool_headers, json={
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
