@@ -54,9 +54,20 @@ async def _call_mcp(arguments: dict) -> dict:
         })
         r.raise_for_status()
 
-    data = r.json()
+    content_type = r.headers.get("content-type", "")
+    if "text/event-stream" in content_type:
+        data = _parse_sse(r.text)
+    else:
+        data = r.json()
     raw_text = data["result"]["content"][0]["text"]
     return json.loads(raw_text)
+
+
+def _parse_sse(body: str) -> dict:
+    for line in body.splitlines():
+        if line.startswith("data: "):
+            return json.loads(line[6:])
+    raise ValueError(f"No data line found in SSE response: {body!r}")
 
 
 async def fetch_candidates(offset: int = 0, limit: int = 100) -> dict:
