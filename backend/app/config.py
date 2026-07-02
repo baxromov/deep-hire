@@ -87,5 +87,8 @@ class Settings(BaseSettings):
     cleverstaff_mcp_token: str = ""
     cleverstaff_sync_hour: int = 2   # daily sync at 2 AM
 
+    # Deep-hire MCP server (Streamable HTTP)
+    mcp_api_key: str = ""   # Bearer token clients must send; empty = disabled
+
 
 settings = Settings()

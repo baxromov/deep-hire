@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import close_qdrant, close_redis, init_db
 from app.models.user import User
 from app.routers import ai, areas, candidates, matching, talent_pool, vacancies
-from app.routers import auth, integrations
+from app.routers import auth, integrations, mcp
 from app.services import ai_service, embedding_service, hh_service
 from app.services.auth_service import ensure_admin_exists
 from app.services.sync_service import sync_cleverstaff
@@ -65,6 +65,7 @@ app.include_router(matching.router)
 app.include_router(talent_pool.router)
 app.include_router(ai.router)
 app.include_router(areas.router)
+app.include_router(mcp.router)
 
 
 async def health():
