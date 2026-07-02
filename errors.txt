@@ -1,12 +1,17 @@
+root@genai-tst-jupiterhub01:/home/bakhromovshb# cd deep-hire
+root@genai-tst-jupiterhub01:/home/bakhromovshb/deep-hire# ls
+backend  deploy.ps1  doc  docker-compose.yml  errors.txt  frontend  nginx.conf
 root@genai-tst-jupiterhub01:/home/bakhromovshb/deep-hire# docker compose logs -f --tail 1
-nginx-1     | 2026/07/02 06:22:55 [notice] 1#1: start worker process 92
-backend-1   | INFO:     Application startup complete.
+backend-1   | INFO:     Started reloader process [1] using WatchFiles
 frontend-1  | ✓ Ready in 0ms
-backend-1   | INFO:     10.10.0.4:50732 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:23:10 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 22 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:50734 - "POST /api/sync/cleverstaff HTTP/1.1" 200 OK
+nginx-1     | 2026/07/02 06:25:57 [notice] 1#1: start worker process 92
+backend-1   | INFO:     Started server process [71]
+backend-1   | INFO:     Waiting for application startup.
+backend-1   | INFO:     Application startup complete.
+backend-1   | INFO:     10.10.0.4:36880 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:26:12 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 22 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:36890 - "POST /api/sync/cleverstaff HTTP/1.1" 200 OK
 backend-1   | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
 backend-1   |   _qdrant_client = AsyncQdrantClient(
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:23:11 +0000] "POST /api/sync/cleverstaff HTTP/1.1" 200 25 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | Cleverstaff MCP error at offset=0: Client error '400 Bad Request' for url 'http://172.31.174.11:8765/mcp'
-backend-1   | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:06:26:13 +0000] "POST /api/sync/cleverstaff HTTP/1.1" 200 25 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | Cleverstaff MCP error at offset=0: Expecting value: line 1 column 1 (char 0)
