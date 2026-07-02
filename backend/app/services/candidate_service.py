@@ -9,21 +9,52 @@ from app.models.vacancy import Vacancy
 
 
 def _parse_candidate(vacancy_id: PydanticObjectId, resume: Dict[str, Any], relevance_score: Optional[int] = None) -> Dict:
-    salary = resume.get("salary") or {}
-    photo = resume.get("photo") or {}
+    salary_raw = resume.get("salary")
+    salary = salary_raw if isinstance(salary_raw, dict) else {}
+    photo_raw = resume.get("photo")
+    photo = photo_raw if isinstance(photo_raw, dict) else {}
+
+    # salary may be stored as int (cleverstaff) or dict {"amount":..,"currency":..} (hh.uz)
+    if isinstance(salary_raw, (int, float)):
+        salary_amount = salary_raw
+        salary_currency = resume.get("currency")
+    else:
+        salary_amount = salary.get("amount")
+        salary_currency = salary.get("currency")
+
+    # area may be a dict {"name":..} (hh.uz) or a plain string (cleverstaff "region")
+    area_raw = resume.get("area")
+    if isinstance(area_raw, dict):
+        area = area_raw.get("name")
+    else:
+        area = area_raw or resume.get("region")
+
+    # gender may be a dict {"id":..} (hh.uz) or a string
+    gender_raw = resume.get("gender")
+    gender = gender_raw.get("id") if isinstance(gender_raw, dict) else gender_raw
+
+    # title: prefer hh.uz "title", fall back to cleverstaff "position"
+    title = resume.get("title") or resume.get("position") or resume.get("current_position")
+
+    # hh_resume_id: hh.uz uses "id", cleverstaff uses "candidate_id"
+    hh_resume_id = resume.get("id") or resume.get("candidate_id") or ""
+
+    skills_raw = resume.get("skill_set") or resume.get("skills") or []
+    skills = [s if isinstance(s, str) else s.get("name", "") for s in skills_raw]
+
     return {
         "vacancy_id": vacancy_id,
-        "hh_resume_id": resume.get("id", ""),
+        "hh_resume_id": hh_resume_id,
         "first_name": resume.get("first_name"),
         "last_name": resume.get("last_name"),
         "age": resume.get("age"),
-        "gender": (resume.get("gender") or {}).get("id"),
-        "area": (resume.get("area") or {}).get("name"),
-        "title": resume.get("title"),
-        "salary_amount": salary.get("amount"),
-        "salary_currency": salary.get("currency"),
-        "skills": [s if isinstance(s, str) else s.get("name", "") for s in (resume.get("skill_set") or [])],
-        "photo_url": photo.get("medium"),
+        "gender": gender,
+        "area": area,
+        "title": title,
+        "salary_amount": salary_amount,
+        "salary_currency": salary_currency,
+        "skills": skills,
+        "photo_url": photo.get("medium") if photo else None,
         "resume_url": resume.get("alternate_url"),
         "relevance_score": relevance_score,
         "raw_resume_json": resume,
