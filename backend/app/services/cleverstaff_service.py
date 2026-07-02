@@ -13,24 +13,49 @@ _MCP_TIMEOUT = 30
 
 
 async def _call_mcp(arguments: dict) -> dict:
-    payload = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "search_candidates",
-            "arguments": arguments,
-        },
-    }
     headers = {
         "Authorization": f"Bearer {settings.cleverstaff_mcp_token}",
         "Accept": "application/json, text/event-stream",
     }
+
     async with httpx.AsyncClient(timeout=_MCP_TIMEOUT) as client:
-        r = await client.post(settings.cleverstaff_mcp_url, json=payload, headers=headers)
+        # MCP requires initialize handshake before any tool call
+        init_r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "deep-hire-backend", "version": "1.0.0"},
+            },
+        })
+        init_r.raise_for_status()
+
+        session_id = init_r.headers.get("Mcp-Session-Id")
+        if session_id:
+            headers["Mcp-Session-Id"] = session_id
+
+        # Acknowledge initialization
+        await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+        })
+
+        # Call the tool
+        r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "search_candidates",
+                "arguments": arguments,
+            },
+        })
         r.raise_for_status()
+
     data = r.json()
-    raw_text = data["content"][0]["text"]
+    raw_text = data["result"]["content"][0]["text"]
     return json.loads(raw_text)
 
 
