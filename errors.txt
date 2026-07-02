@@ -1,24 +1,165 @@
-HTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /candidates?_rsc=y3wtw HTTP/1.1" 200 315 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /candidates?_rsc=a8ldd HTTP/1.1" 200 512 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /vacancies?_rsc=t78ql HTTP/1.1" 200 511 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:43794 - "GET /api/candidates/rescore-status HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/rescore-status HTTP/1.1" 200 85 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:43796 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:43792 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:56614 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:02 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:45366 - "POST /api/candidates/vectorize-all HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:11 +0000] "POST /api/candidates/vectorize-all HTTP/1.1" 200 20 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
-backend-1   |   _qdrant_client = AsyncQdrantClient(
-backend-1   | INFO:     10.10.0.4:45368 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:13 +0000] "GET /api/candidates/vectorize-status HTTP/1.1" 200 69 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:45382 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:13 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:38086 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:25:08 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.0.4:37538 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:25:23 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+Bizda mcp bor http://172.31.174.11:8765/mcp
+
+Authorization
+Bearer <TOKEN>
+{
+  "method": "tools/list",
+  "params": {}
+}
+qilganda bizda hozrcha shu tool bor:
+{
+  "tools": [
+    {
+      "name": "search_candidates",
+      "description": "Search the HR candidates database (20,000+ people) and get their full profiles and analytics. Use this for ANY question about candidates: finding people who match criteria, reading someone's background, or counting / averaging across the pool. This is the ONLY tool you need for candidates.\n\nHOW RESULTS WORK\n- Returns the top 20 matching candidates, most experienced first. There is NO paging: if 20 is not enough, ADD MORE FILTERS to narrow to the people you actually want.\n- `total` is how many candidates match in all (often far more than the 20 returned); `count` is how many are in this response (<= 20).\n- Every returned candidate ALWAYS includes their full profile — hard skills (with years), education, work experience, and languages. You never need a second call to read a profile; to answer 'what does X know / where did X work', just search for X.\n- All filters are AND-combined (a candidate must satisfy every filter you set). Enum filters are case-insensitive and fuzzy: 'it' -> IT, 'senior' -> Senior.\n\nPICKING THE RIGHT FILTER (important)\n- Concrete technologies, tools, or hard skills -> `skills` (e.g. Python, React, Figma, Excel), NOT `query`. `skills` requires ALL listed skills; aliases and typos are auto-resolved (js -> JavaScript, k8s -> Kubernetes).\n- Job title -> `position`; current job title only -> `current_position`; seniority -> `role_level`; business sector -> `industry`.\n- Vague or descriptive wording that is not a concrete field -> `query` (free text over name/position/workplace/description). It matches per word (order-independent), ignores words absent from the data, and understands role synonyms (programmer/coder/SWE -> developer/engineer). Do NOT put technologies here.\n- Dedicated filters exist and are preferred over `query`: `language` (+ `language_level`), `region`, `currency` with `min_salary`/`max_salary`, `min_experience`/`max_experience`, `employment_type`, `sex`, `speciality`.\n\nANALYTICS\nSet `stats`=true for aggregates over the WHOLE matching population (not just the 20 returned): total count, experience avg/min/max, and salary per currency. Add `group_by` (industry, role_level, status, employment_type, currency, sex, region) for a per-group breakdown. Use this for 'how many...', 'average...', 'breakdown by...' questions. For a plain count, just read `total` — you do not need group_by.\n\nEXAMPLES (question -> parameters)\n- 'Senior Python developers' -> role_level='Senior', skills=['Python']\n- 'English-speaking marketers in Tashkent earning over $2000/mo' -> industry='Marketing', language='English', region='Tashkent', currency='USD', min_salary=2000\n- 'How many candidates in each industry?' -> stats=true, group_by='industry'\n- 'Average salary of QA engineers' -> position='QA Engineer', stats=true\n- 'Java or Go engineers with 5+ years' -> skills=['Java'] (or ['Go']), min_experience=5\n\nRETURNS: `total` (all matches), `count` (returned, <= 20), `candidates` (each with full profile), and — when requested — a `stats` block. Transparency notes may appear (`query_note` = how free text was interpreted, `unknown_skills` = skills not recognised with suggestions, `relaxed` = an unmatched query was dropped) so you can trust or adjust the result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free-text search across name, position, current workplace and description. Matched per word (order-independent); words not present in the data are ignored, and generic role synonyms (programmer/coder/SWE → developer/engineer) are understood. Put concrete technologies in `skills`, NOT here."
+          },
+          "sex": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ],
+            "description": "Sex (also accepts 'male'/'female')."
+          },
+          "position": {
+            "type": "string",
+            "description": "Desired OR current job title (partial), e.g. 'Backend Developer'."
+          },
+          "current_position": {
+            "type": "string",
+            "description": "Current job title only (partial)."
+          },
+          "role_level": {
+            "type": "string",
+            "enum": [
+              "Intern",
+              "Junior",
+              "Middle",
+              "Senior",
+              "Lead",
+              "Head",
+              "C-level"
+            ],
+            "description": "Seniority level."
+          },
+          "industry": {
+            "type": "string",
+            "enum": [
+              "IT",
+              "Banking",
+              "Finance",
+              "Telecom",
+              "Retail",
+              "Manufacturing",
+              "Healthcare",
+              "Education",
+              "Construction",
+              "Logistics",
+              "Oil & Gas",
+              "Agriculture",
+              "Marketing",
+              "Government",
+              "FMCG"
+            ],
+            "description": "Industry sector."
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "full-time",
+              "remote",
+              "contract",
+              "part-time",
+              "freelance",
+              "internship"
+            ],
+            "description": "Employment type."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required skills (exact skill name, case-insensitive) — candidate must have ALL of them. Aliases/typos are resolved; unknown skills come back with suggestions."
+          },
+          "speciality": {
+            "type": "string",
+            "description": "Field of study / major (partial), e.g. 'Computer Science'."
+          },
+          "language": {
+            "type": "string",
+            "description": "Spoken language by name, e.g. 'English'. Combine with language_level."
+          },
+          "language_level": {
+            "type": "string",
+            "enum": [
+              "A1",
+              "A2",
+              "B1",
+              "B2",
+              "C1",
+              "C2",
+              "Native"
+            ],
+            "description": "Minimum CEFR level for `language` (A1…C2, or Native). Requires `language`."
+          },
+          "region": {
+            "type": "string",
+            "description": "Region by text across country / city / full name (partial), e.g. 'Tashkent'."
+          },
+          "min_experience": {
+            "type": "integer",
+            "description": "Minimum years of total experience (0–22)."
+          },
+          "max_experience": {
+            "type": "integer",
+            "description": "Maximum years of total experience (0–22)."
+          },
+          "min_salary": {
+            "type": "number",
+            "description": "Minimum salary, in the candidate's currency. Combine with `currency`."
+          },
+          "max_salary": {
+            "type": "number",
+            "description": "Maximum salary, in the candidate's currency. Combine with `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UZS",
+              "USD",
+              "EUR",
+              "RUB"
+            ],
+            "description": "Salary currency. Recommended when filtering by salary."
+          },
+          "stats": {
+            "type": "boolean",
+            "description": "Set true to also return an aggregate `stats` block (counts, experience & salary stats) over the whole filtered population. Use for 'how many / average' questions."
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "industry",
+              "role_level",
+              "status",
+              "employment_type",
+              "currency",
+              "sex",
+              "region"
+            ],
+            "description": "OPTIONAL analytics breakdown dimension ('by/per X'), e.g. 'industry' or 'role_level'. Implies stats. Must be one of the enum values — it is NOT 'count'; for a plain count omit it and read the `total` field."
+          }
+        }
+      }
+    }
+  ]
+}
+
+candidate ni search qilganda hozrgi xolat vector dbdan bo'ladi buni ham qanday qilsak bo'ladi tez va effective bo'lishi uchun suggestion ber menga ?
