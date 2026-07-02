@@ -387,7 +387,6 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
         />
       </div>
 
-      {/* ── Score criteria editor (temporarily disabled) ────────────────────
       <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -474,7 +473,6 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
           <span className="text-base leading-none">+</span> Добавить критерий
         </button>
       </div>
-      ── end criteria editor ── */}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button
