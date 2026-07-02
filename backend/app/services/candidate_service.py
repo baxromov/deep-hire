@@ -84,9 +84,6 @@ async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> i
     if not ops:
         return 0
     result = await collection.bulk_write(ops, ordered=False)
-    # Remove pool candidates (vacancy_id=None) that now have vacancy-specific counterparts
-    if matched_hh_ids:
-        await collection.delete_many({"vacancy_id": None, "hh_resume_id": {"$in": matched_hh_ids}})
     return result.upserted_count + result.modified_count
 
 
