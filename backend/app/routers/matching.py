@@ -918,7 +918,7 @@ async def match_from_live_pool_stream(vacancy_id: str):
 
 
 async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0, le=100)):
-    """SSE: embed all DB candidates → temp Qdrant collection → vector search only (no LLM scoring)."""
+    """SSE: search main Qdrant collection directly (no MongoDB pre-fetch, no re-embedding)."""
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -927,211 +927,95 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
             await queue.put(event)
 
         async def run() -> None:
-            temp_col: str | None = None
             try:
-                from app.models.candidate import Candidate
-
                 vacancy = await vacancy_service.get_vacancy(vacancy_id)
                 if not vacancy:
                     await emit({"step": "error", "message": "Vacancy not found."}); return
                 if vacancy.status != VacancyStatus.approved:
                     await emit({"step": "error", "message": "Vacancy must be approved."}); return
 
-                await emit({"step": "planning", "message": f"Scanning candidates database (threshold ≥{min_score}%)…"})
+                qdrant = await get_qdrant()
+                pool = await collection_info(qdrant)
+                total_indexed = pool["points_count"]
 
-                # ── 1. xlsx groups ────────────────────────────────────────────────
-                pipeline = [
-                    {"$match": {"raw_resume_json.source": "xlsx"}},
-                    {"$group": {
-                        "_id": "$raw_resume_json.internship_name",
-                        "candidates": {"$push": {
-                            "id": {"$toString": "$_id"},
-                            "hh_resume_id": "$hh_resume_id",
-                            "first_name": "$first_name",
-                            "last_name": "$last_name",
-                        }},
-                        "skills": {"$first": "$skills"},
-                        "first_name": {"$first": "$first_name"},
-                        "last_name": {"$first": "$last_name"},
-                        "phone": {"$first": "$raw_resume_json.phone"},
-                        "comment": {"$first": "$raw_resume_json.comment"},
-                    }},
-                ]
-                xlsx_groups = await Candidate.get_motor_collection().aggregate(pipeline).to_list(None)
-
-                # ── 2. Non-xlsx candidates (file / hh), deduplicated ──────────────
-                non_xlsx_all = await Candidate.find(
-                    {"raw_resume_json.source": {"$in": ["file", "hh"]}}
-                ).to_list()
-                seen_ids: set = set()
-                non_xlsx: list = []
-                for doc in non_xlsx_all:
-                    if doc.hh_resume_id not in seen_ids:
-                        seen_ids.add(doc.hh_resume_id)
-                        non_xlsx.append(doc)
-
-                total_db = len(xlsx_groups) + len(non_xlsx)
                 await emit({
-                    "step": "pool_ready",
-                    "message": f"Found {len(xlsx_groups)} internship groups + {len(non_xlsx)} individual profiles. Embedding…",
-                    "total": total_db,
+                    "step": "planning",
+                    "message": f"Searching {total_indexed:,} candidates in Qdrant (threshold ≥{min_score}%)…",
                 })
 
-                if not total_db:
-                    await emit({"step": "done", "message": "No candidates in database.", "matched": 0, "total": 0})
+                if total_indexed == 0:
+                    await emit({"step": "done", "message": "Qdrant is empty.", "matched": 0, "total": 0})
                     return
 
-                # ── 3. Build items for embedding ──────────────────────────────────
-                struct_items: list[tuple] = []
-                for group in xlsx_groups:
-                    internship = group["_id"] or ""
-                    skills = group.get("skills") or []
-                    safe_key = internship or "_empty_xlsx_"
-                    text = f"{internship}. Skills: {', '.join(skills[:15])}" if internship else ", ".join(skills[:15])
-                    struct_items.append((f"xlsx:{safe_key}", text, "xlsx", safe_key, group))
-                for doc in non_xlsx:
-                    title = doc.title or ""
-                    doc_skills = doc.skills or []
-                    raw = doc.raw_resume_json or {}
-                    if raw.get("source") == "file":
-                        ext = raw.get("extracted") or {}
-                        title = ext.get("title") or title
-                        doc_skills = ext.get("skills") or doc_skills
-                    text = f"{title}. Skills: {', '.join(doc_skills[:15])}" if title else ", ".join(doc_skills[:15])
-                    struct_items.append((f"single:{doc.hh_resume_id}", text, "single", doc.hh_resume_id, doc))
-
-                # ── 4. Embed all candidates ───────────────────────────────────────
-                texts = [item[1] for item in struct_items]
-                vectors = await embed_batch(texts, concurrency=8)
-
-                # ── 5. Upsert into temp Qdrant collection ─────────────────────────
-                qdrant = await get_qdrant()
-                temp_col = f"db_match_{vacancy_id}"
-                await delete_temp_collection(qdrant, temp_col)
-                await ensure_temp_collection(qdrant, temp_col)
-
-                qdrant_items = [
-                    {"id": uid, "type": itype, "key": key}
-                    for uid, _, itype, key, _ in struct_items
-                ]
-                await upsert_items_to_temp_collection(qdrant, temp_col, qdrant_items, vectors)
-
-                # ── 6. Vector search ──────────────────────────────────────────────
-                await emit({"step": "searching", "message": "Vector searching in Qdrant…"})
+                # ── 1. Embed vacancy ──────────────────────────────────────────────
+                await emit({"step": "embedding", "message": "Embedding vacancy into vector space…"})
                 vacancy_vec = await embed(build_vacancy_text(vacancy))
-                top_hits = await search_temp_collection_scored(
-                    qdrant, temp_col, vacancy_vec,
-                    top_k=DB_VECTOR_PRESCORE_N, score_threshold=0.0,
+
+                # ── 2. Search main Qdrant collection with low threshold ────────────
+                # Use min_score/100 as Qdrant threshold so we get all relevant hits
+                qdrant_threshold = max(0.0, (min_score - 5) / 100)
+                await emit({
+                    "step": "searching",
+                    "message": f"Searching Qdrant for top {settings.pool_top_k} candidates…",
+                })
+                pool_hits = await search_candidates(
+                    qdrant,
+                    vacancy_vec,
+                    top_k=settings.pool_top_k,
+                    score_threshold=qdrant_threshold,
                 )
 
-                id_to_item = {uid: item for item in struct_items for uid in [item[0]]}
-                total = len(top_hits)
+                if not pool_hits:
+                    await emit({
+                        "step": "done",
+                        "message": f"No candidates found (Qdrant threshold={qdrant_threshold:.2f}). Try lowering the score threshold.",
+                        "matched": 0, "total": 0,
+                    })
+                    return
+
                 await emit({
-                    "step": "pool_ready",
-                    "message": f"Qdrant: {total_db} candidates → top {total} by vector similarity.",
-                    "total": total,
+                    "step": "fetched",
+                    "count": len(pool_hits),
+                    "message": f"Retrieved {len(pool_hits)} candidates from Qdrant.",
+                    "total": len(pool_hits),
                 })
 
-                # ── 7. Save hits using Qdrant score (no LLM) ─────────────────────
+                # ── 3. Filter by min_score and save ──────────────────────────────
                 now = datetime.now(timezone.utc)
-                col = Candidate.get_motor_collection()
-                matched = 0
+                scored = []
+                for hit in pool_hits:
+                    sc = int(hit.get("_qdrant_score", 0) * 100)
+                    raw = hit.get("raw_resume_json")
+                    if raw and sc >= min_score:
+                        scored.append(({**raw, "_source": "db_search"}, sc))
 
-                for proc, (payload, qdrant_score) in enumerate(top_hits, 1):
-                    sc = int(qdrant_score * 100)
-                    uid = payload.get("id", "")
-                    item = id_to_item.get(uid)
-                    if not item:
-                        continue
+                for proc, (resume, sc) in enumerate(scored, 1):
+                    name = (
+                        resume.get("full_name")
+                        or resume.get("title")
+                        or resume.get("position")
+                        or "Unknown"
+                    )
+                    await emit({
+                        "step": "scoring",
+                        "message": f"[{proc}/{len(scored)}] \"{name}\" → {sc}% ✓",
+                        "count": proc, "total": len(scored), "matched": proc,
+                    })
 
-                    _uid, _text, item_type, _key, data = item
-
-                    if item_type == "xlsx":
-                        group = data
-                        internship = group["_id"] or ""
-                        skills = group.get("skills") or []
-                        if sc >= min_score:
-                            for cand in group["candidates"]:
-                                orig_hh_id = cand["hh_resume_id"]
-                                await col.update_one(
-                                    {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
-                                    {"$set": {"relevance_score": sc, "matched_at": now},
-                                     "$setOnInsert": {
-                                        "vacancy_id": vacancy.id,
-                                        "hh_resume_id": orig_hh_id,
-                                        "first_name": cand.get("first_name") or group.get("first_name"),
-                                        "last_name": cand.get("last_name") or group.get("last_name"),
-                                        "title": internship or None,
-                                        "skills": skills,
-                                        "raw_resume_json.source": "xlsx",
-                                        "raw_resume_json.internship_name": internship,
-                                        "raw_resume_json.phone": group.get("phone"),
-                                        "raw_resume_json.comment": group.get("comment"),
-                                    }},
-                                    upsert=True,
-                                )
-                            matched += len(group["candidates"])
-                        await emit({
-                            "step": "scoring",
-                            "message": f"[{proc}/{total}] \"{internship or '—'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
-                            "count": proc, "total": total, "matched": matched,
-                        })
-
-                    else:  # single (file / hh)
-                        doc = data
-                        title = doc.title or ""
-                        skills = doc.skills or []
-                        raw = doc.raw_resume_json or {}
-                        if raw.get("source") == "file":
-                            ext = raw.get("extracted") or {}
-                            title = ext.get("title") or title
-                            skills = ext.get("skills") or skills
-                        if sc >= min_score:
-                            await col.update_one(
-                                {"vacancy_id": vacancy.id, "hh_resume_id": doc.hh_resume_id},
-                                {"$set": {"relevance_score": sc, "matched_at": now},
-                                 "$setOnInsert": {
-                                    "vacancy_id": vacancy.id,
-                                    "hh_resume_id": doc.hh_resume_id,
-                                    "first_name": doc.first_name,
-                                    "last_name": doc.last_name,
-                                    "title": title or doc.title,
-                                    "area": doc.area,
-                                    "skills": skills or doc.skills,
-                                    "salary_amount": doc.salary_amount,
-                                    "salary_currency": doc.salary_currency,
-                                    "resume_url": doc.resume_url,
-                                    "photo_url": doc.photo_url,
-                                    "raw_resume_json": raw,
-                                }},
-                                upsert=True,
-                            )
-                            if doc.vacancy_id is None:
-                                await col.delete_one({"_id": doc.id})
-                            matched += 1
-                        await emit({
-                            "step": "scoring",
-                            "message": f"[{proc}/{total}] \"{title or 'Unknown'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
-                            "count": proc, "total": total, "matched": matched,
-                        })
-
+                count = await candidate_service.replace_candidates(vacancy, scored)
                 vacancy.last_matched_at = now
                 await vacancy.save()
+
                 await emit({
                     "step": "done",
-                    "message": f"Done. Found {matched} candidates from {total} (vector only, threshold ≥{min_score}%).",
-                    "matched": matched, "total": total,
+                    "message": f"Done. Saved {count} candidates from Qdrant (threshold ≥{min_score}%).",
+                    "matched": count, "total": len(pool_hits),
                 })
 
             except Exception as exc:
                 logger.error("match_from_db_stream error: %s", exc, exc_info=True)
                 await emit({"step": "error", "message": f"Error: {exc}"})
             finally:
-                if temp_col:
-                    try:
-                        await delete_temp_collection(await get_qdrant(), temp_col)
-                    except Exception:
-                        pass
                 await queue.put(None)
 
         asyncio.create_task(run())

@@ -108,6 +108,7 @@ async def search_candidates(
     area_filter: Optional[str] = None,
     min_salary: Optional[int] = None,
     max_salary: Optional[int] = None,
+    score_threshold: float = 0.5,
 ) -> List[Dict[str, Any]]:
     """Search Qdrant for the top-K most similar candidates.
 
@@ -144,7 +145,7 @@ async def search_candidates(
         query=query_vector,
         limit=top_k,
         query_filter=query_filter,
-        score_threshold=0.5,
+        score_threshold=score_threshold,
         with_payload=True,
     )
 
