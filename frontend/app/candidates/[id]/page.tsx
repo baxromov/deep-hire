@@ -40,6 +40,43 @@ export default function CandidateDetailPage({ params }: Props) {
     () => candidateApi.get(id).then((r) => r.data)
   );
 
+  // Defined before early return so it can be referenced in useEffect below
+  const handleExplain = async () => {
+    if (!candidate) return;
+    setExplaining(true);
+    try {
+      const res = await candidateApi.explainScore(id);
+      setLocalReasoning(res.data.reasoning);
+      setLocalCriteria(res.data.criteria ?? null);
+      setLocalScore(res.data.score);
+      const old = candidate.relevance_score ?? 0;
+      const updated = res.data.score;
+      const diff = updated - old;
+      const sign = diff > 0 ? `+${diff}` : `${diff}`;
+      toast.success(
+        diff !== 0
+          ? `Балл пересчитан: ${old}% → ${updated}% (${sign})`
+          : `Балл подтверждён: ${updated}%`
+      );
+    } catch {
+      toast.error("Не удалось сгенерировать объяснение");
+    } finally {
+      setExplaining(false);
+    }
+  };
+
+  // Hooks MUST come before any conditional return — Rules of Hooks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!candidate) return;
+    const score = localScore ?? candidate.relevance_score;
+    const displayReasoning = localReasoning ?? candidate.score_reasoning;
+    const displayCriteria = localCriteria ?? candidate.score_criteria;
+    if (score != null && !displayReasoning && !displayCriteria && !explaining) {
+      handleExplain();
+    }
+  }, [candidate?.id]);
+
   if (!candidate) {
     return (
       <div className="flex justify-center pt-20">
@@ -75,36 +112,6 @@ export default function CandidateDetailPage({ params }: Props) {
   const sourceCfg = candidate.source ? (SOURCE_CONFIG[candidate.source] ?? null) : null;
   const displayReasoning = localReasoning ?? candidate.score_reasoning;
   const displayCriteria = localCriteria ?? candidate.score_criteria;
-
-  const handleExplain = async () => {
-    setExplaining(true);
-    try {
-      const res = await candidateApi.explainScore(id);
-      setLocalReasoning(res.data.reasoning);
-      setLocalCriteria(res.data.criteria ?? null);
-      setLocalScore(res.data.score);
-      const old = candidate.relevance_score ?? 0;
-      const updated = res.data.score;
-      const diff = updated - old;
-      const sign = diff > 0 ? `+${diff}` : `${diff}`;
-      toast.success(
-        diff !== 0
-          ? `Балл пересчитан: ${old}% → ${updated}% (${sign})`
-          : `Балл подтверждён: ${updated}%`
-      );
-    } catch {
-      toast.error("Не удалось сгенерировать объяснение");
-    } finally {
-      setExplaining(false);
-    }
-  };
-  // Auto-load explanation when candidate has a score but no reasoning yet
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (candidate && score != null && !displayReasoning && !displayCriteria && !explaining) {
-      handleExplain();
-    }
-  }, [candidate?.id]);
 
   const matchedDate = new Date(candidate.matched_at).toLocaleDateString("ru-RU", {
     day: "numeric", month: "long", year: "numeric",

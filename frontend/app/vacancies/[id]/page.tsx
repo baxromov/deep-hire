@@ -499,11 +499,16 @@ export default function VacancyDetailPage({ params }: Props) {
       if (event.step === "done") {
         source.close(); dbSourceRef.current = null;
         setDbMatching(false);
-        mutateCandidates();
         setDbResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0
-          ? toast.success(`Найдено ${event.matched} подходящих из базы`)
-          : toast.info("Подходящих кандидатов не найдено.");
+        if ((event.matched ?? 0) > 0) {
+          toast.success(`Найдено ${event.matched} подходящих из базы`);
+          // Explicitly fetch and push into SWR cache — avoids dedup/timing race with passive mutate()
+          candidateApi.byVacancy(id).then((r) =>
+            mutateCandidates(r.data as Candidate[], { revalidate: false })
+          );
+        } else {
+          toast.info("Подходящих кандидатов не найдено.");
+        }
         setTimeout(() => {
           document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
         }, 400);
