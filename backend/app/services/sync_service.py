@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import get_qdrant, get_redis
 from app.services import embedding_service
 from app.services import cleverstaff_service as cs
+from app.services.qdrant_service import ensure_collection
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ async def sync_cleverstaff() -> dict:
 
     logger.info("Cleverstaff sync started → collection: %s", settings.qdrant_collection)
     qdrant = await get_qdrant()
+    await ensure_collection(qdrant)
     redis = await get_redis()
 
     offset = 0
