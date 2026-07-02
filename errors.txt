@@ -1,33 +1,24 @@
-backend-1  | INFO:     Started server process [71]
-backend-1  | INFO:     Waiting for application startup.
-backend-1  | INFO:     Application startup complete.
-backend-1  | INFO:     172.26.0.4:60276 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39910 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39920 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39926 - "GET /api/candidates/rescore-status HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39940 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39942 - "GET /api/auth/me HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:39946 - "POST /api/candidates/vectorize-all HTTP/1.1" 200 OK
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | embed_batch: failed for text snippet: Client error '403 Forbidden' for url 'http://172.31.230.3:8080/v1/embeddings'
-backend-1  | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
-backend-1  | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
-backend-1  |   _qdrant_client = AsyncQdrantClient(
-backend-1  | INFO:     172.26.0.4:41836 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:41852 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1  | INFO:     172.26.0.4:42126 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+HTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /candidates?_rsc=y3wtw HTTP/1.1" 200 315 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /candidates?_rsc=a8ldd HTTP/1.1" 200 512 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:43 +0000] "GET /vacancies?_rsc=t78ql HTTP/1.1" 200 511 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:43794 - "GET /api/candidates/rescore-status HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/rescore-status HTTP/1.1" 200 85 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:43796 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:43792 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:23:46 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:56614 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:02 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:45366 - "POST /api/candidates/vectorize-all HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:11 +0000] "POST /api/candidates/vectorize-all HTTP/1.1" 200 20 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | /app/app/database.py:41: UserWarning: Api key is used with an insecure connection.
+backend-1   |   _qdrant_client = AsyncQdrantClient(
+backend-1   | INFO:     10.10.0.4:45368 - "GET /api/candidates/vectorize-status HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:13 +0000] "GET /api/candidates/vectorize-status HTTP/1.1" 200 69 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:45382 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:24:13 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:38086 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:25:08 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.0.4:37538 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.41.32 - - [02/Jul/2026:03:25:23 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 4678 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
