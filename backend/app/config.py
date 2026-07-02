@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     cleverstaff_mcp_token: str = ""
     cleverstaff_sync_hour: int = 2   # daily sync at 2 AM
 
+    # Logging
+    log_level: str = "info"   # info | debug (debug shows MCP request/response details)
 
 
 settings = Settings()

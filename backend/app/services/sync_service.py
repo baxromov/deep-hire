@@ -67,17 +67,19 @@ async def _upsert_batch(qdrant, candidates: list[dict], vectors: list[list[float
         ))
 
     if not points:
+        logger.debug("_upsert_batch: no valid vectors — skipping")
         return 0
 
     for i in range(0, len(points), UPSERT_BATCH):
-        await qdrant.upsert(
-            collection_name=settings.qdrant_collection,
-            points=points[i:i + UPSERT_BATCH],
-        )
+        batch_slice = points[i:i + UPSERT_BATCH]
+        await qdrant.upsert(collection_name=settings.qdrant_collection, points=batch_slice)
+        logger.debug("Qdrant upsert: %d points (slice %d–%d)", len(batch_slice), i, i + len(batch_slice))
 
     if mongo_ops:
         col = Candidate.get_motor_collection()
-        await col.bulk_write(mongo_ops, ordered=False)
+        result = await col.bulk_write(mongo_ops, ordered=False)
+        logger.debug("MongoDB bulk_write: upserted=%d modified=%d",
+                     result.upserted_count, result.modified_count)
 
     return len(points)
 
@@ -120,21 +122,33 @@ async def sync_cleverstaff() -> dict:
         cids = [c.get("candidate_id", "") for c in page]
         is_known = await redis.smismember(REDIS_KEY, *cids)
         new_candidates = [c for c, known in zip(page, is_known) if not known]
+        skipped = len(page) - len(new_candidates)
+
+        logger.info(
+            "Page offset=%d: fetched=%d new=%d already_synced=%d",
+            offset, len(page), len(new_candidates), skipped,
+        )
 
         if new_candidates:
             for i in range(0, len(new_candidates), BATCH_EMBED):
                 batch = new_candidates[i:i + BATCH_EMBED]
+                logger.info("Embedding batch %d–%d (%d candidates)…",
+                            i, i + len(batch), len(batch))
                 texts = [cs.build_embedding_text(c) for c in batch]
                 vectors = await embedding_service.embed_batch(texts)
+                valid_vecs = sum(1 for v in vectors if v)
+                logger.info("Embedding done: %d/%d vectors obtained", valid_vecs, len(batch))
                 upserted = await _upsert_batch(qdrant, batch, vectors)
                 total_new += upserted
+                logger.info("Upserted %d candidates (Qdrant + MongoDB)", upserted)
 
                 new_ids = [c["candidate_id"] for c in batch if c.get("candidate_id")]
                 if new_ids:
                     await redis.sadd(REDIS_KEY, *new_ids)
+                    logger.debug("Redis: marked %d ids as synced", len(new_ids))
 
         logger.info(
-            "Cleverstaff sync: offset=%d/%s fetched=%d new=%d",
+            "Cleverstaff sync progress: offset=%d/%s total_fetched=%d total_new=%d",
             offset, global_total, total_fetched, total_new,
         )
 

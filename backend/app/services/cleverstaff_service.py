@@ -18,8 +18,11 @@ async def _call_mcp(arguments: dict) -> dict:
         "Accept": "application/json, text/event-stream",
     }
 
+    logger.debug("MCP call → url=%s args=%s", settings.cleverstaff_mcp_url, arguments)
+
     async with httpx.AsyncClient(timeout=_MCP_TIMEOUT) as client:
         # MCP requires initialize handshake before any tool call
+        logger.debug("MCP initialize …")
         init_r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "id": 1,
@@ -30,19 +33,24 @@ async def _call_mcp(arguments: dict) -> dict:
                 "clientInfo": {"name": "deep-hire-backend", "version": "1.0.0"},
             },
         })
+        logger.debug("MCP initialize → status=%d", init_r.status_code)
         init_r.raise_for_status()
 
         session_id = init_r.headers.get("Mcp-Session-Id")
         if session_id:
             headers["Mcp-Session-Id"] = session_id
+            logger.debug("MCP session_id=%s", session_id)
 
         # Acknowledge initialization
         await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "method": "notifications/initialized",
         })
+        logger.debug("MCP notifications/initialized sent")
 
         # Call the tool
+        logger.debug("MCP tools/call search_candidates offset=%s limit=%s",
+                     arguments.get("offset"), arguments.get("limit"))
         r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "id": 2,
@@ -52,6 +60,8 @@ async def _call_mcp(arguments: dict) -> dict:
                 "arguments": arguments,
             },
         })
+        logger.debug("MCP tools/call → status=%d content-type=%s",
+                     r.status_code, r.headers.get("content-type", ""))
         r.raise_for_status()
 
     content_type = r.headers.get("content-type", "")
@@ -60,7 +70,10 @@ async def _call_mcp(arguments: dict) -> dict:
     else:
         data = r.json()
     raw_text = data["result"]["content"][0]["text"]
-    return json.loads(raw_text)
+    result = json.loads(raw_text)
+    logger.debug("MCP response → total=%s candidates=%s",
+                 result.get("total"), len(result.get("candidates", [])))
+    return result
 
 
 def _parse_sse(body: str) -> dict:
