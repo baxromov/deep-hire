@@ -20,7 +20,10 @@ async def _call_mcp(arguments: dict) -> dict:
             "arguments": arguments,
         },
     }
-    headers = {"Authorization": f"Bearer {settings.cleverstaff_mcp_token}"}
+    headers = {
+        "Authorization": f"Bearer {settings.cleverstaff_mcp_token}",
+        "Accept": "application/json, text/event-stream",
+    }
     async with httpx.AsyncClient(timeout=_MCP_TIMEOUT) as client:
         r = await client.post(settings.cleverstaff_mcp_url, json=payload, headers=headers)
         r.raise_for_status()
