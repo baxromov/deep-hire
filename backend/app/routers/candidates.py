@@ -519,10 +519,32 @@ class BulkDeleteBody(BaseModel):
     ids: List[str]
 
 
+async def _delete_qdrant_points(point_ids: list[int]) -> None:
+    if not point_ids:
+        return
+    from app.database import get_qdrant
+    from app.config import settings
+    from qdrant_client.http import models as qmodels
+    try:
+        qdrant = await get_qdrant()
+        await qdrant.delete(
+            collection_name=settings.qdrant_collection,
+            points_selector=qmodels.PointIdsList(points=point_ids),
+        )
+    except Exception as exc:
+        logger.warning("Qdrant delete failed: %s", exc)
+
+
+def _resume_point_id(hh_resume_id: str) -> int:
+    return int(hashlib.sha1(hh_resume_id.encode()).hexdigest(), 16) % (2 ** 53)
+
+
 async def delete_candidate(candidate_id: str):
     doc = await candidate_service.get_candidate(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    if doc.hh_resume_id:
+        await _delete_qdrant_points([_resume_point_id(doc.hh_resume_id)])
     await doc.delete()
     return {"ok": True}
 
@@ -531,7 +553,10 @@ async def delete_candidates_bulk(body: BulkDeleteBody):
     from bson import ObjectId
     col = Candidate.get_motor_collection()
     oids = [ObjectId(cid) for cid in body.ids if cid]
+    docs = await Candidate.find({"_id": {"$in": oids}}).to_list()
+    point_ids = [_resume_point_id(d.hh_resume_id) for d in docs if d.hh_resume_id]
     result = await col.delete_many({"_id": {"$in": oids}})
+    await _delete_qdrant_points(point_ids)
     return {"deleted": result.deleted_count}
 
 

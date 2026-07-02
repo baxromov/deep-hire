@@ -46,16 +46,14 @@ export default function CandidatesPage() {
   const [source, setSource]   = useState("");
   const [uploading, setUploading]   = useState(false);
   const [importing, setImporting]   = useState(false);
-  const [rescoring, setRescoring]   = useState(false);
-  const [rescoreJob, setRescoreJob] = useState<{ status: string; total: number; processed: number; updated: number; can_resume?: boolean; error?: string | null } | null>(null);
   const [vectorizing, setVectorizing] = useState(false);
+  const [cleverstaffSyncing, setCleverstaffSyncing] = useState(false);
   const [vectorizeJob, setVectorizeJob] = useState<{ status: string; total: number; processed: number; vectorized: number; error?: string | null } | null>(null);
   const [uploadJob, setUploadJob]   = useState<UploadJobState>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const xlsxInputRef  = useRef<HTMLInputElement>(null);
-  const pollRef          = useRef<ReturnType<typeof setInterval> | null>(null);
   const uploadPollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const vectorizePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mutateRef     = useRef<() => void>(() => {});
@@ -66,34 +64,6 @@ export default function CandidatesPage() {
     setPage(0);
     setSelectedIds(new Set());
   }, [debouncedSearch, sortBy, source]);
-
-  // ── Rescore polling ────────────────────────────────────────────────────────
-  const stopPoll = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  }, []);
-
-  const startPoll = useCallback(() => {
-    stopPoll();
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await candidateApi.rescoreStatus();
-        const job = res.data;
-        setRescoreJob(job);
-        if (job.status === "done") {
-          stopPoll();
-          setRescoring(false);
-          toast.success(`✅ Пересчёт завершён — обновлено ${job.updated} кандидатов`);
-          mutateRef.current();
-        } else if (job.status === "error") {
-          stopPoll();
-          setRescoring(false);
-          toast.error(`Ошибка пересчёта: ${job.error}`);
-        }
-      } catch { /* ignore */ }
-    }, 3000);
-  }, [stopPoll]);
-
-  useEffect(() => () => stopPoll(), [stopPoll]);
 
   // ── Vectorize polling ──────────────────────────────────────────────────────
   const stopVectorizePoll = useCallback(() => {
@@ -180,12 +150,6 @@ export default function CandidatesPage() {
 
   // On mount: resume any in-progress jobs
   useEffect(() => {
-    candidateApi.rescoreStatus().then((res) => {
-      const job = res.data;
-      if (job.status === "running") { setRescoring(true); setRescoreJob(job); startPoll(); }
-      else if (job.status !== "idle") setRescoreJob(job);
-    }).catch(() => {});
-
     candidateApi.uploadStatus().then((res) => {
       const job = res.data;
       if (job.status === "processing") {
@@ -199,23 +163,16 @@ export default function CandidatesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Rescore ────────────────────────────────────────────────────────────────
-  const handleRescoreAll = async (resume = false) => {
+  // ── Cleverstaff sync ──────────────────────────────────────────────────────
+  const handleCleverstaffSync = async () => {
     try {
-      await candidateApi.rescoreAll(resume);
-      setRescoring(true);
-      if (!resume) setRescoreJob({ status: "running", total: 0, processed: 0, updated: 0 });
-      toast.info(resume ? "Пересчёт возобновлён…" : "Пересчёт запущен…");
-      startPoll();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      if (err?.response?.data?.detail === "Rescore already running") {
-        toast.warning("Пересчёт уже выполняется");
-        setRescoring(true);
-        startPoll();
-      } else {
-        toast.error("Не удалось запустить пересчёт");
-      }
+      setCleverstaffSyncing(true);
+      await candidateApi.cleverstaffSync();
+      toast.success("Cleverstaff sync boshlandi — fon rejimida davom etadi");
+    } catch {
+      toast.error("Cleverstaff sync xatoligi");
+    } finally {
+      setCleverstaffSyncing(false);
     }
   };
 
@@ -336,48 +293,55 @@ export default function CandidatesPage() {
         </div>
         <div className="flex items-center gap-3">
 
-          {/* Delete selected */}
+          {/* Selected actions */}
           {selectedIds.size > 0 && (
-            <button
-              onClick={handleDeleteSelected}
-              disabled={deleting}
-              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {deleting
-                ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
-                : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              }
-              O&apos;chirish ({selectedIds.size})
-            </button>
+            <>
+              <button
+                onClick={handleVectorizeAll}
+                disabled={vectorizing || uploading || importing}
+                className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {vectorizing
+                  ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+                  : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                }
+                {vectorizing ? "Vektorlash…" : `Vektorlashtirish (${selectedIds.size})`}
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {deleting
+                  ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                  : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                }
+                O&apos;chirish ({selectedIds.size})
+              </button>
+            </>
           )}
 
-          {/* Rescore */}
-          {rescoreJob?.can_resume ? (
-            <button onClick={() => handleRescoreAll(true)} disabled={rescoring}
-              className="flex items-center gap-1.5 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-medium text-yellow-700 hover:bg-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              Продолжить ({rescoreJob.processed}/{rescoreJob.total})
-            </button>
-          ) : (
-            <button onClick={() => handleRescoreAll(false)} disabled={rescoring || uploading || importing}
-              className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-              {rescoring
-                ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-400 border-t-transparent" />
-                : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              }
-              {rescoring ? "Пересчёт…" : "Пересчитать все баллы"}
-            </button>
-          )}
-
-          {/* Vectorize All */}
-          <button onClick={handleVectorizeAll} disabled={vectorizing || uploading || importing}
-            className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            {vectorizing
-              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
-              : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+          {/* Cleverstaff Sync */}
+          <button onClick={handleCleverstaffSync} disabled={cleverstaffSyncing}
+            className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {cleverstaffSyncing
+              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
+              : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             }
-            {vectorizing ? "Vektorlash…" : "Vektorlashtirish"}
+            {cleverstaffSyncing ? "Sync…" : "Cleverstaff Sync"}
           </button>
+
+          {/* Vectorize All (when nothing selected) */}
+          {selectedIds.size === 0 && (
+            <button onClick={handleVectorizeAll} disabled={vectorizing || uploading || importing}
+              className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {vectorizing
+                ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+                : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              }
+              {vectorizing ? "Vektorlash…" : "Vektorlashtirish"}
+            </button>
+          )}
 
           {/* Import Excel */}
           <button onClick={() => xlsxInputRef.current?.click()} disabled={importing || uploading}
@@ -450,43 +414,6 @@ export default function CandidatesPage() {
           )}
 
           {uploadJob.status === "done" && (
-            <div className="h-2 w-full rounded-full bg-green-100 overflow-hidden">
-              <div className="h-full w-full rounded-full bg-green-400" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Rescore progress banner */}
-      {rescoreJob && rescoreJob.status !== "idle" && (
-        <div className={`mb-4 rounded-xl border px-4 py-3 ${
-          rescoreJob.status === "running" ? "border-orange-200 bg-orange-50"
-          : rescoreJob.status === "done"  ? "border-green-200 bg-green-50"
-          : "border-red-200 bg-red-50"
-        }`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm font-medium ${
-              rescoreJob.status === "running" ? "text-orange-700"
-              : rescoreJob.status === "done"  ? "text-green-700" : "text-red-700"
-            }`}>
-              {rescoreJob.status === "running" && `⏳ Пересчёт баллов… ${rescoreJob.total > 0 ? `(${rescoreJob.processed} / ${rescoreJob.total} групп)` : ""}`}
-              {rescoreJob.status === "done"    && `✅ Пересчёт завершён`}
-              {rescoreJob.status === "error"   && `❌ Ошибка пересчёта`}
-            </span>
-            <span className={`text-xs font-semibold ${rescoreJob.status === "done" ? "text-green-600" : "text-orange-500"}`}>
-              обновлено: {rescoreJob.updated}{rescoreJob.total > 0 && ` / ${rescoreJob.total} групп`}
-            </span>
-          </div>
-          {rescoreJob.status === "running" && (
-            <>
-              <div className="h-2 w-full rounded-full bg-orange-100 overflow-hidden">
-                <div className="h-full rounded-full bg-orange-400 transition-all duration-500"
-                  style={{ width: rescoreJob.total > 0 ? `${Math.round((rescoreJob.processed / rescoreJob.total) * 100)}%` : "3%" }} />
-              </div>
-              <p className="mt-1.5 text-xs text-orange-400">Страницу можно закрыть — процесс продолжается на сервере</p>
-            </>
-          )}
-          {rescoreJob.status === "done" && (
             <div className="h-2 w-full rounded-full bg-green-100 overflow-hidden">
               <div className="h-full w-full rounded-full bg-green-400" />
             </div>

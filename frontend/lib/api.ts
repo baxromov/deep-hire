@@ -187,6 +187,8 @@ export const candidateApi = {
     api.get<{ status: string; total: number; processed: number; vectorized: number; error: string | null }>(
       "/api/candidates/vectorize-status"
     ),
+  cleverstaffSync: () =>
+    api.post<{ status: string }>("/api/sync/cleverstaff"),
   delete: (id: string) =>
     api.delete<{ ok: boolean }>(`/api/candidates/${id}`),
   deleteMany: (ids: string[]) =>
