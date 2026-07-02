@@ -48,11 +48,10 @@ async def _call_mcp(arguments: dict) -> dict:
         })
         logger.debug("MCP notifications/initialized sent")
 
-        # Call the tool — request plain JSON to avoid SSE multiline parsing
-        tool_headers = {**headers, "Accept": "application/json"}
+        # Call the tool
         logger.debug("MCP tools/call search_candidates offset=%s limit=%s",
                      arguments.get("offset"), arguments.get("limit"))
-        r = await client.post(settings.cleverstaff_mcp_url, headers=tool_headers, json={
+        r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
@@ -67,7 +66,6 @@ async def _call_mcp(arguments: dict) -> dict:
 
     content_type = r.headers.get("content-type", "")
     if "text/event-stream" in content_type:
-        # Fallback: server ignored our Accept: application/json preference
         data = _parse_sse(r.text)
     else:
         data = r.json()
