@@ -241,6 +241,9 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
         resume_url = f"/api/candidates/{candidate_oid}/resume"
         await col.update_one({"_id": candidate_oid}, {"$set": {"resume_url": resume_url}})
 
+    # Remove pool duplicate (vacancy_id=None) with same file hash to prevent double entries
+    await col.delete_many({"vacancy_id": None, "hh_resume_id": f"file:{file_hash}", "_id": {"$ne": candidate_oid}})
+
     # Also search Qdrant pool using the file text as query — find similar candidates
     pool_count = 0
     try:
@@ -1159,6 +1162,9 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                                 }},
                                 upsert=True,
                             )
+                            # If original was a pool candidate (no vacancy), remove it to prevent duplicates
+                            if doc.vacancy_id is None:
+                                await col.delete_one({"_id": doc.id})
                             counter["matched"] += 1
 
                         await emit({

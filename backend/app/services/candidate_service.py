@@ -37,10 +37,12 @@ async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> i
 
     collection = Candidate.get_motor_collection()
     ops = []
+    matched_hh_ids = []
     for resume, score in scored_resumes:
         data = _parse_candidate(vacancy.id, resume, relevance_score=score)
         if not data["hh_resume_id"]:
             continue
+        matched_hh_ids.append(data["hh_resume_id"])
         ops.append(
             UpdateOne(
                 {"vacancy_id": vacancy.id, "hh_resume_id": data["hh_resume_id"]},
@@ -51,6 +53,9 @@ async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> i
     if not ops:
         return 0
     result = await collection.bulk_write(ops, ordered=False)
+    # Remove pool candidates (vacancy_id=None) that now have vacancy-specific counterparts
+    if matched_hh_ids:
+        await collection.delete_many({"vacancy_id": None, "hh_resume_id": {"$in": matched_hh_ids}})
     return result.upserted_count + result.modified_count
 
 
