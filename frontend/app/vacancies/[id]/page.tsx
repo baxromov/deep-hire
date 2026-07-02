@@ -295,7 +295,7 @@ export default function VacancyDetailPage({ params }: Props) {
   const [dbMatching, setDbMatching] = useState(false);
   const [dbSteps, setDbSteps] = useState<MatchStep[]>([]);
   const [dbResult, setDbResult] = useState<number | null>(null);
-  const [dbMinScore, setDbMinScore] = useState(60);
+  const [dbMinScore, setDbMinScore] = useState(40);
 
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);

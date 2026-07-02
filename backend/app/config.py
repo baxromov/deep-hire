@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     ollama_embed_base_url: str = ""
     ollama_embed_model: str = "bge-m3:latest"
 
+    # Cross-encoder reranker — loaded directly from HuggingFace Hub via sentence-transformers.
+    # Model is downloaded once and cached in ~/.cache/huggingface/hub on the container.
+    # Recommended: BAAI/bge-reranker-v2-m3 (multilingual, handles Russian/Uzbek, ~270M params, ~1 GB).
+    # Set USE_RERANKER=true in .env to enable; model loads on first request.
+    use_reranker: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_top_n: int = 30    # how many Qdrant hits to pass to the reranker
+    reranker_save_n: int = 15   # how many reranked candidates to save after filtering
+
     # Pool matching params
     pool_top_k: int = 50    # candidates retrieved from Qdrant before re-scoring
     pool_top_n: int = 10    # candidates saved after Ollama re-scoring

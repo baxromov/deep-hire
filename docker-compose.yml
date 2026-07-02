@@ -16,6 +16,7 @@ services:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
+      - hf_cache:/root/.cache/huggingface   # persist downloaded HF models across restarts
     command: .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -41,3 +42,4 @@ services:
 
 volumes:
   backend_venv:
+  hf_cache:

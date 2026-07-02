@@ -576,7 +576,7 @@ async def vectorize_all():
         try:
             from app.database import get_qdrant
             from app.config import settings
-            from app.services.embedding_service import embed_batch
+            from app.services.embedding_service import embed_batch, build_resume_text
             from app.services.qdrant_service import ensure_collection, upsert_items_to_temp_collection
 
             all_docs = await Candidate.find().to_list()
@@ -591,16 +591,24 @@ async def vectorize_all():
 
             texts: list[str] = []
             for c in unique:
-                title = c.title or ""
-                skills = c.skills or []
                 raw = c.raw_resume_json or {}
+                # Use build_resume_text for consistent, high-quality embedding text
+                # For file-sourced candidates, reconstruct a minimal resume dict from stored fields
                 if raw.get("source") == "file":
                     ext = raw.get("extracted") or {}
-                    title = ext.get("title") or title
-                    skills = ext.get("skills") or skills
-                skills_str = ", ".join(skills[:25])
-                text = f"{title}. {title}. Skills: {skills_str}. {skills_str}" if title else f"{skills_str}. {skills_str}"
-                texts.append(text)
+                    resume_dict = {
+                        "title": ext.get("title") or c.title or "",
+                        "skill_set": ext.get("skills") or c.skills or [],
+                        "about": ext.get("about") or "",
+                        "experience": [],
+                    }
+                else:
+                    resume_dict = {
+                        "title": c.title or "",
+                        "skill_set": c.skills or [],
+                        "experience": [],
+                    }
+                texts.append(build_resume_text(resume_dict))
 
             vectors = await embed_batch(texts, concurrency=8)
 
@@ -621,6 +629,16 @@ async def vectorize_all():
                     "source": "db",
                     "first_name": c.first_name or "",
                     "last_name": c.last_name or "",
+                    "raw_resume_json": {
+                        "id": c.hh_resume_id,
+                        "first_name": c.first_name or "",
+                        "last_name": c.last_name or "",
+                        "title": c.title or "",
+                        "skill_set": c.skills or [],
+                        "area": {"name": c.area} if c.area else {},
+                        "salary": {"amount": c.salary_amount, "currency": c.salary_currency} if c.salary_amount else {},
+                        "source": (c.raw_resume_json or {}).get("source", "db"),
+                    },
                 })
                 valid_vectors.append(vector)
                 valid_resume_ids.append(c.hh_resume_id)

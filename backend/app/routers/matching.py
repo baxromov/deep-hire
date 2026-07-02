@@ -11,11 +11,13 @@ from app.config import settings
 from app.database import get_qdrant
 from app.models.vacancy import VacancyStatus
 from app.services import ai_service, candidate_service, file_service, hh_service, minio_service, vacancy_service
-from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch
+from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch, rerank
 from app.services.ingestion_service import _fetch_resume_page
 from app.services.qdrant_service import (
     collection_info,
     search_candidates,
+    ensure_collection,
+    upsert_candidates,
     ensure_temp_collection,
     upsert_to_temp_collection,
     upsert_items_to_temp_collection,
@@ -192,7 +194,7 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
 
     # Extract fields first, then score once with actual data
     fields = await ai_service.extract_resume_fields(text)
-    score = await ai_service.score_candidate(
+    score, _reasoning, _criteria = await ai_service.score_candidate(
         vacancy_title=vacancy.title or "",
         required_skills=vacancy.skills,
         experience=vacancy.experience or "",
@@ -243,6 +245,29 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
 
     # Remove pool duplicate (vacancy_id=None) with same file hash to prevent double entries
     await col.delete_many({"vacancy_id": None, "hh_resume_id": f"file:{file_hash}", "_id": {"$ne": candidate_oid}})
+
+    # Index uploaded resume into main Qdrant collection so "Из нашей базы" can find it later
+    try:
+        qdrant_resume = {
+            "id": f"file:{file_hash}",
+            "first_name": fields.get("first_name"),
+            "last_name": fields.get("last_name"),
+            "title": fields.get("title") or fields.get("position"),
+            "area": {"name": fields.get("area")} if fields.get("area") else {},
+            "salary": {
+                "amount": fields.get("salary_amount"),
+                "currency": fields.get("salary_currency"),
+            },
+            "skill_set": fields.get("skills", []),
+            "experience": [],
+        }
+        qdrant = await get_qdrant()
+        await ensure_collection(qdrant)
+        resume_vec = await embed(text[:4000])
+        await upsert_candidates(qdrant, [qdrant_resume], [resume_vec])
+        logger.info("match_from_file: indexed file:%s into main Qdrant collection", file_hash)
+    except Exception as exc:
+        logger.warning("match_from_file: Qdrant indexing failed (non-fatal): %s", exc)
 
     # Also search Qdrant pool using the file text as query — find similar candidates
     pool_count = 0
@@ -980,20 +1005,78 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                     "total": len(pool_hits),
                 })
 
-                # ── 3. Filter by min_score and save ──────────────────────────────
+                # ── 3. Rerank (cross-encoder) if enabled ─────────────────────────
                 now = datetime.now(timezone.utc)
-                scored = []
-                for hit in pool_hits:
-                    sc = int(hit.get("_qdrant_score", 0) * 100)
-                    raw = hit.get("raw_resume_json")
-                    if raw and sc >= min_score:
-                        scored.append(({**raw, "_source": "db_search"}, sc))
+                vacancy_skills_set = {s.lower() for s in (vacancy.skills or [])}
+                vacancy_query = build_vacancy_text(vacancy)
+
+                if settings.use_reranker and pool_hits:
+                    rerank_pool = pool_hits[:settings.reranker_top_n]
+                    await emit({
+                        "step": "reranking",
+                        "message": f"Cross-encoder reranking top {len(rerank_pool)} candidates…",
+                    })
+                    doc_texts = [
+                        build_resume_text(hit["raw_resume_json"])
+                        if hit.get("raw_resume_json") else
+                        f"{hit.get('title', '')}. Skills: {', '.join(hit.get('skills', []))}"
+                        for hit in rerank_pool
+                    ]
+                    rerank_results = await rerank(vacancy_query, doc_texts, top_n=settings.reranker_top_n)
+
+                    # Re-order pool_hits by reranker score, then skill-boost the final score
+                    reranked_hits = []
+                    for r in rerank_results:
+                        idx = r.get("index", 0)
+                        if idx < len(rerank_pool):
+                            hit = rerank_pool[idx]
+                            reranked_hits.append((hit, r.get("relevance_score", 0.0)))
+                    # Append any hits beyond reranker_top_n (no rerank, use qdrant score)
+                    for hit in pool_hits[settings.reranker_top_n:]:
+                        reranked_hits.append((hit, hit.get("_qdrant_score", 0.0) * 0.8))
+
+                    await emit({
+                        "step": "reranked",
+                        "count": len(reranked_hits),
+                        "message": f"Reranking done — scoring {len(reranked_hits)} candidates with skill boost…",
+                    })
+
+                    scored = []
+                    for hit, rerank_sc in reranked_hits:
+                        raw = hit.get("raw_resume_json")
+                        if not raw:
+                            continue
+                        # Skill overlap bonus (0–15 pts): rewards candidates matching required skills
+                        candidate_skills = {s.lower() for s in (hit.get("skills") or [])}
+                        overlap = len(vacancy_skills_set & candidate_skills)
+                        skill_bonus = min(15, overlap * 3) if vacancy_skills_set else 0
+                        # Blend reranker score (0–1 → 0–85) + skill bonus (0–15)
+                        final_sc = min(100, int(rerank_sc * 85) + skill_bonus)
+                        if final_sc >= min_score:
+                            scored.append(({**raw, "_source": "db_search"}, final_sc))
+                    scored.sort(key=lambda x: x[1], reverse=True)
+
+                else:
+                    # ── No reranker: cosine score + skill bonus ───────────────────
+                    scored = []
+                    for hit in pool_hits:
+                        raw = hit.get("raw_resume_json")
+                        if not raw:
+                            continue
+                        candidate_skills = {s.lower() for s in (hit.get("skills") or [])}
+                        overlap = len(vacancy_skills_set & candidate_skills)
+                        skill_bonus = min(15, overlap * 3) if vacancy_skills_set else 0
+                        qdrant_sc = int(hit.get("_qdrant_score", 0) * 85)
+                        final_sc = min(100, qdrant_sc + skill_bonus)
+                        if final_sc >= min_score:
+                            scored.append(({**raw, "_source": "db_search"}, final_sc))
+                    scored.sort(key=lambda x: x[1], reverse=True)
 
                 for proc, (resume, sc) in enumerate(scored, 1):
                     name = (
                         resume.get("full_name")
+                        or resume.get("first_name", "")
                         or resume.get("title")
-                        or resume.get("position")
                         or "Unknown"
                     )
                     await emit({
