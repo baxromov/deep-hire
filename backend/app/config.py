@@ -88,4 +88,5 @@ class Settings(BaseSettings):
     cleverstaff_sync_hour: int = 2   # daily sync at 2 AM
 
 
+
 settings = Settings()
