@@ -917,8 +917,8 @@ async def match_from_live_pool_stream(vacancy_id: str):
     )
 
 
-async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0, le=100)):
-    """SSE: Qdrant vector pre-filter then concurrent LLM scoring of MongoDB candidates."""
+async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0, le=100)):
+    """SSE: embed all DB candidates → temp Qdrant collection → vector search only (no LLM scoring)."""
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -937,9 +937,9 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 if vacancy.status != VacancyStatus.approved:
                     await emit({"step": "error", "message": "Vacancy must be approved."}); return
 
-                await emit({"step": "planning", "message": f"Scanning candidates database (порог ≥{min_score}%)…"})
+                await emit({"step": "planning", "message": f"Scanning candidates database (threshold ≥{min_score}%)…"})
 
-                # ── 1. xlsx groups (one LLM call per unique internship_name) ──────
+                # ── 1. xlsx groups ────────────────────────────────────────────────
                 pipeline = [
                     {"$match": {"raw_resume_json.source": "xlsx"}},
                     {"$group": {
@@ -959,7 +959,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 ]
                 xlsx_groups = await Candidate.get_motor_collection().aggregate(pipeline).to_list(None)
 
-                # ── 2. Non-xlsx candidates (file / hh), deduplicated by hh_resume_id ─
+                # ── 2. Non-xlsx candidates (file / hh), deduplicated ──────────────
                 non_xlsx_all = await Candidate.find(
                     {"raw_resume_json.source": {"$in": ["file", "hh"]}}
                 ).to_list()
@@ -973,7 +973,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 total_db = len(xlsx_groups) + len(non_xlsx)
                 await emit({
                     "step": "pool_ready",
-                    "message": f"Found {len(xlsx_groups)} internship groups + {len(non_xlsx)} individual profiles. Pre-filtering with Qdrant…",
+                    "message": f"Found {len(xlsx_groups)} internship groups + {len(non_xlsx)} individual profiles. Embedding…",
                     "total": total_db,
                 })
 
@@ -981,8 +981,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                     await emit({"step": "done", "message": "No candidates in database.", "matched": 0, "total": 0})
                     return
 
-                # ── 3. Build structured items for embedding ───────────────────────
-                # Each tuple: (unique_id, text, item_type, key, original_data)
+                # ── 3. Build items for embedding ──────────────────────────────────
                 struct_items: list[tuple] = []
                 for group in xlsx_groups:
                     internship = group["_id"] or ""
@@ -1001,14 +1000,14 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                     text = f"{title}. Skills: {', '.join(doc_skills[:15])}" if title else ", ".join(doc_skills[:15])
                     struct_items.append((f"single:{doc.hh_resume_id}", text, "single", doc.hh_resume_id, doc))
 
-                # ── 4. Embed all candidates in batch ──────────────────────────────
+                # ── 4. Embed all candidates ───────────────────────────────────────
                 texts = [item[1] for item in struct_items]
                 vectors = await embed_batch(texts, concurrency=8)
 
-                # ── 5. Temp Qdrant collection ─────────────────────────────────────
+                # ── 5. Upsert into temp Qdrant collection ─────────────────────────
                 qdrant = await get_qdrant()
                 temp_col = f"db_match_{vacancy_id}"
-                await delete_temp_collection(qdrant, temp_col)  # clear any crash residue
+                await delete_temp_collection(qdrant, temp_col)
                 await ensure_temp_collection(qdrant, temp_col)
 
                 qdrant_items = [
@@ -1017,7 +1016,8 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 ]
                 await upsert_items_to_temp_collection(qdrant, temp_col, qdrant_items, vectors)
 
-                # ── 6. Embed vacancy → vector search → top-N pre-filtered hits ────
+                # ── 6. Vector search ──────────────────────────────────────────────
+                await emit({"step": "searching", "message": "Vector searching in Qdrant…"})
                 vacancy_vec = await embed(build_vacancy_text(vacancy))
                 top_hits = await search_temp_collection_scored(
                     qdrant, temp_col, vacancy_vec,
@@ -1028,72 +1028,41 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                 total = len(top_hits)
                 await emit({
                     "step": "pool_ready",
-                    "message": f"Qdrant: {total_db} → {total} candidates. Starting AI scoring…",
+                    "message": f"Qdrant: {total_db} candidates → top {total} by vector similarity.",
                     "total": total,
                 })
 
-                # ── 7. Concurrent LLM scoring of pre-filtered candidates ──────────
-                sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+                # ── 7. Save hits using Qdrant score (no LLM) ─────────────────────
                 now = datetime.now(timezone.utc)
                 col = Candidate.get_motor_collection()
+                matched = 0
 
-                existing_doc_ids: set[str] = set()
-                async for doc in Candidate.find({"vacancy_id": vacancy.id}):
-                    existing_doc_ids.add(doc.hh_resume_id)
-
-                counter = {"matched": 0, "processed": 0}
-                passed_ids: set[str] = set()
-                scored_ids: set[str] = set()
-
-                async def score_one(payload: dict, _qdrant_score: float) -> None:
+                for proc, (payload, qdrant_score) in enumerate(top_hits, 1):
+                    sc = int(qdrant_score * 100)
                     uid = payload.get("id", "")
                     item = id_to_item.get(uid)
                     if not item:
-                        return
+                        continue
 
                     _uid, _text, item_type, _key, data = item
-                    counter["processed"] += 1
-                    proc = counter["processed"]
 
                     if item_type == "xlsx":
                         group = data
                         internship = group["_id"] or ""
                         skills = group.get("skills") or []
-                        for cand in group["candidates"]:
-                            scored_ids.add(cand["hh_resume_id"])
-
-                        if not settings.use_llm_scoring:
-                            sc, rs, cr = int(_qdrant_score * 100), "", []
-                        else:
-                            async with sem:
-                                sc, rs, cr = await ai_service.score_candidate(
-                                    vacancy_title=vacancy.title or "",
-                                    required_skills=vacancy.skills,
-                                    experience=vacancy.experience or "",
-                                    candidate_title=internship,
-                                    candidate_skills=skills,
-                                    vacancy_description=vacancy.description or "",
-                                    criteria=vacancy.score_criteria,
-                                )
-
                         if sc >= min_score:
                             for cand in group["candidates"]:
                                 orig_hh_id = cand["hh_resume_id"]
-                                passed_ids.add(orig_hh_id)
                                 await col.update_one(
                                     {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
-                                    {"$set": {
-                                        "relevance_score": sc,
-                                        "raw_resume_json.score_reasoning": rs,
-                                        "raw_resume_json.score_criteria": cr,
-                                    }, "$setOnInsert": {
+                                    {"$set": {"relevance_score": sc, "matched_at": now},
+                                     "$setOnInsert": {
                                         "vacancy_id": vacancy.id,
                                         "hh_resume_id": orig_hh_id,
                                         "first_name": cand.get("first_name") or group.get("first_name"),
                                         "last_name": cand.get("last_name") or group.get("last_name"),
                                         "title": internship or None,
                                         "skills": skills,
-                                        "matched_at": now,
                                         "raw_resume_json.source": "xlsx",
                                         "raw_resume_json.internship_name": internship,
                                         "raw_resume_json.phone": group.get("phone"),
@@ -1101,12 +1070,11 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                                     }},
                                     upsert=True,
                                 )
-                            counter["matched"] += len(group["candidates"])
-
+                            matched += len(group["candidates"])
                         await emit({
                             "step": "scoring",
                             "message": f"[{proc}/{total}] \"{internship or '—'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
-                            "count": proc, "total": total, "matched": counter["matched"],
+                            "count": proc, "total": total, "matched": matched,
                         })
 
                     else:  # single (file / hh)
@@ -1118,88 +1086,46 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(60, ge=0,
                             ext = raw.get("extracted") or {}
                             title = ext.get("title") or title
                             skills = ext.get("skills") or skills
-
-                        orig_hh_id = doc.hh_resume_id
-                        scored_ids.add(orig_hh_id)
-
-                        if not settings.use_llm_scoring:
-                            sc, rs, cr = int(_qdrant_score * 100), "", []
-                        else:
-                            async with sem:
-                                sc, rs, cr = await ai_service.score_candidate(
-                                    vacancy_title=vacancy.title or "",
-                                    required_skills=vacancy.skills,
-                                    experience=vacancy.experience or "",
-                                    candidate_title=title,
-                                    candidate_skills=skills,
-                                    vacancy_description=vacancy.description or "",
-                                    criteria=vacancy.score_criteria,
-                                )
-
                         if sc >= min_score:
-                            passed_ids.add(orig_hh_id)
                             await col.update_one(
-                                {"vacancy_id": vacancy.id, "hh_resume_id": orig_hh_id},
-                                {"$set": {
-                                    "relevance_score": sc,
-                                    "raw_resume_json.score_reasoning": rs,
-                                    "raw_resume_json.score_criteria": cr,
-                                }, "$setOnInsert": {
+                                {"vacancy_id": vacancy.id, "hh_resume_id": doc.hh_resume_id},
+                                {"$set": {"relevance_score": sc, "matched_at": now},
+                                 "$setOnInsert": {
                                     "vacancy_id": vacancy.id,
-                                    "hh_resume_id": orig_hh_id,
+                                    "hh_resume_id": doc.hh_resume_id,
                                     "first_name": doc.first_name,
                                     "last_name": doc.last_name,
-                                    "title": doc.title,
+                                    "title": title or doc.title,
                                     "area": doc.area,
-                                    "skills": doc.skills,
+                                    "skills": skills or doc.skills,
                                     "salary_amount": doc.salary_amount,
                                     "salary_currency": doc.salary_currency,
                                     "resume_url": doc.resume_url,
                                     "photo_url": doc.photo_url,
-                                    "matched_at": now,
-                                    "raw_resume_json.source": raw.get("source"),
-                                    "raw_resume_json.filename": raw.get("filename"),
+                                    "raw_resume_json": raw,
                                 }},
                                 upsert=True,
                             )
-                            # If original was a pool candidate (no vacancy), remove it to prevent duplicates
                             if doc.vacancy_id is None:
                                 await col.delete_one({"_id": doc.id})
-                            counter["matched"] += 1
-
+                            matched += 1
                         await emit({
                             "step": "scoring",
                             "message": f"[{proc}/{total}] \"{title or 'Unknown'}\" → {sc}% {'✓' if sc >= min_score else '✗'}",
-                            "count": proc, "total": total, "matched": counter["matched"],
+                            "count": proc, "total": total, "matched": matched,
                         })
-
-                await asyncio.gather(*[score_one(payload, score) for payload, score in top_hits])
-
-                # ── 8. Remove stale matches that fell below threshold on re-run ────
-                stale_ids = existing_doc_ids & (scored_ids - passed_ids)
-                stale_removed = 0
-                if stale_ids:
-                    result = await col.delete_many({
-                        "vacancy_id": vacancy.id,
-                        "hh_resume_id": {"$in": list(stale_ids)},
-                    })
-                    stale_removed = result.deleted_count
 
                 vacancy.last_matched_at = now
                 await vacancy.save()
                 await emit({
                     "step": "done",
-                    "message": (
-                        f"Готово. Найдено {counter['matched']} подходящих из {counter['processed']} "
-                        f"проверенных (Qdrant: {total_db}→{total}, порог ≥{min_score}%)."
-                        + (f" Удалено устаревших: {stale_removed}." if stale_removed else "")
-                    ),
-                    "matched": counter["matched"], "total": counter["processed"],
+                    "message": f"Done. Found {matched} candidates from {total} (vector only, threshold ≥{min_score}%).",
+                    "matched": matched, "total": total,
                 })
 
             except Exception as exc:
                 logger.error("match_from_db_stream error: %s", exc, exc_info=True)
-                await emit({"step": "error", "message": f"Ошибка: {exc}"})
+                await emit({"step": "error", "message": f"Error: {exc}"})
             finally:
                 if temp_col:
                     try:
