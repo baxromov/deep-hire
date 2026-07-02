@@ -1,6 +1,8 @@
 import json
 import re
 import logging
+from datetime import datetime, timezone
+
 import httpx
 
 from app.config import settings
@@ -55,20 +57,28 @@ def build_embedding_text(candidate: dict) -> str:
 
 
 def build_payload(candidate: dict) -> dict:
+    """Map Cleverstaff candidate to uzbek_candidates payload schema."""
+    cid = candidate.get("candidate_id", "")
     skills = [s["skill"] for s in candidate.get("skills", []) if s.get("skill")]
+
+    # experience field is in months in Cleverstaff
+    exp_months = candidate.get("experience") or 0
+    experience_years = round(exp_months / 12, 1)
+
+    salary = candidate.get("salary")
+    salary_amount = int(salary) if salary is not None else None
+
     return {
-        "candidate_id": candidate.get("candidate_id", ""),
-        "full_name": candidate.get("full_name"),
-        "position": candidate.get("position"),
-        "current_position": candidate.get("current_position"),
-        "region": candidate.get("region"),
-        "employment_type": candidate.get("employment_type") or "",
-        "sex": candidate.get("sex"),
-        "experience": candidate.get("experience"),
-        "salary": candidate.get("salary"),
-        "currency": candidate.get("currency"),
+        "hh_resume_id": f"cs:{cid}",
+        "full_name": candidate.get("full_name") or "",
+        "title": candidate.get("position") or "",
+        "area": candidate.get("region") or "",
+        "experience_years": experience_years,
         "skills": skills,
-        "industry": candidate.get("industry"),
-        "role_level": candidate.get("role_level"),
-        "source": "cleverstaff",
+        "salary_amount": salary_amount,
+        "salary_currency": candidate.get("currency"),
+        "employment_type": candidate.get("employment_type") or "",
+        "schedule": "",
+        "last_indexed_at": datetime.now(timezone.utc).isoformat(),
+        "raw_resume_json": {**candidate, "source": "cleverstaff"},
     }

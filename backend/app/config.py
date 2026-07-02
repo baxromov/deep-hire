@@ -85,7 +85,6 @@ class Settings(BaseSettings):
     # Cleverstaff MCP sync
     cleverstaff_mcp_url: str = "http://172.31.174.11:8765/mcp"
     cleverstaff_mcp_token: str = ""
-    cleverstaff_collection: str = "cleverstaff_candidates"
     cleverstaff_sync_hour: int = 2   # daily sync at 2 AM
 
 
