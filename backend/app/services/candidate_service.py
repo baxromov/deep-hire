@@ -55,7 +55,7 @@ def _parse_candidate(vacancy_id: PydanticObjectId, resume: Dict[str, Any], relev
         "salary_currency": salary_currency,
         "skills": skills,
         "photo_url": photo.get("medium") if photo else None,
-        "resume_url": resume.get("alternate_url"),
+        "resume_url": resume.get("alternate_url") or resume.get("resume_url"),
         "relevance_score": relevance_score,
         "raw_resume_json": resume,
         "matched_at": datetime.now(timezone.utc),

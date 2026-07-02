@@ -638,6 +638,9 @@ async def vectorize_all():
                         "area": {"name": c.area} if c.area else {},
                         "salary": {"amount": c.salary_amount, "currency": c.salary_currency} if c.salary_amount else {},
                         "source": (c.raw_resume_json or {}).get("source", "db"),
+                        "resume_url": c.resume_url,
+                        "minio_key": (c.raw_resume_json or {}).get("minio_key"),
+                        "filename": (c.raw_resume_json or {}).get("filename"),
                     },
                 })
                 valid_vectors.append(vector)

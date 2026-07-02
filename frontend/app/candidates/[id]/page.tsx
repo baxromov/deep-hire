@@ -562,9 +562,22 @@ export default function CandidateDetailPage({ params }: Props) {
                 rel="noopener noreferrer"
                 className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
               >
-                {candidate.resume_url.startsWith("/api/") ? "Открыть резюме →" : "Открыть на HH.uz →"}
+                {candidate.resume_url.startsWith("/api/") ? "Скачать резюме ↓" : "Открыть на HH.uz →"}
               </a>
             </div>
+
+            {/* Inline PDF preview for uploaded resumes */}
+            {candidate.resume_url.startsWith("/api/") &&
+              (candidate.raw_resume_json?.filename as string | undefined)?.toLowerCase().endsWith(".pdf") && (
+              <div className="mt-4 overflow-hidden rounded-lg border border-blue-200 bg-white">
+                <iframe
+                  src={`${API_BASE}${candidate.resume_url}`}
+                  title="Резюме"
+                  className="w-full"
+                  style={{ height: "780px" }}
+                />
+              </div>
+            )}
           </Section>
         </div>
       )}
