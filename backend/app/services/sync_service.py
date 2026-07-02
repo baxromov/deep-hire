@@ -1,11 +1,14 @@
 import hashlib
 import logging
 import asyncio
+from datetime import datetime, timezone
 
+from pymongo import UpdateOne
 from qdrant_client.http import models as qmodels
 
 from app.config import settings
 from app.database import get_qdrant, get_redis
+from app.models.candidate import Candidate
 from app.services import embedding_service
 from app.services import cleverstaff_service as cs
 from app.services.qdrant_service import ensure_collection
@@ -24,22 +27,58 @@ def _point_id(candidate_id: str) -> int:
 
 async def _upsert_batch(qdrant, candidates: list[dict], vectors: list[list[float]]) -> int:
     points = []
+    mongo_ops = []
+    now = datetime.now(timezone.utc)
+
     for cand, vec in zip(candidates, vectors):
         if not vec:
             continue
         cid = cand.get("candidate_id", "")
+        hh_resume_id = f"cs:{cid}"
+
         points.append(qmodels.PointStruct(
             id=_point_id(cid),
             vector=vec,
             payload=cs.build_payload(cand),
         ))
+
+        full_name = cand.get("full_name") or ""
+        name_parts = full_name.split(" ", 1)
+        skills = [s["skill"] for s in cand.get("skills", []) if s.get("skill")]
+        salary = cand.get("salary")
+
+        mongo_ops.append(UpdateOne(
+            {"vacancy_id": None, "hh_resume_id": hh_resume_id},
+            {"$set": {
+                "hh_resume_id": hh_resume_id,
+                "vacancy_id": None,
+                "first_name": name_parts[0] if name_parts else "",
+                "last_name": name_parts[1] if len(name_parts) > 1 else "",
+                "title": cand.get("position") or "",
+                "area": cand.get("region") or "",
+                "skills": skills,
+                "salary_amount": int(salary) if salary is not None else None,
+                "salary_currency": cand.get("currency"),
+                "raw_resume_json": {**cand, "source": "cleverstaff"},
+                "is_vectorized": True,
+                "matched_at": now,
+            }},
+            upsert=True,
+        ))
+
     if not points:
         return 0
+
     for i in range(0, len(points), UPSERT_BATCH):
         await qdrant.upsert(
             collection_name=settings.qdrant_collection,
             points=points[i:i + UPSERT_BATCH],
         )
+
+    if mongo_ops:
+        col = Candidate.get_motor_collection()
+        await col.bulk_write(mongo_ops, ordered=False)
+
     return len(points)
 
 

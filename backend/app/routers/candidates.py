@@ -27,7 +27,7 @@ async def list_candidates(
     vacancy_id: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     sort_by: str = Query("score", pattern="^(score|date|name)$"),
-    source: Optional[str] = Query(None, pattern="^(xlsx|file|hh)$"),
+    source: Optional[str] = Query(None, pattern="^(xlsx|file|hh|cleverstaff)$"),
 ):
     items, total = await candidate_service.get_all_candidates(
         skip=skip, limit=limit, vacancy_id=vacancy_id,
