@@ -25,10 +25,11 @@ const SORT_OPTIONS = [
 ];
 
 const SOURCE_FILTERS = [
-  { value: "",     label: "Все"     },
-  { value: "xlsx", label: "📊 Excel" },
-  { value: "file", label: "📎 Загрузка" },
-  { value: "hh",   label: "🔗 HH"    },
+  { value: "",             label: "Все"           },
+  { value: "xlsx",         label: "📊 Excel"      },
+  { value: "file",         label: "📎 Загрузка"   },
+  { value: "hh",           label: "🔗 HH"         },
+  { value: "cleverstaff",  label: "🟢 Cleverstaff" },
 ];
 
 type UploadJobState = {
