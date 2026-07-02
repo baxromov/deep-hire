@@ -77,10 +77,11 @@ async def _call_mcp(arguments: dict) -> dict:
 
 
 def _parse_sse(body: str) -> dict:
-    for line in body.splitlines():
-        if line.startswith("data: "):
-            return json.loads(line[6:])
-    raise ValueError(f"No data line found in SSE response: {body!r}")
+    # SSE large payloads are split across multiple "data: " lines — join them all
+    data_lines = [line[6:] for line in body.splitlines() if line.startswith("data: ")]
+    if not data_lines:
+        raise ValueError(f"No data line found in SSE response: {body!r}")
+    return json.loads("".join(data_lines))
 
 
 async def fetch_candidates(offset: int = 0, limit: int = 100) -> dict:
