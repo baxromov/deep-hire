@@ -348,13 +348,19 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
             messages=[{"role": "user", "content": RESUME_EXTRACT_PROMPT + text[:5000]}],
         )
         raw = response.choices[0].message.content or ""
+        logger.info("extract_resume_fields: raw LLM response (first 500 chars): %r", raw[:500])
         cleaned = _strip_fences(raw)
         parsed = json.loads(cleaned)
         result = {k: v for k, v in parsed.items() if v is not None}
+        logger.info("extract_resume_fields: parsed fields=%s", list(result.keys()))
     except Exception as e:
         logger.warning("extract_resume_fields LLM failed: %s | text_preview=%r", e, text[:150])
 
-    if not isinstance(result.get("skills"), list):
+    # Handle skills returned as comma-separated string instead of list
+    skills_raw = result.get("skills")
+    if isinstance(skills_raw, str):
+        result["skills"] = [s.strip() for s in re.split(r'[,;]+', skills_raw) if s.strip()]
+    elif not isinstance(skills_raw, list):
         result["skills"] = []
 
     if not result["skills"]:
@@ -378,10 +384,20 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
 
 def _strip_fences(raw: str) -> str:
     raw = raw.strip()
+    # Remove think/reasoning blocks (various formats used by thinking models)
     raw = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", raw, flags=re.DOTALL)
+    raw = re.sub(r"</?think(?:ing)?>", "", raw)
     raw = raw.strip()
+    # Remove markdown code fences
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
+    raw = raw.strip()
+    # Extract JSON object from anywhere in the text — handles preamble/postamble text
+    # that thinking models often add before/after the JSON block.
+    first_brace = raw.find('{')
+    last_brace = raw.rfind('}')
+    if first_brace != -1 and last_brace > first_brace:
+        raw = raw[first_brace:last_brace + 1]
     return raw.strip()
 
 
