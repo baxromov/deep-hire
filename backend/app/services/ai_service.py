@@ -325,46 +325,71 @@ async def generate_search_queries(title: str, description: str, skills: list) ->
 
 # ── Vacancy extraction ────────────────────────────────────────────────────────
 
-EXTRACT_PROMPT = """You are a recruitment assistant. Extract structured vacancy information from the text below.
+EXTRACT_PROMPT = """You are a recruitment assistant. Analyze this vacancy text and return ONLY a valid JSON object with no markdown, no explanation.
 
-Rules:
-- title: extract explicitly or infer from context (NEVER null)
-- skills: list ALL required and preferred technical skills, tools, languages, and technologies mentioned
-- description: copy the full job description / responsibilities text from the vacancy
-- experience: one of noExperience, between1And3, between3And6, moreThan6
-- employment_type: one of full, part, project, volunteer, probation
-- schedule: one of fullDay, shift, flexible, remote, flyInFlyOut
-- currency: RUB, USD, or EUR
+Required fields:
+- "title": job title, explicitly stated or inferred (NEVER null or empty)
+- "skills": array of ALL required/preferred skills, technologies, tools mentioned (NEVER empty if any tech mentioned)
+- "description": 2-3 sentence summary — what the company does, the role, and key responsibilities
 
-Text:
+Optional fields (include only if clearly stated):
+- "area": city or region
+- "salary_from": number
+- "salary_to": number
+- "currency": "RUB" or "USD" or "EUR"
+- "experience": "noExperience" or "between1And3" or "between3And6" or "moreThan6"
+- "employment_type": "full" or "part" or "project" or "volunteer" or "probation"
+- "schedule": "fullDay" or "shift" or "flexible" or "remote" or "flyInFlyOut"
+
+Return ONLY the JSON object:
 {text}"""
 
 
+def _heuristic_title(text: str) -> str:
+    for line in text.strip().split('\n')[:10]:
+        line = line.strip()
+        if line and 3 <= len(line) <= 80 and not line.startswith(('•', '-', '*')):
+            return line
+    return "Вакансия"
+
+
 async def extract_fields(text: str) -> Dict[str, Any]:
+    prompt = EXTRACT_PROMPT.format(text=text[:4000])
+
+    # Tier 1: structured output (function calling)
     try:
         llm = _get_llm()
         structured = llm.with_structured_output(VacancyFields)
-        result_obj: VacancyFields = await structured.ainvoke(
-            EXTRACT_PROMPT.format(text=text[:4000])
-        )
+        result_obj: VacancyFields = await structured.ainvoke(prompt)
         fields = result_obj.model_dump(exclude_none=True)
-
-        if not fields.get("title"):
-            fields["title"] = await _infer_title(text)
-
+        logger.info("extract_fields: structured output OK — title=%r skills=%d",
+                    fields.get("title"), len(fields.get("skills") or []))
         if not fields.get("skills"):
             fields["skills"] = _heuristic_extract_skills(text)
-            if fields["skills"]:
-                logger.info("extract_fields: heuristic skills fallback: %d items", len(fields["skills"]))
-
         return fields
     except Exception as e:
-        logger.error("extract_fields LLM failed: %s", e, exc_info=True)
-        skills = _heuristic_extract_skills(text)
-        return {
-            "skills": skills,
-            "description": text[:3000].strip(),
-        }
+        logger.warning("extract_fields: structured output failed (%s) — trying plain JSON", e)
+
+    # Tier 2: plain chat call + manual JSON parse
+    try:
+        llm = _get_llm()
+        response = await llm.ainvoke(prompt)
+        raw = _strip_fences(response.content if hasattr(response, "content") else str(response))
+        fields = json.loads(raw)
+        logger.info("extract_fields: plain JSON OK — title=%r skills=%d",
+                    fields.get("title"), len(fields.get("skills") or []))
+        if not fields.get("skills"):
+            fields["skills"] = _heuristic_extract_skills(text)
+        return fields
+    except Exception as e:
+        logger.error("extract_fields: plain JSON also failed: %s", e, exc_info=True)
+
+    # Tier 3: heuristics only
+    return {
+        "title": _heuristic_title(text),
+        "skills": _heuristic_extract_skills(text),
+        "description": "\n".join(text.strip().split('\n')[:6]).strip(),
+    }
 
 
 async def _infer_title(text: str) -> str:
