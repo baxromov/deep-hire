@@ -345,14 +345,16 @@ async def explain_score(candidate_id: str):
         criteria=vacancy.score_criteria,
     )
 
-    # Persist new score + reasoning + criteria
+    # Persist reasoning + criteria; only update score if LLM succeeded (> 0)
     raw["score_reasoning"] = reasoning
     raw["score_criteria"] = criteria
     doc.raw_resume_json = raw
-    doc.relevance_score = new_score
+    if new_score > 0:
+        doc.relevance_score = new_score
     await doc.save()
 
-    return {"reasoning": reasoning, "criteria": criteria, "score": new_score}
+    effective_score = new_score if new_score > 0 else (doc.relevance_score or 0)
+    return {"reasoning": reasoning, "criteria": criteria, "score": effective_score}
 
 
 # ── Bulk rescore job state (in-process; single uvicorn worker) ──────────────
