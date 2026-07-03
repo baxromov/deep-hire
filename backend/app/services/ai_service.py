@@ -32,11 +32,20 @@ async def close_client() -> None:
 
 # ── Pydantic schemas for structured output ────────────────────────────────────
 
+class ExperienceEntry(BaseModel):
+    company: Optional[str] = Field(None, description="Company or organization name")
+    position: Optional[str] = Field(None, description="Job title / position held")
+    start: Optional[str] = Field(None, description="Start date in YYYY-MM format")
+    end: Optional[str] = Field(None, description="End date in YYYY-MM format, null if current job")
+    description: Optional[str] = Field(None, description="Brief description of responsibilities")
+
+
 class ResumeFields(BaseModel):
     first_name: Optional[str] = Field(None, description="Candidate first name")
     last_name: Optional[str] = Field(None, description="Candidate last name")
     title: Optional[str] = Field(None, description="Current or desired job title")
     skills: List[str] = Field(default_factory=list, description="All technical skills, tools, frameworks")
+    experience: List[ExperienceEntry] = Field(default_factory=list, description="Work experience history, most recent first")
     area: Optional[str] = Field(None, description="City or region")
     salary_amount: Optional[int] = Field(None, description="Expected salary amount")
     salary_currency: Optional[str] = Field(None, description="Salary currency: UZS, RUB, USD, or EUR")
@@ -103,6 +112,7 @@ IMPORTANT rules:
 - skills: list EVERY technical skill, tool, language, framework mentioned anywhere in the resume. NEVER return empty list if any technology is mentioned.
 - title: infer from experience/skills if not stated explicitly.
 - salary_currency: UZS, RUB, USD, or EUR only.
+- experience: extract ALL work history entries. For each entry provide: company name, position/job title, start date (YYYY-MM), end date (YYYY-MM or null if current), and a brief description of responsibilities. List most recent first.
 
 Resume text:
 {text}"""
@@ -179,8 +189,8 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
         result = result_obj.model_dump(exclude_none=True)
         if "skills" not in result:
             result["skills"] = []
-        logger.info("extract_resume_fields: structured output OK — skills=%d title=%r",
-                    len(result.get("skills", [])), result.get("title"))
+        logger.info("extract_resume_fields: structured output OK — skills=%d experience=%d title=%r",
+                    len(result.get("skills", [])), len(result.get("experience", [])), result.get("title"))
     except Exception as e:
         logger.warning("extract_resume_fields structured LLM failed: %s", e)
         result = {}
@@ -319,6 +329,8 @@ EXTRACT_PROMPT = """You are a recruitment assistant. Extract structured vacancy 
 
 Rules:
 - title: extract explicitly or infer from context (NEVER null)
+- skills: list ALL required and preferred technical skills, tools, languages, and technologies mentioned
+- description: copy the full job description / responsibilities text from the vacancy
 - experience: one of noExperience, between1And3, between3And6, moreThan6
 - employment_type: one of full, part, project, volunteer, probation
 - schedule: one of fullDay, shift, flexible, remote, flyInFlyOut
@@ -340,9 +352,19 @@ async def extract_fields(text: str) -> Dict[str, Any]:
         if not fields.get("title"):
             fields["title"] = await _infer_title(text)
 
+        if not fields.get("skills"):
+            fields["skills"] = _heuristic_extract_skills(text)
+            if fields["skills"]:
+                logger.info("extract_fields: heuristic skills fallback: %d items", len(fields["skills"]))
+
         return fields
-    except Exception:
-        return {}
+    except Exception as e:
+        logger.error("extract_fields LLM failed: %s", e, exc_info=True)
+        skills = _heuristic_extract_skills(text)
+        return {
+            "skills": skills,
+            "description": text[:3000].strip(),
+        }
 
 
 async def _infer_title(text: str) -> str:

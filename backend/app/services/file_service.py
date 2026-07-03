@@ -21,28 +21,31 @@ def extract_text_from_docx(file_bytes: bytes) -> Optional[str]:
         from docx import Document
         doc = Document(io.BytesIO(file_bytes))
 
-        # Walk every w:t XML node in the document body — catches paragraphs,
-        # tables, AND text-boxes/shapes which the high-level API misses.
-        W_T = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
-        tokens: list[str] = []
-        for elem in doc.element.body.iter(W_T):
-            text = (elem.text or "").strip()
-            if text:
-                tokens.append(text)
+        W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        W_T = W + "t"
+        W_P = W + "p"
+
+        def _para_lines(root) -> list[str]:
+            lines = []
+            for para in root.iter(W_P):
+                tokens = [(e.text or "").strip() for e in para.iter(W_T)]
+                line = " ".join(t for t in tokens if t)
+                if line:
+                    lines.append(line)
+            return lines
+
+        lines = _para_lines(doc.element.body)
 
         # Also sweep headers/footers (some CVs put the name there)
         for section in doc.sections:
             for hdr in (section.header, section.first_page_header, section.even_page_header):
                 try:
                     if not hdr.is_linked_to_previous:
-                        for elem in hdr._element.iter(W_T):
-                            text = (elem.text or "").strip()
-                            if text:
-                                tokens.append(text)
+                        lines.extend(_para_lines(hdr._element))
                 except Exception:
                     pass
 
-        return " ".join(tokens).strip() or None
+        return "\n".join(lines).strip() or None
     except Exception as e:
         logger.warning("DOCX extraction failed: %s", e)
         return None

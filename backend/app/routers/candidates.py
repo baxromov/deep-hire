@@ -108,6 +108,7 @@ async def _process_one_file(filename: str, file_bytes: bytes) -> dict | None:
                 "filename": filename,
                 "extracted": fields,
                 "minio_key": minio_key,
+                "experience": fields.get("experience") or [],
             },
             "matched_at": datetime.now(timezone.utc),
             **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
