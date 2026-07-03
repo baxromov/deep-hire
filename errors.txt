@@ -1,201 +1,179 @@
-10~x95jhs6ns3.js:1 Uncaught Error: Minified React error #310; visit https://react.dev/errors/310 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
-    at aP (10~x95jhs6ns3.js:1:65130)
-    at a4 (10~x95jhs6ns3.js:1:71587)
-    at Object.a5 [as useEffect] (10~x95jhs6ns3.js:1:71812)
-    at r.useEffect (0y2px2khyh8n1.js:1:9598)
-    at 0.a2w1c.o7d_c.js:1:1859
-    at ay (10~x95jhs6ns3.js:1:63845)
-    at oJ (10~x95jhs6ns3.js:1:84102)
-    at iu (10~x95jhs6ns3.js:1:95704)
-    at sd (10~x95jhs6ns3.js:1:138944)
-    at 10~x95jhs6ns3.js:1:138789
-aP @ 10~x95jhs6ns3.js:1
-a4 @ 10~x95jhs6ns3.js:1
-a5 @ 10~x95jhs6ns3.js:1
-r.useEffect @ 0y2px2khyh8n1.js:1
-(anonymous) @ 0.a2w1c.o7d_c.js:1
-ay @ 10~x95jhs6ns3.js:1
-oJ @ 10~x95jhs6ns3.js:1
-iu @ 10~x95jhs6ns3.js:1
-sd @ 10~x95jhs6ns3.js:1
-(anonymous) @ 10~x95jhs6ns3.js:1
-sf @ 10~x95jhs6ns3.js:1
-se @ 10~x95jhs6ns3.js:1
-sQ @ 10~x95jhs6ns3.js:1
-sU @ 10~x95jhs6ns3.js:1
-sV @ 10~x95jhs6ns3.js:1
-(anonymous) @ 10~x95jhs6ns3.js:1
-XMLHttpRequest.send
-(anonymous) @ 0hma6kn6f1ewn.js:1
-xhr @ 0hma6kn6f1ewn.js:1
-e7 @ 0hma6kn6f1ewn.js:1
-Promise.then
-_request @ 0hma6kn6f1ewn.js:1
-request @ 0hma6kn6f1ewn.js:1
-tn.<computed> @ 0hma6kn6f1ewn.js:1
-(anonymous) @ 0hma6kn6f1ewn.js:1
-get @ 0hma6kn6f1ewn.js:1
-(anonymous) @ 0.a2w1c.o7d_c.js:1
-(anonymous) @ 0jyzzai3bkiki.js:1
-(anonymous) @ 0jyzzai3bkiki.js:1
-(anonymous) @ 0jyzzai3bkiki.js:1
-iv @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-us @ 10~x95jhs6ns3.js:1
-i4 @ 10~x95jhs6ns3.js:1
-sS @ 10~x95jhs6ns3.js:1
-(anonymous) @ 10~x95jhs6ns3.js:1
-sv @ 10~x95jhs6ns3.js:1
-st @ 10~x95jhs6ns3.js:1
-se @ 10~x95jhs6ns3.js:1
-s$ @ 10~x95jhs6ns3.js:1
-O @ 10~x95jhs6ns3.js:1
-postMessage
-i @ 10~x95jhs6ns3.js:1
-O @ 10~x95jhs6ns3.js:1
-postMessage
-i @ 10~x95jhs6ns3.js:1
-n.unstable_scheduleCallback @ 10~x95jhs6ns3.js:1
-sH @ 10~x95jhs6ns3.js:1
-sV @ 10~x95jhs6ns3.js:1
-(anonymous) @ 10~x95jhs6ns3.js:1
+← Назад
+К
+Карабаева Фируза
+📎 Загрузка файла
+87% совпадение
+Оценка соответствия
+
+Итоговый балл
+87%
+Дата оценки: 3 июля 2026 г.
+Открыть вакансию →
+Навыки
+
+Python
+SQL
+Apache Airflow
+Airbyte
+dbt
+Apache Spark
+Apache Iceberg
+ClickHouse
+MSSQL
+Ташкент
+hamkorbank.uz
+1 год 9 месяцев
+Финансовый сектор
+Банк
+Data engineer
+отчётности для ЦБ
+пользователей
+а также поддержку инициатив
+направленных на увеличение использования
+банковских продуктов клиентами.
+NameNode
+3 DataNode) со Spark и Hive
+аналитики данных
+Оптимизировала SQL-запросы
+производит
+Резюме
+
+Загруженное резюме
+
+Просмотреть оригинальный файл резюме
+
+Скачат
+###################################
+vacancies detail pagdagi iz nashiey bazi ni bosganimda kandidate list paydo bo'ladi lekin u kadidate list pageda ham paydo bo'lyapti dublicate bo'lib,
+Кандидаты
+11 кандидатов
+
+Cleverstaff Sync
+Векторизовать
+Импорт Excel
+Загрузить резюме
+Поиск…
+✅ Анализ завершён
+6 / 7 успешно
+Все
+📊 Excel
+📎 Загрузка
+🔗 HH
+🟢 Cleverstaff
+Сортировка:
+
+По баллу ↓
+	Имя	Должность	Город	Зарплата	Навыки	Вектор	CV
+
+И
+Икрамов Акмаль
+Загрузка
+—	—	—
+Python
+Django
+DRF
++27
+—	CV
+
+К
+Карабаева Фируза
+Загрузка
+—	—	—
+Python
+SQL
+Apache Airflow
++22
+—	CV
+
+Т
+Тимофеева Александра
+Загрузка
+—	—	—
+Знание языков Русский — Родной
+Английский — A2 — Элементарный
+PySpark Numpy pandas Аналитика
++15
+—	CV
+
+Х
+Хакимов Сарварбек
+Загрузка
+—	—	—
+системная интеграция
+интернет
+Разработка программного обеспечения
++14
+—	CV
+
+O
+Olesia Lipatova
+Загрузка
+DWH Analyst	—	—
+DWH
+Data Warehouse
+Data Quality
++27
+—	CV
+
+К
+Карабаева Фируза
+Загрузка
+—	—	—
+Python
+SQL
+Apache Airflow
++22
+Вектор	CV
+
+А
+Абдурауф Абидов
+Загрузка
+Data Engineer	—	—
+Python
+PostgreSQL
+Apache Kafka
++14
+Вектор	CV
+
+Т
+Тимофеева Александра
+Загрузка
+—	—	—
+Знание языков Русский — Родной
+Английский — A2 — Элементарный
+PySpark Numpy pandas Аналитика
++15
+Вектор	CV
+
+И
+Икрамов Акмаль
+Загрузка
+—	—	—
+Python
+Django
+DRF
++27
+Вектор	CV
+
+Х
+Хакимов Сарварбек
+Загрузка
+—	—	—
+системная интеграция
+интернет
+Разработка программного обеспечения
++14
+Вектор	CV
+
+O
+Olesia Lipatova
+Загрузка
+DWH Analyst	—	—
+DWH
+Data Warehouse
+Data Quality
++27
+Вектор	CV
+
+
+va yana o'sha xato llm score ishlamadi
