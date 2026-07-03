@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     hh_retry_backoff: list[float] = [2.0, 5.0]  # wait times between 429 retries (exponential backoff)
 
     # Cleverstaff MCP sync
+    cleverstaff_sync_enabled: bool = True
     cleverstaff_mcp_url: str = "http://172.31.174.11:8765/mcp"
     cleverstaff_mcp_token: str = ""
     cleverstaff_sync_hour: int = 2   # daily sync at 2 AM

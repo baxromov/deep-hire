@@ -29,16 +29,19 @@ _scheduler = AsyncIOScheduler()
 async def lifespan(app: FastAPI):
     await init_db()
     await ensure_admin_exists()
-    _scheduler.add_job(
-        sync_cleverstaff,
-        "cron",
-        hour=settings.cleverstaff_sync_hour,
-        minute=0,
-        id="cleverstaff_daily_sync",
-        replace_existing=True,
-    )
+    if settings.cleverstaff_sync_enabled:
+        _scheduler.add_job(
+            sync_cleverstaff,
+            "cron",
+            hour=settings.cleverstaff_sync_hour,
+            minute=0,
+            id="cleverstaff_daily_sync",
+            replace_existing=True,
+        )
+        logger.info("Cleverstaff daily sync scheduled at %02d:00", settings.cleverstaff_sync_hour)
+    else:
+        logger.info("Cleverstaff daily sync is DISABLED (CLEVERSTAFF_SYNC_ENABLED=false)")
     _scheduler.start()
-    logger.info("Cleverstaff daily sync scheduled at %02d:00", settings.cleverstaff_sync_hour)
     yield
     _scheduler.shutdown(wait=False)
     await close_redis()
