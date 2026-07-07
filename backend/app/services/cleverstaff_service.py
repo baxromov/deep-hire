@@ -115,15 +115,15 @@ def build_embedding_text(candidate: dict) -> str:
 def _extract_resume_doc(candidate: dict) -> dict:
     """Return resume document metadata (open_url, filename) from the candidate's documents list."""
     documents = candidate.get("documents") or []
-    # Prefer a doc explicitly typed as resume; CS uses "CleverStaff" as type, so fallback to [0]
+    # Prefer a doc with a usable open_url; CS uses "CleverStaff" as type, so just pick first with URL
     resume_doc = next(
-        (d for d in documents if d.get("type", "").lower() in ("resume", "pdf")),
-        documents[0] if documents else None,
+        (d for d in documents if d.get("open_url")),
+        None,
     )
     if resume_doc is None:
         return {}
     return {
-        "cs_open_url": resume_doc.get("open_url") or "",
+        "cs_open_url": resume_doc["open_url"],
         "filename": resume_doc.get("filename") or "resume.pdf",
         "cs_mimetype": resume_doc.get("mimetype") or "application/pdf",
     }

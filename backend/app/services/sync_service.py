@@ -126,26 +126,40 @@ async def sync_cleverstaff() -> dict:
 
         total_fetched += len(page)
 
+        # Only process candidates that have at least one document with a usable open_url.
+        # Candidates without documents are skipped entirely — no file = not importable.
+        def _has_document(c: dict) -> bool:
+            return any(d.get("open_url") for d in c.get("documents") or [])
+
+        page_with_docs = [c for c in page if _has_document(c)]
+        skipped_no_docs = len(page) - len(page_with_docs)
+        if skipped_no_docs:
+            logger.info("Skipping %d candidates with no document/open_url", skipped_no_docs)
+
+        if not page_with_docs:
+            offset += PAGE_LIMIT
+            if global_total and offset >= global_total:
+                break
+            await asyncio.sleep(0.1)
+            continue
+
         # Batch-check Redis: which candidate_ids are already synced?
-        cids = [c.get("candidate_id", "") for c in page]
+        cids = [c.get("candidate_id", "") for c in page_with_docs]
         is_known = await redis.smismember(REDIS_KEY, *cids)
-        new_candidates = [c for c, known in zip(page, is_known) if not known]
-        known_candidates = [c for c, known in zip(page, is_known) if known]
-        skipped = len(page) - len(new_candidates)
+        new_candidates = [c for c, known in zip(page_with_docs, is_known) if not known]
+        known_candidates = [c for c, known in zip(page_with_docs, is_known) if known]
 
         logger.info(
-            "Page offset=%d: fetched=%d new=%d already_synced=%d",
-            offset, len(page), len(new_candidates), skipped,
+            "Page offset=%d: fetched=%d (with_docs=%d) new=%d already_synced=%d no_docs_skipped=%d",
+            offset, len(page), len(page_with_docs), len(new_candidates),
+            len(known_candidates), skipped_no_docs,
         )
 
-        # For already-synced candidates: patch document metadata if MCP now returns documents
-        # but the stored record is missing cs_open_url (no re-embedding needed)
+        # For already-synced candidates: patch cs_open_url if it was missing (no re-embedding)
         if known_candidates:
             col = Candidate.get_motor_collection()
             doc_patch_ops = []
             for cand in known_candidates:
-                if not cand.get("documents"):
-                    continue
                 doc_meta = cs._extract_resume_doc(cand)
                 if not doc_meta.get("cs_open_url"):
                     continue
