@@ -3,7 +3,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
-from urllib.parse import quote as urlquote
+from urllib.parse import quote as urlquote, urlparse, urlunparse
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
@@ -62,6 +62,15 @@ async def get_candidate_resume(candidate_id: str):
     # CleverStaff candidates: proxy the file from the MCP open_url
     cs_open_url = raw.get("cs_open_url")
     if cs_open_url and (doc.hh_resume_id or "").startswith("cs:"):
+        # Cleverstaff MCP server reports 0.0.0.0 as the file host.
+        # Replace it with the actual MCP server host so the backend can reach it.
+        parsed_file = urlparse(cs_open_url)
+        if parsed_file.hostname == "0.0.0.0":
+            mcp_host = urlparse(app_settings.cleverstaff_mcp_url).hostname or "localhost"
+            port = parsed_file.port
+            netloc = f"{mcp_host}:{port}" if port else mcp_host
+            cs_open_url = urlunparse(parsed_file._replace(netloc=netloc))
+            logger.debug("CS resume URL normalized: %s", cs_open_url)
         try:
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 resp = await client.get(
@@ -69,10 +78,14 @@ async def get_candidate_resume(candidate_id: str):
                     headers={"Authorization": f"Bearer {app_settings.cleverstaff_mcp_token}"},
                 )
                 resp.raise_for_status()
+            # Use content-type from response when available (more reliable than filename guess)
+            actual_ct = resp.headers.get("content-type", content_type).split(";")[0].strip()
+            actual_disp = "inline" if "pdf" in actual_ct else disposition
+            actual_content_disposition = f"{actual_disp}; filename*=UTF-8''{encoded_filename}"
             return Response(
                 content=resp.content,
-                media_type=resp.headers.get("content-type", content_type),
-                headers={"Content-Disposition": content_disposition},
+                media_type=actual_ct,
+                headers={"Content-Disposition": actual_content_disposition},
             )
         except Exception as exc:
             logger.error("CS resume fetch failed url=%s: %s", cs_open_url, exc)

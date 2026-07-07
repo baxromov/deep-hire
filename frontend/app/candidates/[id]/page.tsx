@@ -593,18 +593,25 @@ export default function CandidateDetailPage({ params }: Props) {
               </a>
             </div>
 
-            {/* Inline PDF preview for uploaded resumes */}
-            {candidate.resume_url.startsWith("/api/") &&
-              (candidate.raw_resume_json?.filename as string | undefined)?.toLowerCase().endsWith(".pdf") && (
-              <div className="mt-4 overflow-hidden rounded-lg border border-blue-200 bg-white">
-                <iframe
-                  src={`${API_BASE}${candidate.resume_url}`}
-                  title="Резюме"
-                  className="w-full"
-                  style={{ height: "780px" }}
-                />
-              </div>
-            )}
+            {/* Inline PDF preview — shown for PDFs from any source */}
+            {candidate.resume_url.startsWith("/api/") && (() => {
+              const mimetype = candidate.raw_resume_json?.cs_mimetype as string | undefined;
+              const filename = candidate.raw_resume_json?.filename as string | undefined;
+              const isPdf =
+                mimetype === "application/pdf" ||
+                (!mimetype && filename?.toLowerCase().endsWith(".pdf"));
+              if (!isPdf) return null;
+              return (
+                <div className="mt-4 overflow-hidden rounded-lg border border-blue-200 bg-white">
+                  <iframe
+                    src={`${API_BASE}${candidate.resume_url}`}
+                    title="Резюме"
+                    className="w-full"
+                    style={{ height: "780px" }}
+                  />
+                </div>
+              );
+            })()}
           </Section>
         </div>
       )}
