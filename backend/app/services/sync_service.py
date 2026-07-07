@@ -36,33 +36,41 @@ async def _upsert_batch(qdrant, candidates: list[dict], vectors: list[list[float
         cid = cand.get("candidate_id", "")
         hh_resume_id = f"cs:{cid}"
 
+        payload = cs.build_payload(cand)
         points.append(qmodels.PointStruct(
             id=_point_id(cid),
             vector=vec,
-            payload=cs.build_payload(cand),
+            payload=payload,
         ))
 
         full_name = cand.get("full_name") or ""
         name_parts = full_name.split(" ", 1)
         skills = [s["skill"] for s in cand.get("skills", []) if s.get("skill")]
         salary = cand.get("salary")
+        raw_json = payload["raw_resume_json"]
 
+        # Filter targets only pool records (vacancy_id=None).
+        # $setOnInsert keeps vacancy_id=None on new inserts; on update the $set
+        # does not include vacancy_id so a previously-matched record is never
+        # overwritten with None.
         mongo_ops.append(UpdateOne(
             {"vacancy_id": None, "hh_resume_id": hh_resume_id},
-            {"$set": {
-                "hh_resume_id": hh_resume_id,
-                "vacancy_id": None,
-                "first_name": name_parts[0] if name_parts else "",
-                "last_name": name_parts[1] if len(name_parts) > 1 else "",
-                "title": cand.get("position") or "",
-                "area": cand.get("region") or "",
-                "skills": skills,
-                "salary_amount": int(salary) if salary is not None else None,
-                "salary_currency": cand.get("currency"),
-                "raw_resume_json": {**cand, "source": "cleverstaff"},
-                "is_vectorized": True,
-                "matched_at": now,
-            }},
+            {
+                "$set": {
+                    "hh_resume_id": hh_resume_id,
+                    "first_name": name_parts[0] if name_parts else "",
+                    "last_name": name_parts[1] if len(name_parts) > 1 else "",
+                    "title": cand.get("position") or "",
+                    "area": cand.get("region") or "",
+                    "skills": skills,
+                    "salary_amount": int(salary) if salary is not None else None,
+                    "salary_currency": cand.get("currency"),
+                    "raw_resume_json": raw_json,
+                    "is_vectorized": True,
+                    "matched_at": now,
+                },
+                "$setOnInsert": {"vacancy_id": None},
+            },
             upsert=True,
         ))
 

@@ -241,17 +241,31 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
       </td>
       <td className="px-3 py-3 pr-4">
         {candidate.relevance_score != null && (
-          <span
-            className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-              candidate.relevance_score >= 70
-                ? "bg-green-50 text-green-700"
-                : candidate.relevance_score >= 40
-                ? "bg-yellow-50 text-yellow-700"
-                : "bg-red-50 text-red-600"
-            }`}
-          >
-            {candidate.relevance_score}%
-          </span>
+          <div>
+            <span
+              className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
+                candidate.relevance_score >= 70
+                  ? "bg-green-50 text-green-700"
+                  : candidate.relevance_score >= 40
+                  ? "bg-yellow-50 text-yellow-700"
+                  : "bg-red-50 text-red-600"
+              }`}
+            >
+              {candidate.relevance_score}%
+            </span>
+            {candidate.score_criteria && candidate.score_criteria.length > 0 && (
+              <div className="mt-1.5 space-y-0.5">
+                {candidate.score_criteria.map((c, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{c.name}:</span>
+                    <span className={`text-[10px] font-semibold ${
+                      c.score >= 70 ? "text-green-600" : c.score >= 40 ? "text-yellow-600" : "text-red-500"
+                    }`}>{c.score}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </td>
     </tr>

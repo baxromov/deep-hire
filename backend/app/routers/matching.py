@@ -55,6 +55,13 @@ def _make_scorer(vacancy, sem: asyncio.Semaphore):
                 s if isinstance(s, str) else s.get("name", "")
                 for s in (resume.get("skill_set") or [])
             ]
+            raw = resume.get("raw_resume_json") or {}
+            work_exp = (
+                raw.get("work_experience")
+                or raw.get("extracted", {}).get("experience")
+                or resume.get("work_experience")
+                or []
+            )
             sc, _rs, _cr = await ai_service.score_candidate(
                 vacancy_title=vacancy.title or "",
                 vacancy_description=vacancy.description or "",
@@ -62,6 +69,7 @@ def _make_scorer(vacancy, sem: asyncio.Semaphore):
                 experience=vacancy.experience or "",
                 candidate_title=resume.get("title", ""),
                 candidate_skills=skills,
+                work_experience=work_exp[:3],
             )
         return resume, sc
     return _score
@@ -201,6 +209,7 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
         candidate_title=fields.get("title", ""),
         candidate_skills=fields.get("skills", []),
         vacancy_description=vacancy.description or "",
+        work_experience=(fields.get("experience") or [])[:3],
     )
 
     # Use file hash as a stable unique ID
@@ -1075,6 +1084,13 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                                     s if isinstance(s, str) else s.get("name", "")
                                     for s in (resume.get("skill_set") or [])
                                 ]
+                                raw_r = resume.get("raw_resume_json") or {}
+                                work_exp_r = (
+                                    raw_r.get("work_experience")
+                                    or raw_r.get("extracted", {}).get("experience")
+                                    or resume.get("work_experience")
+                                    or []
+                                )
                                 llm_sc, reasoning, criteria = await ai_service.score_candidate(
                                     vacancy_title=vacancy.title or "",
                                     vacancy_description=vacancy.description or "",
@@ -1082,6 +1098,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                                     experience=vacancy.experience or "",
                                     candidate_title=resume.get("title", ""),
                                     candidate_skills=cand_skills,
+                                    work_experience=work_exp_r[:3],
                                 )
                                 # Fall back to reranker score if LLM failed (returns 0)
                                 final_sc = llm_sc if llm_sc > 0 else reranker_sc

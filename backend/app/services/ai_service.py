@@ -217,6 +217,31 @@ async def extract_resume_fields(text: str) -> Dict[str, Any]:
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
+def _format_work_experience(work_experience: list | None) -> str:
+    if not work_experience:
+        return ""
+    lines = []
+    for entry in work_experience[:3]:
+        if isinstance(entry, dict):
+            company = entry.get("company") or entry.get("employer", {})
+            if isinstance(company, dict):
+                company = company.get("name", "")
+            position = entry.get("position") or entry.get("title") or ""
+            start = entry.get("start") or entry.get("from_date") or ""
+            end = entry.get("end") or entry.get("to_date") or "present"
+            desc = entry.get("description") or ""
+            if isinstance(desc, str):
+                desc = desc[:150].strip()
+            period = f"{str(start)[:7]}–{str(end)[:7]}" if start else ""
+            line = f"  • {company} — {position}"
+            if period:
+                line += f" ({period})"
+            if desc:
+                line += f"\n    {desc}"
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def _build_score_prompt(
     vacancy_title: str,
     vacancy_description: str,
@@ -225,6 +250,7 @@ def _build_score_prompt(
     candidate_title: str,
     candidate_skills: list,
     crit: list[dict],
+    work_experience: list | None = None,
 ) -> str:
     n = len(crit)
     criteria_lines = "\n".join(
@@ -239,17 +265,19 @@ def _build_score_prompt(
         f'name="{c["name"]}" weight={c["weight"]}'
         for c in crit
     )
+    exp_block = _format_work_experience(work_experience)
+    work_exp_section = f"\n- Work experience:\n{exp_block}" if exp_block else ""
     return f"""You are a senior recruiter. Evaluate how well this candidate matches the vacancy.
 
 VACANCY:
 - Title: {vacancy_title or ""}
-- Required skills: {", ".join(skills[:10])}
+- Required skills: {", ".join(skills[:20])}
 - Experience required: {experience or ""}
 - Description: {(vacancy_description or "")[:600]}
 
 CANDIDATE:
 - Job title: {candidate_title or ""}
-- Skills: {", ".join(candidate_skills[:10])}
+- Skills: {", ".join(candidate_skills[:20])}{work_exp_section}
 
 Evaluate across EXACTLY {n} criteria (0-100 each):
 {criteria_lines}
@@ -257,6 +285,32 @@ Evaluate across EXACTLY {n} criteria (0-100 each):
 Final score = round({formula}).
 For each criterion write a short comment IN RUSSIAN (1 sentence).
 Criteria details: {criteria_desc}"""
+
+
+def _parse_score_json(raw: str, crit: list[dict]) -> tuple[int, str, list] | None:
+    """Try to extract score/reasoning/criteria from a plain JSON string."""
+    try:
+        data = json.loads(_strip_fences(raw))
+        score = int(data.get("score", 0))
+        if not (0 <= score <= 100):
+            return None
+        reasoning = str(data.get("reasoning", ""))
+        criteria_raw = data.get("criteria", [])
+        parsed_crit: list[dict] = []
+        if isinstance(criteria_raw, list):
+            for item in criteria_raw:
+                if isinstance(item, dict):
+                    parsed_crit.append({
+                        "name":    str(item.get("name", "")),
+                        "weight":  int(item.get("weight", 0)),
+                        "score":   int(item.get("score", 0)),
+                        "comment": str(item.get("comment", "")),
+                    })
+        if not parsed_crit:
+            parsed_crit = [{"name": c["name"], "weight": c["weight"], "score": score, "comment": ""} for c in crit]
+        return score, reasoning, parsed_crit
+    except Exception:
+        return None
 
 
 async def score_candidate(
@@ -268,6 +322,7 @@ async def score_candidate(
     vacancy_description: str = "",
     weights: dict | None = None,
     criteria: list | None = None,
+    work_experience: list | None = None,
 ) -> tuple[int, str, list]:
     crit = _resolve_criteria(criteria, weights)
     prompt = _build_score_prompt(
@@ -278,15 +333,41 @@ async def score_candidate(
         candidate_title=candidate_title,
         candidate_skills=candidate_skills,
         crit=crit,
+        work_experience=work_experience,
     )
+
+    # Tier 1: structured output (function calling)
     try:
         llm = _get_llm()
         structured = llm.with_structured_output(ScoreResult)
         result_obj: ScoreResult = await structured.ainvoke(prompt)
-        return result_obj.score, result_obj.reasoning, result_obj.criteria
+        criteria_out = result_obj.criteria or []
+        if not criteria_out:
+            criteria_out = [{"name": c["name"], "weight": c["weight"], "score": result_obj.score, "comment": ""} for c in crit]
+        return result_obj.score, result_obj.reasoning, criteria_out
     except Exception as e:
-        logger.error("score_candidate failed: %s | model=%s", e, settings.ollama_model, exc_info=True)
-        return 0, "", []
+        logger.warning("score_candidate structured output failed: %s | model=%s — trying plain JSON", e, settings.ollama_model)
+
+    # Tier 2: plain chat + JSON parse
+    json_prompt = (
+        prompt
+        + '\n\nReturn ONLY a valid JSON object (no markdown, no extra text):\n'
+        '{"score": <0-100>, "reasoning": "<1-2 sentences in Russian>", '
+        '"criteria": [{"name": "...", "weight": <int>, "score": <0-100>, "comment": "..."}]}'
+    )
+    try:
+        llm = _get_llm()
+        response = await llm.ainvoke(json_prompt)
+        raw = response.content if hasattr(response, "content") else str(response)
+        parsed = _parse_score_json(raw, crit)
+        if parsed:
+            logger.info("score_candidate: plain JSON fallback OK — score=%d", parsed[0])
+            return parsed
+        logger.warning("score_candidate: plain JSON parse returned None for response: %r", raw[:200])
+    except Exception as e:
+        logger.error("score_candidate: plain JSON also failed: %s", e, exc_info=True)
+
+    return 0, "", []
 
 
 # ── Search query generation ───────────────────────────────────────────────────

@@ -44,26 +44,48 @@ async def get_candidate(candidate_id: str):
 
 
 async def get_candidate_resume(candidate_id: str):
+    import httpx
+    from app.config import settings as app_settings
+
     doc = await candidate_service.get_candidate(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    minio_key = (doc.raw_resume_json or {}).get("minio_key")
+    raw = doc.raw_resume_json or {}
+    filename = raw.get("filename", "resume.pdf")
+    is_pdf = filename.lower().endswith(".pdf")
+    content_type = "application/pdf" if is_pdf else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    disposition = "inline" if is_pdf else "attachment"
+    encoded_filename = urlquote(filename, safe="")
+    content_disposition = f"{disposition}; filename*=UTF-8''{encoded_filename}"
+
+    # CleverStaff candidates: proxy the file from the MCP open_url
+    cs_open_url = raw.get("cs_open_url")
+    if cs_open_url and (doc.hh_resume_id or "").startswith("cs:"):
+        try:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                resp = await client.get(
+                    cs_open_url,
+                    headers={"Authorization": f"Bearer {app_settings.cleverstaff_mcp_token}"},
+                )
+                resp.raise_for_status()
+            return Response(
+                content=resp.content,
+                media_type=resp.headers.get("content-type", content_type),
+                headers={"Content-Disposition": content_disposition},
+            )
+        except Exception as exc:
+            logger.error("CS resume fetch failed url=%s: %s", cs_open_url, exc)
+            raise HTTPException(status_code=502, detail="Could not fetch resume from CleverStaff")
+
+    # MinIO-stored candidates (file uploads)
+    minio_key = raw.get("minio_key")
     if not minio_key:
         raise HTTPException(status_code=404, detail="Resume file not available")
 
     file_bytes = await minio_service.get_file_bytes(minio_key)
     if file_bytes is None:
         raise HTTPException(status_code=404, detail="Resume file not found in storage")
-
-    filename = (doc.raw_resume_json or {}).get("filename", "resume.pdf")
-    is_pdf = filename.lower().endswith(".pdf")
-    content_type = "application/pdf" if is_pdf else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    disposition = "inline" if is_pdf else "attachment"
-
-    # RFC 5987: encode filename so Cyrillic / Unicode chars don't crash latin-1 header encoding
-    encoded_filename = urlquote(filename, safe="")
-    content_disposition = f"{disposition}; filename*=UTF-8''{encoded_filename}"
 
     return Response(
         content=file_bytes,
@@ -323,9 +345,26 @@ async def explain_score(candidate_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    vacancy = await Vacancy.find_one({"_id": doc.vacancy_id})
-    if not vacancy:
-        raise HTTPException(status_code=404, detail="Matched vacancy not found")
+    vacancy = None
+    if doc.vacancy_id:
+        vacancy = await Vacancy.find_one({"_id": doc.vacancy_id})
+
+    # Pool candidates (vacancy_id=None): find the best approved vacancy using title + skill overlap
+    if vacancy is None:
+        vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
+        if not vacancies:
+            raise HTTPException(status_code=404, detail="No approved vacancies to score against")
+
+        def _vacancy_fit(v: Vacancy) -> float:
+            title_words = set((doc.title or "").lower().split())
+            v_words = set((v.title or "").lower().split())
+            title_overlap = len(title_words & v_words)
+            cand_skills = set(s.lower() for s in (doc.skills or []))
+            v_skills = set(s.lower() for s in (v.skills or []))
+            skill_overlap = len(cand_skills & v_skills)
+            return title_overlap * 2 + skill_overlap
+
+        vacancy = max(vacancies, key=_vacancy_fit, default=vacancies[0])
 
     candidate_title = doc.title or ""
     candidate_skills = doc.skills or []
@@ -335,6 +374,13 @@ async def explain_score(candidate_id: str):
     if raw.get("source") == "xlsx":
         candidate_title = raw.get("internship_name") or candidate_title
 
+    # Extract work experience from raw data (Cleverstaff, file, or xlsx sources)
+    raw_experience = (
+        raw.get("work_experience")
+        or raw.get("extracted", {}).get("experience")
+        or []
+    )
+
     new_score, reasoning, criteria = await ai_service.score_candidate(
         vacancy_title=vacancy.title or "",
         required_skills=vacancy.skills,
@@ -343,15 +389,24 @@ async def explain_score(candidate_id: str):
         candidate_skills=candidate_skills,
         vacancy_description=vacancy.description or "",
         criteria=vacancy.score_criteria,
+        work_experience=raw_experience[:3],
     )
 
-    # Persist reasoning + criteria; only update score if LLM succeeded (> 0)
-    raw["score_reasoning"] = reasoning
-    raw["score_criteria"] = criteria
-    doc.raw_resume_json = raw
-    if new_score > 0:
-        doc.relevance_score = new_score
-    await doc.save()
+    llm_ok = new_score > 0 or bool(reasoning)
+    if llm_ok:
+        # Only persist when LLM returned something useful — don't overwrite good data with empty strings.
+        raw["score_reasoning"] = reasoning
+        raw["score_criteria"] = criteria
+        doc.raw_resume_json = raw
+        if new_score > 0:
+            doc.relevance_score = new_score
+        await doc.save()
+    else:
+        # LLM completely failed — surface the error so the frontend can show a retry prompt.
+        raise HTTPException(
+            status_code=503,
+            detail="LLM scoring unavailable; existing score preserved.",
+        )
 
     effective_score = new_score if new_score > 0 else (doc.relevance_score or 0)
     return {"reasoning": reasoning, "criteria": criteria, "score": effective_score}
@@ -401,7 +456,7 @@ async def _run_rescore(resume: bool = False) -> None:
         sem = asyncio.Semaphore(SCORE_CONCURRENCY)
 
         # helper: score one title against all vacancies (uses each vacancy's own weights)
-        async def best_score_for(title: str, skills: list) -> tuple[int, str, list, object]:
+        async def best_score_for(title: str, skills: list, work_experience: list | None = None) -> tuple[int, str, list, object]:
             async def _one(v: Vacancy) -> tuple[int, str, list]:
                 async with sem:
                     return await ai_service.score_candidate(
@@ -412,6 +467,7 @@ async def _run_rescore(resume: bool = False) -> None:
                         candidate_skills=skills,
                         vacancy_description=v.description or "",
                         criteria=v.score_criteria,
+                        work_experience=work_experience,
                     )
             results = await asyncio.gather(*[_one(v) for v in vacancies])
             scores = [r[0] for r in results]
@@ -462,12 +518,16 @@ async def _run_rescore(resume: bool = False) -> None:
             title = doc.title or ""
             skills = doc.skills or []
             raw = doc.raw_resume_json or {}
+            work_experience: list = []
             if raw.get("source") == "file":
                 extracted = raw.get("extracted") or {}
                 title = extracted.get("title") or title
                 skills = extracted.get("skills") or skills
+                work_experience = extracted.get("experience") or []
+            else:
+                work_experience = raw.get("work_experience") or []
 
-            sc, rs, cr, _best_vacancy = await best_score_for(title, skills)
+            sc, rs, cr, _best_vacancy = await best_score_for(title, skills, work_experience[:3])
 
             # Use direct update_one to avoid DuplicateKeyError on the
             # (vacancy_id, hh_resume_id) unique compound index.

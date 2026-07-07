@@ -20,9 +20,10 @@ function VectorBadge({ isVectorized }: { isVectorized: boolean }) {
 }
 
 const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
-  xlsx:  { label: "Excel",    cls: "bg-green-50 text-green-700" },
-  file:  { label: "Загрузка", cls: "bg-purple-50 text-purple-700" },
-  hh:    { label: "HH",       cls: "bg-green-50 text-green-700" },
+  xlsx:        { label: "Excel",       cls: "bg-green-50 text-green-700" },
+  file:        { label: "Загрузка",    cls: "bg-purple-50 text-purple-700" },
+  hh:          { label: "HH",          cls: "bg-blue-50 text-blue-700" },
+  cleverstaff: { label: "Cleverstaff", cls: "bg-teal-50 text-teal-700" },
 };
 
 function SourceBadge({ source }: { source: string | null }) {

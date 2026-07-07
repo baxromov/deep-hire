@@ -76,7 +76,9 @@ async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> i
         matched_hh_ids.append(data["hh_resume_id"])
         ops.append(
             UpdateOne(
-                {"vacancy_id": vacancy.id, "hh_resume_id": data["hh_resume_id"]},
+                # Match either an existing vacancy match OR a pool copy (vacancy_id=None).
+                # This converts a file-uploaded candidate in-place instead of creating a duplicate.
+                {"hh_resume_id": data["hh_resume_id"], "vacancy_id": {"$in": [None, vacancy.id]}},
                 {"$set": data},
                 upsert=True,
             )
@@ -98,7 +100,7 @@ async def get_all_candidates(
     vacancy_id: Optional[str] = None,
     search: Optional[str] = None,
     sort_by: str = "score",       # "score" | "date" | "name"
-    source: Optional[str] = None, # "xlsx" | "file" | "hh" | None
+    source: Optional[str] = None, # "xlsx" | "file" | "hh" | "cleverstaff" | None
 ):
     query: dict = {}
     if vacancy_id:
@@ -122,9 +124,44 @@ async def get_all_candidates(
         "name":  [("first_name", pymongo.ASCENDING), ("last_name", pymongo.ASCENDING)],
     }
     sort_spec = _SORT.get(sort_by, _SORT["score"])
+    sort_stage = {k: v for k, v in sort_spec}
 
-    total = await Candidate.find(query).count()
-    items = await Candidate.find(query).skip(skip).limit(limit).sort(sort_spec).to_list()
+    if vacancy_id:
+        # Specific vacancy filter — no dedup needed, return as-is
+        total = await Candidate.find(query).count()
+        items = await Candidate.find(query).skip(skip).limit(limit).sort(sort_spec).to_list()
+        return items, total
+
+    # No vacancy filter: deduplicate by hh_resume_id so pool (vacancy_id=None) and
+    # matched (vacancy_id=X) copies of the same candidate appear only once.
+    # $first after sorting picks the matched/scored record over the pool copy.
+    col = Candidate.get_motor_collection()
+    pipeline = [
+        {"$match": query},
+        {"$sort": sort_stage},
+        {"$group": {
+            "_id": "$hh_resume_id",
+            "doc": {"$first": "$$ROOT"},
+        }},
+        {"$replaceRoot": {"newRoot": "$doc"}},
+        {"$sort": sort_stage},
+        {"$facet": {
+            "total": [{"$count": "count"}],
+            "items": [{"$skip": skip}, {"$limit": limit}],
+        }},
+    ]
+    result = await col.aggregate(pipeline).to_list(1)
+    if not result:
+        return [], 0
+    total = result[0]["total"][0]["count"] if result[0].get("total") else 0
+    raw_items = result[0].get("items", [])
+    items = []
+    for raw in raw_items:
+        try:
+            raw["id"] = raw.pop("_id", None)
+            items.append(Candidate.model_validate(raw))
+        except Exception:
+            pass
     return items, total
 
 

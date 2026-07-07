@@ -21,9 +21,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const SOURCE_CONFIG: Record<string, { label: string; cls: string; icon: string }> = {
-  xlsx:  { label: "Импорт Excel",    cls: "bg-green-50 text-green-700 border-green-200",   icon: "📊" },
-  file:  { label: "Загрузка файла",  cls: "bg-purple-50 text-purple-700 border-purple-200", icon: "📎" },
-  hh:    { label: "HeadHunter",      cls: "bg-blue-50 text-blue-700 border-blue-200",       icon: "🔗" },
+  xlsx:         { label: "Импорт Excel",    cls: "bg-green-50 text-green-700 border-green-200",   icon: "📊" },
+  file:         { label: "Загрузка файла",  cls: "bg-purple-50 text-purple-700 border-purple-200", icon: "📎" },
+  hh:           { label: "HeadHunter",      cls: "bg-blue-50 text-blue-700 border-blue-200",       icon: "🔗" },
+  cleverstaff:  { label: "Cleverstaff",     cls: "bg-teal-50 text-teal-700 border-teal-200",       icon: "🤝" },
 };
 
 
@@ -31,6 +32,7 @@ export default function CandidateDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
   const [explaining, setExplaining] = useState(false);
+  const [explainFailed, setExplainFailed] = useState(false);
   const [localReasoning, setLocalReasoning] = useState<string | null>(null);
   const [localCriteria, setLocalCriteria] = useState<ScoreCriterion[] | null>(null);
   const [localScore, setLocalScore] = useState<number | null>(null);
@@ -44,6 +46,7 @@ export default function CandidateDetailPage({ params }: Props) {
   const handleExplain = async () => {
     if (!candidate) return;
     setExplaining(true);
+    setExplainFailed(false);
     try {
       const res = await candidateApi.explainScore(id);
       setLocalReasoning(res.data.reasoning);
@@ -59,6 +62,7 @@ export default function CandidateDetailPage({ params }: Props) {
           : `Балл подтверждён: ${updated}%`
       );
     } catch {
+      setExplainFailed(true);
       toast.error("Не удалось сгенерировать объяснение");
     } finally {
       setExplaining(false);
@@ -467,6 +471,19 @@ export default function CandidateDetailPage({ params }: Props) {
                 </div>
               )}
 
+              {/* Retry prompt — shown when auto-explain was attempted but LLM was unavailable */}
+              {!displayReasoning && !displayCriteria && !explaining && explainFailed && (
+                <div className="flex items-center justify-between rounded-lg border border-dashed border-orange-200 bg-orange-50/40 px-4 py-3 text-sm text-orange-600">
+                  <span>ИИ недоступен. Попробуйте ещё раз.</span>
+                  <button
+                    onClick={handleExplain}
+                    className="ml-4 text-xs font-medium text-orange-600 hover:text-orange-800 transition-colors"
+                  >
+                    ↻ Повторить
+                  </button>
+                </div>
+              )}
+
               {/* Regenerate link — shown when data already exists */}
               {(displayReasoning || (displayCriteria && displayCriteria.length > 0)) && (
                 <button
@@ -548,10 +565,16 @@ export default function CandidateDetailPage({ params }: Props) {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-800">
-                  {candidate.resume_url.startsWith("/api/") ? "Загруженное резюме" : "Полное резюме на HH.uz"}
+                  {candidate.source === "cleverstaff"
+                    ? "Резюме из Cleverstaff"
+                    : candidate.resume_url.startsWith("/api/")
+                    ? "Загруженное резюме"
+                    : "Полное резюме на HH.uz"}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">
-                  {candidate.resume_url.startsWith("/api/")
+                  {candidate.source === "cleverstaff"
+                    ? "Оригинальный файл резюме из базы Cleverstaff"
+                    : candidate.resume_url.startsWith("/api/")
                     ? "Просмотреть оригинальный файл резюме"
                     : "Открывает публичный профиль кандидата на HeadHunter Узбекистан"}
                 </p>
@@ -562,7 +585,11 @@ export default function CandidateDetailPage({ params }: Props) {
                 rel="noopener noreferrer"
                 className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
               >
-                {candidate.resume_url.startsWith("/api/") ? "Скачать резюме ↓" : "Открыть на HH.uz →"}
+                {candidate.source === "cleverstaff"
+                  ? "Открыть резюме ↗"
+                  : candidate.resume_url.startsWith("/api/")
+                  ? "Скачать резюме ↓"
+                  : "Открыть на HH.uz →"}
               </a>
             </div>
 

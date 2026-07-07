@@ -112,6 +112,21 @@ def build_embedding_text(candidate: dict) -> str:
     return ". ".join(filter(None, parts))
 
 
+def _extract_resume_doc(candidate: dict) -> dict:
+    """Return resume document metadata (open_url, filename) from the candidate's documents list."""
+    documents = candidate.get("documents") or []
+    resume_doc = next((d for d in documents if d.get("type") == "resume"), None)
+    if resume_doc is None and documents:
+        resume_doc = documents[0]
+    if resume_doc is None:
+        return {}
+    return {
+        "cs_open_url": resume_doc.get("open_url"),
+        "filename": resume_doc.get("filename"),
+        "cs_mimetype": resume_doc.get("mimetype"),
+    }
+
+
 def build_payload(candidate: dict) -> dict:
     """Map Cleverstaff candidate to uzbek_candidates payload schema."""
     cid = candidate.get("candidate_id", "")
@@ -123,6 +138,16 @@ def build_payload(candidate: dict) -> dict:
 
     salary = candidate.get("salary")
     salary_amount = int(salary) if salary is not None else None
+
+    doc_meta = _extract_resume_doc(candidate)
+
+    # Strip large base64 blobs — use open_url to fetch on demand instead
+    candidate_stripped = {k: v for k, v in candidate.items() if k != "documents"}
+    if candidate.get("documents"):
+        candidate_stripped["documents"] = [
+            {k2: v2 for k2, v2 in d.items() if k2 != "data_base64"}
+            for d in candidate["documents"]
+        ]
 
     return {
         "hh_resume_id": f"cs:{cid}",
@@ -136,5 +161,5 @@ def build_payload(candidate: dict) -> dict:
         "employment_type": candidate.get("employment_type") or "",
         "schedule": "",
         "last_indexed_at": datetime.now(timezone.utc).isoformat(),
-        "raw_resume_json": {**candidate, "source": "cleverstaff"},
+        "raw_resume_json": {**candidate_stripped, "source": "cleverstaff", **doc_meta},
     }

@@ -33,6 +33,10 @@ class CandidateResponse(BaseModel):
     @classmethod
     def from_doc(cls, doc) -> "CandidateResponse":
         raw: dict = doc.raw_resume_json or {}
+        resume_url = doc.resume_url
+        # CS candidates with a document open_url — expose our proxy endpoint
+        if not resume_url and raw.get("cs_open_url"):
+            resume_url = f"/api/candidates/{doc.id}/resume"
         return cls(
             id=str(doc.id),
             vacancy_id=str(doc.vacancy_id),
@@ -47,7 +51,7 @@ class CandidateResponse(BaseModel):
             salary_currency=doc.salary_currency,
             skills=doc.skills,
             photo_url=doc.photo_url,
-            resume_url=doc.resume_url,
+            resume_url=resume_url,
             relevance_score=doc.relevance_score,
             is_vectorized=doc.is_vectorized,
             matched_at=doc.matched_at,
