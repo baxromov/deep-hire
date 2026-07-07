@@ -130,12 +130,45 @@ async def sync_cleverstaff() -> dict:
         cids = [c.get("candidate_id", "") for c in page]
         is_known = await redis.smismember(REDIS_KEY, *cids)
         new_candidates = [c for c, known in zip(page, is_known) if not known]
+        known_candidates = [c for c, known in zip(page, is_known) if known]
         skipped = len(page) - len(new_candidates)
 
         logger.info(
             "Page offset=%d: fetched=%d new=%d already_synced=%d",
             offset, len(page), len(new_candidates), skipped,
         )
+
+        # For already-synced candidates: patch document metadata if MCP now returns documents
+        # but the stored record is missing cs_open_url (no re-embedding needed)
+        if known_candidates:
+            col = Candidate.get_motor_collection()
+            doc_patch_ops = []
+            for cand in known_candidates:
+                if not cand.get("documents"):
+                    continue
+                doc_meta = cs._extract_resume_doc(cand)
+                if not doc_meta.get("cs_open_url"):
+                    continue
+                hh_resume_id = f"cs:{cand.get('candidate_id', '')}"
+                stripped_docs = [
+                    {k: v for k, v in d.items() if k != "data_base64"}
+                    for d in cand["documents"]
+                ]
+                doc_patch_ops.append(UpdateOne(
+                    {"hh_resume_id": hh_resume_id, "raw_resume_json.cs_open_url": {"$exists": False}},
+                    {"$set": {
+                        "raw_resume_json.cs_open_url": doc_meta["cs_open_url"],
+                        "raw_resume_json.filename": doc_meta.get("filename", "resume.pdf"),
+                        "raw_resume_json.cs_mimetype": doc_meta.get("cs_mimetype", "application/pdf"),
+                        "raw_resume_json.documents": stripped_docs,
+                    }},
+                ))
+            if doc_patch_ops:
+                patch_result = await col.bulk_write(doc_patch_ops, ordered=False)
+                logger.info(
+                    "Doc-metadata patch: updated %d existing CS candidates with cs_open_url",
+                    patch_result.modified_count,
+                )
 
         if new_candidates:
             for i in range(0, len(new_candidates), BATCH_EMBED):
