@@ -72,8 +72,21 @@ async def _call_mcp(arguments: dict) -> dict:
         data = r.json()
     raw_text = data["result"]["content"][0]["text"]
     result = json.loads(raw_text)
-    logger.debug("MCP response → total=%s candidates=%s",
-                 result.get("total"), len(result.get("candidates", [])))
+    candidates = result.get("candidates", [])
+    logger.info(
+        "MCP response → total=%s candidates=%s",
+        result.get("total"), len(candidates),
+    )
+    for i, cand in enumerate(candidates):
+        docs = cand.get("documents") or []
+        logger.info(
+            "  [%d] candidate_id=%s name=%r docs=%d open_urls=%s",
+            i,
+            cand.get("candidate_id"),
+            cand.get("full_name"),
+            len(docs),
+            [d.get("open_url") for d in docs],
+        )
     return result
 
 
