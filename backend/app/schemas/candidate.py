@@ -34,9 +34,15 @@ class CandidateResponse(BaseModel):
     def from_doc(cls, doc) -> "CandidateResponse":
         raw: dict = doc.raw_resume_json or {}
         resume_url = doc.resume_url
-        # CS candidates with a document open_url — expose our proxy endpoint
-        if not resume_url and raw.get("cs_open_url"):
-            resume_url = f"/api/candidates/{doc.id}/resume"
+        # CS candidates: use explicit cs_open_url, or fall back to documents[0].open_url
+        if not resume_url and (doc.hh_resume_id or "").startswith("cs:"):
+            cs_open_url = raw.get("cs_open_url")
+            if not cs_open_url:
+                docs = raw.get("documents") or []
+                if docs:
+                    cs_open_url = docs[0].get("open_url")
+            if cs_open_url:
+                resume_url = f"/api/candidates/{doc.id}/resume"
         return cls(
             id=str(doc.id),
             vacancy_id=str(doc.vacancy_id) if doc.vacancy_id else None,

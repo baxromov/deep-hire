@@ -61,6 +61,10 @@ async def get_candidate_resume(candidate_id: str):
 
     # CleverStaff candidates: proxy the file from the MCP open_url
     cs_open_url = raw.get("cs_open_url")
+    if not cs_open_url:
+        stored_docs = raw.get("documents") or []
+        if stored_docs:
+            cs_open_url = stored_docs[0].get("open_url")
     if cs_open_url and (doc.hh_resume_id or "").startswith("cs:"):
         # Cleverstaff MCP server reports 0.0.0.0 as the file host.
         # Replace it with the actual MCP server host so the backend can reach it.
