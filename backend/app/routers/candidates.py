@@ -636,6 +636,41 @@ async def delete_candidates_bulk(body: BulkDeleteBody):
     return {"deleted": result.deleted_count}
 
 
+async def clear_cleverstaff_candidates():
+    """Delete all Cleverstaff-synced candidates from MongoDB, Qdrant, and Redis."""
+    from app.database import get_qdrant, get_redis
+    from app.config import settings
+    from qdrant_client.http import models as qmodels
+
+    col = Candidate.get_motor_collection()
+    result = await col.delete_many({"raw_resume_json.source": "cleverstaff"})
+
+    try:
+        qdrant = await get_qdrant()
+        await qdrant.delete(
+            collection_name=settings.qdrant_collection,
+            points_selector=qmodels.FilterSelector(
+                filter=qmodels.Filter(
+                    must=[qmodels.FieldCondition(
+                        key="raw_resume_json.source",
+                        match=qmodels.MatchValue(value="cleverstaff"),
+                    )]
+                )
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Qdrant cleverstaff delete failed: %s", exc)
+
+    try:
+        redis = await get_redis()
+        await redis.delete("cleverstaff:synced_ids")
+    except Exception as exc:
+        logger.warning("Redis cleverstaff clear failed: %s", exc)
+
+    logger.info("Cleverstaff clear: deleted %d MongoDB docs", result.deleted_count)
+    return {"deleted": result.deleted_count}
+
+
 _vectorize_job: dict = {"status": "idle", "total": 0, "processed": 0, "vectorized": 0, "error": None}
 
 
@@ -758,6 +793,7 @@ router.add_api_route("/upload", upload_and_auto_match, methods=["POST"])
 router.add_api_route("/upload-status", upload_status, methods=["GET"])
 router.add_api_route("/import-xlsx", import_from_xlsx, methods=["POST"])
 router.add_api_route("/bulk", delete_candidates_bulk, methods=["DELETE"])
+router.add_api_route("/cleverstaff", clear_cleverstaff_candidates, methods=["DELETE"])
 router.add_api_route("/vacancy/{vacancy_id}", candidates_by_vacancy, methods=["GET"])
 router.add_api_route("/{candidate_id}/explain-score", explain_score, methods=["POST"])
 router.add_api_route("/{candidate_id}/resume", get_candidate_resume, methods=["GET"])

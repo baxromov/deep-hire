@@ -189,6 +189,8 @@ export const candidateApi = {
     ),
   cleverstaffSync: () =>
     api.post<{ status: string }>("/api/sync/cleverstaff"),
+  cleverstaffClear: () =>
+    api.delete<{ deleted: number }>("/api/candidates/cleverstaff"),
   delete: (id: string) =>
     api.delete<{ ok: boolean }>(`/api/candidates/${id}`),
   deleteMany: (ids: string[]) =>

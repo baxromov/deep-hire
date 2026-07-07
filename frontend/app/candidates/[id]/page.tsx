@@ -100,16 +100,25 @@ export default function CandidateDetailPage({ params }: Props) {
   type ExpEntry = {
     company: unknown;
     position: string;
-    start: string;
-    end: string | null;
+    start?: string;
+    end?: string | null;
+    from_date?: string;
+    to_date?: string;
     description?: string;
   };
+  // CS stores work history as "work_experience"; HH uses "experience"
   const experience: ExpEntry[] =
-    (candidate.raw_resume_json?.experience as ExpEntry[]) || [];
+    (candidate.raw_resume_json?.work_experience as ExpEntry[]) ||
+    (candidate.raw_resume_json?.experience as ExpEntry[]) ||
+    [];
 
   function companyName(c: unknown): string {
     if (c && typeof c === "object" && "name" in c) return (c as { name: string }).name || "";
     return String(c || "");
+  }
+
+  function stripHtml(html: string): string {
+    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
   const score = localScore ?? candidate.relevance_score;
@@ -497,13 +506,15 @@ export default function CandidateDetailPage({ params }: Props) {
 
               <div className="flex items-center gap-4 text-xs text-gray-400 pt-1 border-t border-gray-50">
                 <span>Дата оценки: {matchedDate}</span>
-                <Link
-                  href={`/vacancies/${candidate.vacancy_id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-blue-500 hover:text-blue-700"
-                >
-                  Открыть вакансию →
-                </Link>
+                {candidate.vacancy_id && (
+                  <Link
+                    href={`/vacancies/${candidate.vacancy_id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-500 hover:text-blue-700"
+                  >
+                    Открыть вакансию →
+                  </Link>
+                )}
               </div>
             </div>
           </Section>
@@ -537,11 +548,11 @@ export default function CandidateDetailPage({ params }: Props) {
                     <p className="font-medium text-gray-900 text-sm">{exp.position}</p>
                     <p className="text-sm text-gray-500">{companyName(exp.company)}</p>
                     <p className="mt-0.5 text-xs text-gray-400">
-                      {exp.start?.slice(0, 7)} — {exp.end?.slice(0, 7) || "по настоящее время"}
+                      {exp.start?.slice(0, 7) || exp.from_date || ""} — {exp.end != null ? exp.end.slice(0, 7) : (exp.to_date && exp.to_date !== "сейчас" ? exp.to_date : "по настоящее время")}
                     </p>
                     {exp.description && (
                       <p className="mt-1.5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                        {exp.description}
+                        {stripHtml(String(exp.description))}
                       </p>
                     )}
                   </div>
@@ -617,14 +628,16 @@ export default function CandidateDetailPage({ params }: Props) {
       )}
 
       {/* Footer */}
-      <div className="mt-4">
-        <Link
-          href={`/vacancies/${candidate.vacancy_id}`}
-          className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
-        >
-          ← Вернуться к вакансии
-        </Link>
-      </div>
+      {candidate.vacancy_id && (
+        <div className="mt-4">
+          <Link
+            href={`/vacancies/${candidate.vacancy_id}`}
+            className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            ← Вернуться к вакансии
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

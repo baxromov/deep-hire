@@ -49,6 +49,7 @@ export default function CandidatesPage() {
   const [importing, setImporting]   = useState(false);
   const [vectorizing, setVectorizing] = useState(false);
   const [cleverstaffSyncing, setCleverstaffSyncing] = useState(false);
+  const [cleverstaffClearing, setCleverstaffClearing] = useState(false);
   const [vectorizeJob, setVectorizeJob] = useState<{ status: string; total: number; processed: number; vectorized: number; error?: string | null } | null>(null);
   const [uploadJob, setUploadJob]   = useState<UploadJobState>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -188,6 +189,20 @@ export default function CandidatesPage() {
       toast.error("Ошибка синхронизации Cleverstaff");
     } finally {
       setCleverstaffSyncing(false);
+    }
+  };
+
+  const handleCleverstaffClear = async () => {
+    if (!confirm("Удалить всех кандидатов из Cleverstaff? Они будут удалены из MongoDB, Qdrant и Redis.")) return;
+    setCleverstaffClearing(true);
+    try {
+      const res = await candidateApi.cleverstaffClear();
+      toast.success(`Удалено ${res.data.deleted} кандидатов Cleverstaff`);
+      mutateRef.current();
+    } catch {
+      toast.error("Ошибка при очистке Cleverstaff");
+    } finally {
+      setCleverstaffClearing(false);
     }
   };
 
@@ -337,13 +352,23 @@ export default function CandidatesPage() {
           )}
 
           {/* Cleverstaff Sync */}
-          <button onClick={handleCleverstaffSync} disabled={cleverstaffSyncing}
+          <button onClick={handleCleverstaffSync} disabled={cleverstaffSyncing || cleverstaffClearing}
             className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
             {cleverstaffSyncing
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             }
             {cleverstaffSyncing ? "Sync…" : "Cleverstaff Sync"}
+          </button>
+
+          {/* Cleverstaff Clear */}
+          <button onClick={handleCleverstaffClear} disabled={cleverstaffClearing || cleverstaffSyncing}
+            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            {cleverstaffClearing
+              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+              : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            }
+            {cleverstaffClearing ? "Очистка…" : "Очистить CS"}
           </button>
 
           {/* Vectorize All (when nothing selected) */}

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 class CandidateResponse(BaseModel):
     id: str
-    vacancy_id: str
+    vacancy_id: Optional[str] = None
     hh_resume_id: str
     first_name: Optional[str]
     last_name: Optional[str]
@@ -39,7 +39,7 @@ class CandidateResponse(BaseModel):
             resume_url = f"/api/candidates/{doc.id}/resume"
         return cls(
             id=str(doc.id),
-            vacancy_id=str(doc.vacancy_id),
+            vacancy_id=str(doc.vacancy_id) if doc.vacancy_id else None,
             hh_resume_id=doc.hh_resume_id,
             first_name=doc.first_name,
             last_name=doc.last_name,

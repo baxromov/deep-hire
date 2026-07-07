@@ -1,6 +1,6 @@
 export interface Candidate {
   id: string;
-  vacancy_id: string;
+  vacancy_id: string | null;
   hh_resume_id: string;
   first_name: string | null;
   last_name: string | null;
