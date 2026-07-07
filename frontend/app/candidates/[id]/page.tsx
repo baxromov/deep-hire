@@ -121,6 +121,24 @@ export default function CandidateDetailPage({ params }: Props) {
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  type EduEntry = { from_date?: string | null; to_date?: string | null; university?: string; speciality?: string };
+  const education = (candidate.raw_resume_json?.education as EduEntry[]) || [];
+
+  type LangEntry = { name: string; level: string };
+  const languages = (candidate.raw_resume_json?.languages as LangEntry[]) || [];
+
+  type LinkEntry = { resource_type: string; url?: string; value?: string };
+  const profileLinks = ((candidate.raw_resume_json?.links as LinkEntry[]) || []).filter((l) => l.url);
+
+  const LANG_LEVEL: Record<string, string> = {
+    Native: "Родной", Basic: "Базовый", Intermediate: "Средний",
+    Upper: "Выше среднего", Advanced: "Продвинутый", Fluent: "Свободный",
+  };
+  const LINK_LABEL: Record<string, string> = {
+    hh: "HH.uz профиль", linkedin: "LinkedIn", github: "GitHub",
+    telegram: "Telegram", facebook: "Facebook",
+  };
+
   const score = localScore ?? candidate.relevance_score;
   const sourceCfg = candidate.source ? (SOURCE_CONFIG[candidate.source] ?? null) : null;
   const displayReasoning = localReasoning ?? candidate.score_reasoning;
@@ -557,6 +575,71 @@ export default function CandidateDetailPage({ params }: Props) {
                     )}
                   </div>
                 </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
+
+      {/* Education */}
+      {education.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
+          <Section title="Образование">
+            <div className="space-y-3">
+              {education.map((edu, i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gray-300" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm">{edu.university}</p>
+                    {edu.speciality && <p className="text-sm text-gray-500">{edu.speciality}</p>}
+                    {(edu.from_date || edu.to_date) && (
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {edu.from_date || ""}{edu.from_date && edu.to_date ? " — " : ""}{edu.to_date || ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
+
+      {/* Languages */}
+      {languages.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
+          <Section title="Языки">
+            <div className="flex flex-wrap gap-2">
+              {languages.map((lang, i) => (
+                <span key={i} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-gray-700">
+                  <span className="capitalize">{lang.name}</span>
+                  {lang.level && (
+                    <span className="ml-1.5 text-xs text-gray-400">
+                      — {LANG_LEVEL[lang.level] ?? lang.level}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </Section>
+        </div>
+      )}
+
+      {/* Profile links */}
+      {profileLinks.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
+          <Section title="Профили">
+            <div className="flex flex-wrap gap-3">
+              {profileLinks.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                >
+                  {LINK_LABEL[link.resource_type] ?? link.resource_type} ↗
+                </a>
               ))}
             </div>
           </Section>
