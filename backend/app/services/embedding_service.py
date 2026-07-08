@@ -158,8 +158,10 @@ def build_resume_text(resume: dict) -> str:
         parts.extend([skills_str, skills_str])
 
     # About / summary text
-    about = resume.get("skills") or resume.get("about") or ""
-    if about:
+    # resume["skills"] may be a list of skill names — only use it as text if it's a string
+    _skills_raw = resume.get("skills")
+    about = (_skills_raw if isinstance(_skills_raw, str) else None) or resume.get("about") or ""
+    if about and isinstance(about, str):
         parts.append(about[:600])
 
     # Work experience: position name + description (up to 3 most recent roles)
@@ -201,7 +203,7 @@ def build_resume_text(resume: dict) -> str:
             if name:
                 parts.append(f"{name} {level}".strip())
 
-    return ". ".join(filter(None, parts))
+    return ". ".join(s for s in parts if s and isinstance(s, str))
 
 
 def build_vacancy_text(vacancy) -> str:
