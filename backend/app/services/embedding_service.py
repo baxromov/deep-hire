@@ -178,14 +178,16 @@ def build_resume_text(resume: dict) -> str:
             parts.append(description[:500])
 
     # Education — degree / specialty names
-    for edu in (resume.get("education") or {}).get("additional", []) or []:
+    # Guard against list (some sources store education as a list, not a dict)
+    _edu_raw = resume.get("education")
+    _edu = _edu_raw if isinstance(_edu_raw, dict) else {}
+    for edu in (_edu.get("additional") or []):
         if isinstance(edu, dict):
             name = edu.get("name") or edu.get("organization") or ""
             if name:
                 parts.append(name)
-    primary_edu = (resume.get("education") or {})
     for level_key in ("level", "primary"):
-        for entry in (primary_edu.get(level_key) or []):
+        for entry in (_edu.get(level_key) or []):
             if isinstance(entry, dict):
                 spec = entry.get("name") or entry.get("specialization") or ""
                 if spec:
