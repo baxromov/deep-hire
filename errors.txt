@@ -1,12 +1,16 @@
- NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:18:23 +0000] "GET /api/talent-pool/status HTTP/1.1" 200 104 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:22:42 +0000] "GET /settings/integrations?_rsc=1vgc0 HTTP/1.1" 200 301 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:22:42 +0000] "GET /candidates?_rsc=1vgc0 HTTP/1.1" 200 291 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:22:42 +0000] "GET /vacancies?_rsc=1b4d9 HTTP/1.1" 200 694 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO: httpx: HTTP Request: POST http://172.31.230.3:8080/v1/embeddings "HTTP/1.1 200 OK"
+backend-1   | INFO: httpx: HTTP Request: POST http://host.docker.internal:6333/collections/hr-resume/points/query "HTTP/1.1 200 OK"
+backend-1   | ERROR: app.routers.matching: match_from_db_stream error: 'list' object has no attribute 'get'
 backend-1   | Traceback (most recent call last):
 backend-1   |   File "/app/app/routers/matching.py", line 1029, in run
 backend-1   |     build_resume_text(hit["raw_resume_json"])
-backend-1   |   File "/app/app/services/embedding_service.py", line 166, in build_resume_text
-backend-1   |     for exp in (resume.get("experience") or [])[:3]:
-backend-1   |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^
-backend-1   | TypeError: 'int' object is not subscriptable
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:18:23 +0000] "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 2 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:18:29 +0000] "GET /api/matching/vacancies/6a4791c802cfe31e316c0ab0/match-from-db-stream?min_score=40 HTTP/1.1" 200 579 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-bakhromovshb@genai-tst-jupiterhub01:~/deep-hire$
+backend-1   |   File "/app/app/services/embedding_service.py", line 181, in build_resume_text
+backend-1   |     for edu in (resume.get("education") or {}).get("additional", []) or []:
+backend-1   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1   | AttributeError: 'list' object has no attribute 'get'
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:22:42 +0000] "GET /vacancies?_rsc=rvabs HTTP/1.1" 200 1104 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:22:42 +0000] "GET /admin/users?_rsc=1b4d9 HTTP/1.1" 200 694 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
