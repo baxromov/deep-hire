@@ -1,18 +1,1 @@
- INFO: app.services.cleverstaff_service: MCP response → total=15314 candidates=14
-backend-1   | INFO: app.services.cleverstaff_service:   [0] candidate_id=ff30460f5a834cfaa56046eb0c6c6148 name='Ретдинов Марат Халитович' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [1] candidate_id=ff41e18dc17f44da99ea759eb91cdc2c name='Khasanova Sevara' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [2] candidate_id=ff542093e7074133b2907625cf88a844 name='Кураисов Кажимканович' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [3] candidate_id=ff56ea20ef9541b199067a53538045bb name='Xurshid Abdumajidov' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [4] candidate_id=ff69996795df4c39bd38e4253d29f75c name='Ruziev Dilmurod' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [5] candidate_id=ff6a5db814bc49bcb4aeb66beae5e4dc name='Алиханова Хидоят' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [6] candidate_id=ff7171d7dcd044538f47f60c1e581745 name='Алексей Сопровод Филипенков' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [7] candidate_id=ff74b6bb863b4203a120dc435df7281d name='Аллаберганова Шахзода' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [8] candidate_id=ffb386d136664187868188fe5cd8f6a2 name='Тухаев Шахриёр' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [9] candidate_id=ffb4353206ac4bc6be0730977a5d2a28 name='Менглибоев Фахриддин' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [10] candidate_id=ffb7eca24ce847778bdf77fdd85704b3 name='Искандаров Исмоил' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [11] candidate_id=ffb8841c7eaa40338b49a78260982f2e name='Removed Candidate' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [12] candidate_id=ffc2e57725f84275b2a11ffb345c7385 name='Кумбатов Али' docs=0 open_urls=[]
-backend-1   | INFO: app.services.cleverstaff_service:   [13] candidate_id=ffd9aaec74334e43b5f62e368e3806c8 name='Ганиев Ахмет Ганий' docs=0 open_urls=[]
-
-
-nega bo'sh bularda borku bazada 15314 ta recored bo'lsa shulardan taxminan 12mingtasida resume file bor bu example da ham bor edi lekin null nega ? bu critical xato
+documents_note
