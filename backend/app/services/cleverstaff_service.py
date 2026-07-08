@@ -2,6 +2,7 @@ import json
 import re
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 
@@ -124,6 +125,18 @@ def build_embedding_text(candidate: dict) -> str:
     return ". ".join(filter(None, parts))
 
 
+def _fix_open_url(url: str) -> str:
+    """Replace 0.0.0.0 in open_url with the actual MCP server host."""
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if parsed.hostname == "0.0.0.0":
+        mcp = urlparse(settings.cleverstaff_mcp_url)
+        fixed = parsed._replace(netloc=mcp.netloc)
+        return urlunparse(fixed)
+    return url
+
+
 def _extract_resume_doc(candidate: dict) -> dict:
     """Return resume document metadata (open_url, filename) from the candidate's documents list."""
     documents = candidate.get("documents") or []
@@ -135,7 +148,7 @@ def _extract_resume_doc(candidate: dict) -> dict:
     if resume_doc is None:
         return {}
     return {
-        "cs_open_url": resume_doc["open_url"],
+        "cs_open_url": _fix_open_url(resume_doc["open_url"]),
         "filename": resume_doc.get("filename") or "resume.pdf",
         "cs_mimetype": resume_doc.get("mimetype") or "application/pdf",
     }
@@ -159,7 +172,11 @@ def build_payload(candidate: dict) -> dict:
     candidate_stripped = {k: v for k, v in candidate.items() if k != "documents"}
     if candidate.get("documents"):
         candidate_stripped["documents"] = [
-            {k2: v2 for k2, v2 in d.items() if k2 != "data_base64"}
+            {
+                k2: (_fix_open_url(v2) if k2 == "open_url" else v2)
+                for k2, v2 in d.items()
+                if k2 != "data_base64"
+            }
             for d in candidate["documents"]
         ]
 
