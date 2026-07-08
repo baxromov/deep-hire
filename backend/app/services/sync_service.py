@@ -115,6 +115,8 @@ async def sync_cleverstaff() -> dict:
             result = await cs.fetch_candidates(offset=offset, limit=PAGE_LIMIT)
         except Exception as exc:
             logger.error("Cleverstaff MCP error at offset=%d: %s", offset, exc)
+            logger.info("Cleverstaff sync STOPPED (error) at offset=%d — fetched=%d new=%d",
+                        offset, total_fetched, total_new)
             break
 
         page = result.get("candidates", [])
@@ -213,5 +215,5 @@ async def sync_cleverstaff() -> dict:
 
         await asyncio.sleep(0.1)
 
-    logger.info("Cleverstaff sync done: fetched=%d new=%d", total_fetched, total_new)
+    logger.info("Cleverstaff sync STOPPED: fetched=%d new=%d", total_fetched, total_new)
     return {"fetched": total_fetched, "new": total_new}
