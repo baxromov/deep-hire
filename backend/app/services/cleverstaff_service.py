@@ -79,14 +79,28 @@ async def _call_mcp(arguments: dict) -> dict:
     logger.info("MCP parsed → total=%s returned=%s", result.get("total"), len(candidates))
     for i, cand in enumerate(candidates):
         docs = cand.get("documents") or []
+        note = cand.get("documents_note", "")
         logger.info(
-            "  [%d] id=%s name=%r docs=%d open_urls=%s",
+            "  [%d] id=%s  name=%r  position=%r  docs=%d%s",
             i,
             cand.get("candidate_id"),
             cand.get("full_name"),
+            cand.get("position"),
             len(docs),
-            [d.get("open_url") for d in docs],
+            f"  documents_note={note!r}" if note else "",
         )
+        for j, doc in enumerate(docs):
+            logger.info(
+                "       doc[%d] atm_id=%s  filename=%s  size=%s bytes  "
+                "mimetype=%s  open_url=%s  uploaded=%s",
+                j,
+                doc.get("atm_id"),
+                doc.get("filename"),
+                doc.get("size_bytes"),
+                doc.get("mimetype"),
+                _fix_open_url(doc.get("open_url", "")),
+                doc.get("uploaded"),
+            )
     return result
 
 
