@@ -163,7 +163,9 @@ def build_resume_text(resume: dict) -> str:
         parts.append(about[:600])
 
     # Work experience: position name + description (up to 3 most recent roles)
-    for exp in (resume.get("experience") or [])[:3]:
+    # Guard against int (e.g. Cleverstaff stores experience as years)
+    _exp_raw = resume.get("experience")
+    for exp in (_exp_raw if isinstance(_exp_raw, list) else [])[:3]:
         if not isinstance(exp, dict):
             continue
         position = exp.get("position") or ""
