@@ -1,107 +1,343 @@
-10~x95jhs6ns3.js:1  GET http://172.31.174.11:8385/api/candidates/6a4ddc9fcfafec1e3712737c/resume 502 (Bad Gateway)
+{
+  "tools": [
+    {
+      "name": "search_candidates",
+      "description": "Search the HR candidates database (20,000+ people) and get their full profiles and analytics. Use this for ANY question about candidates: finding people who match criteria, reading someone's background, or counting / averaging across the pool. This is the ONLY tool you need for candidates.\n\nHOW RESULTS WORK\n- Returns candidates most experienced first, `limit` per page (default 20, max 100), starting at `offset` (default 0). Prefer narrowing with filters over paging deep; use `offset` to fetch the next page of an already-narrow search.\n- `total` is how many candidates match in all (often far more than one page); `count` is how many are in this response (<= `limit`).\n- Every returned candidate ALWAYS includes their full profile — hard skills (with years), education, work experience, languages, and contact/social links (phone, email, LinkedIn, GitHub, Telegram, portfolio). You never need a second call to read a profile; to answer 'what does X know / where did X work / how to reach X', just search for X.\n- Every returned candidate also carries a `documents` list (resume, photo, cover letter, ...). Each document has metadata — `atm_id`, `type`, `filename`, `mimetype`, `size_bytes`, `source`, `uploaded` — plus `open_url` to fetch the ORIGINAL file from the server with the same Bearer token.\n- All filters are AND-combined (a candidate must satisfy every filter you set). Enum filters are case-insensitive and fuzzy: 'it' -> IT, 'senior' -> Senior.\n\nPICKING THE RIGHT FILTER (important)\n- Concrete technologies, tools, or hard skills -> `skills` (e.g. Python, React, Figma, Excel), NOT `query`. `skills` requires ALL listed skills; aliases and typos are auto-resolved (js -> JavaScript, k8s -> Kubernetes).\n- Job title -> `position`; current job title only -> `current_position`; seniority -> `role_level`; business sector -> `industry`.\n- Vague or descriptive wording that is not a concrete field -> `query` (free text over name/position/workplace/description). It matches per word (order-independent), ignores words absent from the data, and understands role synonyms (programmer/coder/SWE -> developer/engineer). Do NOT put technologies here.\n- Dedicated filters exist and are preferred over `query`: `language` (+ `language_level`), `region`, `currency` with `min_salary`/`max_salary`, `min_experience`/`max_experience`, `employment_type`, `sex`, `speciality`, `link_type` (+ `link_value`) for contact/social channels like LinkedIn or GitHub.\n\nANALYTICS\nSet `stats`=true for aggregates over the WHOLE matching population (not just the 20 returned): total count, experience avg/min/max, and salary per currency. Add `group_by` (industry, role_level, status, employment_type, currency, sex, region) for a per-group breakdown. Use this for 'how many...', 'average...', 'breakdown by...' questions. For a plain count, just read `total` — you do not need group_by.\n\nEXAMPLES (question -> parameters)\n- 'Senior Python developers' -> role_level='Senior', skills=['Python']\n- 'English-speaking marketers in Tashkent earning over $2000/mo' -> industry='Marketing', language='English', region='Tashkent', currency='USD', min_salary=2000\n- 'How many candidates in each industry?' -> stats=true, group_by='industry'\n- 'Average salary of QA engineers' -> position='QA Engineer', stats=true\n- 'Java or Go engineers with 5+ years' -> skills=['Java'] (or ['Go']), min_experience=5\n- 'Developers with a GitHub profile' -> link_type='github'\n\nRETURNS: `total` (all matches), `count` (returned this page), `limit`/`offset` (the page actually used), `candidates` (each with `candidate_id` and full profile), and — when requested — a `stats` block. Transparency notes may appear (`query_note` = how free text was interpreted, `unknown_skills` = skills not recognised with suggestions, `relaxed` = an unmatched query was dropped) so you can trust or adjust the result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Free-text search across name, position, current workplace and description. Matched per word (order-independent); words not present in the data are ignored, and generic role synonyms (programmer/coder/SWE → developer/engineer) are understood. Put concrete technologies in `skills`, NOT here."
+          },
+          "sex": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ],
+            "description": "Sex (also accepts 'male'/'female')."
+          },
+          "position": {
+            "type": "string",
+            "description": "Desired OR current job title (partial), e.g. 'Backend Developer'."
+          },
+          "current_position": {
+            "type": "string",
+            "description": "Current job title only (partial)."
+          },
+          "role_level": {
+            "type": "string",
+            "enum": [
+              "Intern",
+              "Junior",
+              "Middle",
+              "Senior",
+              "Lead",
+              "Head",
+              "C-level"
+            ],
+            "description": "Seniority level."
+          },
+          "industry": {
+            "type": "string",
+            "enum": [
+              "IT",
+              "Banking",
+              "Finance",
+              "Telecom",
+              "Retail",
+              "Manufacturing",
+              "Healthcare",
+              "Education",
+              "Construction",
+              "Logistics",
+              "Oil & Gas",
+              "Agriculture",
+              "Marketing",
+              "Government",
+              "FMCG"
+            ],
+            "description": "Industry sector."
+          },
+          "employment_type": {
+            "type": "string",
+            "enum": [
+              "full-time",
+              "remote",
+              "contract",
+              "part-time",
+              "freelance",
+              "internship"
+            ],
+            "description": "Employment type."
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required skills (exact skill name, case-insensitive) — candidate must have ALL of them. Aliases/typos are resolved; unknown skills come back with suggestions."
+          },
+          "speciality": {
+            "type": "string",
+            "description": "Field of study / major (partial), e.g. 'Computer Science'."
+          },
+          "language": {
+            "type": "string",
+            "description": "Spoken language by name, e.g. 'English'. Combine with language_level."
+          },
+          "language_level": {
+            "type": "string",
+            "enum": [
+              "A1",
+              "A2",
+              "B1",
+              "B2",
+              "C1",
+              "C2",
+              "Native"
+            ],
+            "description": "Minimum CEFR level for `language` (A1…C2, or Native). Requires `language`."
+          },
+          "region": {
+            "type": "string",
+            "description": "Region by text across country / city / full name (partial), e.g. 'Tashkent'."
+          },
+          "link_type": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "email",
+              "linkedin",
+              "telegram",
+              "github",
+              "portfolio"
+            ],
+            "description": "Contact/social channel type — candidate must have a link of this type, e.g. 'linkedin', 'github', 'telegram'."
+          },
+          "link_value": {
+            "type": "string",
+            "description": "Partial match on the link's value or URL (e.g. a username, handle, or domain). Combine with `link_type` to scope it, e.g. link_type='github', link_value='someuser'."
+          },
+          "min_experience": {
+            "type": "integer",
+            "description": "Minimum years of total experience (0–22)."
+          },
+          "max_experience": {
+            "type": "integer",
+            "description": "Maximum years of total experience (0–22)."
+          },
+          "min_salary": {
+            "type": "number",
+            "description": "Minimum salary, in the candidate's currency. Combine with `currency`."
+          },
+          "max_salary": {
+            "type": "number",
+            "description": "Maximum salary, in the candidate's currency. Combine with `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "UZS",
+              "USD",
+              "EUR",
+              "RUB"
+            ],
+            "description": "Salary currency. Recommended when filtering by salary."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Max candidates to return in this page (default 20, max 100)."
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of matches to skip before this page (default 0). Use with `limit` to page through `total`."
+          },
+          "stats": {
+            "type": "boolean",
+            "description": "Set true to also return an aggregate `stats` block (counts, experience & salary stats) over the whole filtered population. Use for 'how many / average' questions."
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "industry",
+              "role_level",
+              "status",
+              "employment_type",
+              "currency",
+              "sex",
+              "region"
+            ],
+            "description": "OPTIONAL analytics breakdown dimension ('by/per X'), e.g. 'industry' or 'role_level'. Implies stats. Must be one of the enum values — it is NOT 'count'; for a plain count omit it and read the `total` field."
+          }
+        }
+      }
+    },
+    {
+      "name": "search_candidate_hh",
+      "description": "Search candidates (resumes) on hh.ru / HeadHunter — the EXTERNAL job site — with combinable filters. (For the internal HR candidate database, use search_candidates instead.) Returns `limit` candidates per page (default 50, max 100), and every candidate is returned WITH FULL DETAILS — skills, education, work experience with descriptions, languages — hydrated from the full resume and cached locally.\n\nHOW RESULTS WORK\n- `total` = all matches on hh.ru; `pages`/`page` = hh paging; `count` = returned here.\n- Paging cannot go past ~2000 results (hh.ru limit) — narrow filters instead of paging deep (region, experience, salary, updated_within_days).\n- Experience filters are translated to hh.ru buckets (0-1, 1-3, 3-6, 6+ years) — boundaries are approximate; a note says which buckets were used.\n- Salary filters only match resumes that state a salary.\n- `region` is fuzzy: names like 'Tashkent' resolve to hh area ids; unknown names come back with suggestions.\n- Contacts are NOT included on this server (dev-safe): no contact data is fetched or returned.\n\nTransparency: a `notes` list explains every approximation applied; per-candidate `details_error` marks profiles that could not be fully loaded (the card data is still returned).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Free-text query over the whole resume (title, skills, employers, description), e.g. 'python developer'. Supports hh.ru query syntax (AND/OR/NOT, quotes)."
+          },
+          "region": {
+            "type": "string",
+            "description": "Region by name — fuzzy-resolved against the hh.ru area tree, e.g. 'Tashkent', 'Москва', 'Uzbekistan'. Numeric hh area ids are accepted too."
+          },
+          "min_experience": {
+            "type": "integer",
+            "description": "Minimum total experience, years (approximate — hh uses buckets)."
+          },
+          "max_experience": {
+            "type": "integer",
+            "description": "Maximum total experience, years (approximate — hh uses buckets)."
+          },
+          "min_salary": {
+            "type": "integer",
+            "description": "Minimum desired salary. Combine with `currency`."
+          },
+          "max_salary": {
+            "type": "integer",
+            "description": "Maximum desired salary. Combine with `currency`."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Salary currency code, e.g. RUR, USD, EUR, UZS."
+          },
+          "schedule": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fullDay",
+                "shift",
+                "flexible",
+                "remote",
+                "flyInFlyOut"
+              ]
+            },
+            "description": "Work schedule(s), e.g. remote, fullDay."
+          },
+          "employment": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "full",
+                "part",
+                "project",
+                "volunteer",
+                "probation"
+              ]
+            },
+            "description": "Employment type(s)."
+          },
+          "education_level": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "higher",
+                "bachelor",
+                "master",
+                "candidate",
+                "doctor",
+                "unfinished_higher",
+                "secondary",
+                "special_secondary"
+              ]
+            },
+            "description": "Education level(s)."
+          },
+          "job_search_status": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "active_search",
+                "looking_for_offers",
+                "has_job_offer",
+                "accepted_job_offer",
+                "not_looking_for_job"
+              ]
+            },
+            "description": "Candidate's declared job-search status(es) — active_search etc."
+          },
+          "label": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "only_with_salary",
+                "only_with_photo",
+                "only_with_age",
+                "only_with_gender",
+                "only_with_vehicle"
+              ]
+            },
+            "description": "Extra filters: only_with_salary, only_with_photo, only_with_age, ..."
+          },
+          "relocation": {
+            "type": "string",
+            "enum": [
+              "living",
+              "living_or_relocation",
+              "relocation"
+            ],
+            "description": "Relocation readiness relative to `region`."
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female"
+            ],
+            "description": "Gender."
+          },
+          "age_from": {
+            "type": "integer",
+            "description": "Minimum age."
+          },
+          "age_to": {
+            "type": "integer",
+            "description": "Maximum age."
+          },
+          "updated_within_days": {
+            "type": "integer",
+            "description": "Only resumes updated in the last N days (1–365)."
+          },
+          "order_by": {
+            "type": "string",
+            "enum": [
+              "relevance",
+              "publication_time",
+              "salary_desc",
+              "salary_asc"
+            ],
+            "description": "Sort order (default relevance)."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Candidates per page (default 50, max 100)."
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Page number, 0-based (default 0)."
+          }
+        }
+      }
+    }
+  ]
+}
 
-bakhromovshb@genai-tst-jupiterhub01:~/deep-hire$ docker compose logs --tail 50
-frontend-1  | ▲ Next.js 16.2.4
-frontend-1  | - Local:         http://f29811088148:3001
-frontend-1  | - Network:       http://f29811088148:3001
-frontend-1  | ✓ Ready in 0ms
-backend-1   | INFO:     10.10.1.4:51812 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /api/auth/me HTTP/1.1" 200 143 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /ipotekabank-logo.png HTTP/1.1" 304 0 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=l5v2i HTTP/1.1" 200 295 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=l5v2i HTTP/1.1" 200 302 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=l5v2i HTTP/1.1" 200 292 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=l5v2i HTTP/1.1" 200 291 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /favicon.ico?favicon.0x3dzn~oxb6tn.ico HTTP/1.1" 200 25944 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=ypuun HTTP/1.1" 200 1085 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=a0zv5 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=4ivw0 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=yy73w HTTP/1.1" 200 542 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=16bat HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=1m1o5 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=zjtep HTTP/1.1" 200 502 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=1ykvf HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=146sl HTTP/1.1" 200 503 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=gt96y HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=nlizz HTTP/1.1" 200 502 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.1.4:51822 - "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:51844 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:51838 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:40948 - "GET /api/integrations/hh HTTP/1.1" 200 OK
-backend-1   | INFO: watchfiles.main: 11 changes detected
-backend-1   | INFO:     10.10.1.4:40966 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:40960 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:34 +0000] "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 10498 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:34 +0000] "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 2577 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /vacancies/6a4791c802cfe31e316c0ab0?_rsc=cbkj7 HTTP/1.1" 200 1270 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 1317 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/talent-pool/status HTTP/1.1" 200 104 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 42635 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:41 +0000] "GET /candidates/6a4de099cfafec1e37127f08?_rsc=884c3 HTTP/1.1" 200 1375 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:41 +0000] "GET /api/candidates/6a4de099cfafec1e37127f08 HTTP/1.1" 200 10178 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f08" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 1317 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/talent-pool/status HTTP/1.1" 200 104 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 42635 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:49 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:49 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:51 +0000] "GET /candidates/6a4de099cfafec1e37127f2c?_rsc=y9ius HTTP/1.1" 200 1270 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:51 +0000] "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 9001 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f2c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 9001 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f2c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:00 +0000] "GET /candidates/6a4de099cfafec1e37127f22?_rsc=y9ius HTTP/1.1" 200 1269 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:00 +0000] "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 4366 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f22" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:04 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:04 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 20469 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=40&limit=20&sort_by=score HTTP/1.1" 200 21567 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=60&limit=20&sort_by=score HTTP/1.1" 200 14129 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:07 +0000] "GET /candidates/6a4ddc9fcfafec1e3712737c?_rsc=y9ius HTTP/1.1" 200 1270 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:08 +0000] "GET /api/candidates/6a4ddc9fcfafec1e3712737c HTTP/1.1" 200 7227 "http://172.31.174.11:8385/candidates/6a4ddc9fcfafec1e3712737c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:08 +0000] "GET /api/candidates/6a4ddc9fcfafec1e3712737c/resume HTTP/1.1" 502 52 "http://172.31.174.11:8385/candidates/6a4ddc9fcfafec1e3712737c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   | INFO:     10.10.1.4:40980 - "GET /api/auth/me HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:40974 - "GET /api/candidates/6a4de099cfafec1e37127f31 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:52168 - "GET /api/auth/me HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:52156 - "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:52172 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:44692 - "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:44716 - "GET /api/auth/me HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:44704 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:44728 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:44740 - "GET /api/auth/me HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:46136 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:46152 - "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 OK
-backend-1   | /app/app/database.py:42: UserWarning: Api key is used with an insecure connection.
-backend-1   |   _qdrant_client = AsyncQdrantClient(
-backend-1   | INFO:     10.10.1.4:46160 - "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
-backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333/collections/hr-resume "HTTP/1.1 200 OK"
-backend-1   | INFO:     10.10.1.4:46162 - "GET /api/talent-pool/status HTTP/1.1" 200 OK
-backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333 "HTTP/1.1 200 OK"
-backend-1   | INFO:     10.10.1.4:46172 - "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
-backend-1   | INFO: watchfiles.main: 7 changes detected
-backend-1   | INFO:     10.10.1.4:33876 - "GET /api/candidates/6a4de099cfafec1e37127f08 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:33882 - "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
-backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333/collections/hr-resume "HTTP/1.1 200 OK"
-backend-1   | INFO:     10.10.1.4:33886 - "GET /api/talent-pool/status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:33896 - "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49322 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49310 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49332 - "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49336 - "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49348 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:49356 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41786 - "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41792 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41800 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41816 - "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41826 - "GET /api/candidates/?skip=40&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41828 - "GET /api/candidates/?skip=60&limit=20&sort_by=score HTTP/1.1" 200 OK
-backend-1   | INFO:     10.10.1.4:41842 - "GET /api/candidates/6a4ddc9fcfafec1e3712737c HTTP/1.1" 200 OK
-backend-1   | INFO: httpx: HTTP Request: GET http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9 "HTTP/1.1 500 Internal Server Error"
-backend-1   | ERROR: app.routers.candidates: CS resume fetch failed url=http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9: Server error '500 Internal Server Error' for url 'http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9'
-backend-1   | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
-backend-1   | INFO:     10.10.1.4:41858 - "GET /api/candidates/6a4ddc9fcfafec1e3712737c/resume HTTP/1.1" 502 Bad Gateway
+hh tool qo'shildi vacacy detailda biz da hozrcha iz nashix baza bor endi oldidagi qulfni yana hartani ochin HeadHunter dan bo'lsin faqat head hunterdan bo'ladi va 3 tab list hh dn bo'lsin llm qaytgna candidateni datasini ko'rib rerank qilsin criteria bo'yicha hhdan olinga canidate bazamizga yangi kandidate bo'lib source hh bo'lsin hozrda bizda upload, cleverstaff va hh bo'ldi hh lotiplarini https://hh.ru/ dan ol unda ham horizontal search from hh and llm reranker bo'lsin process ko'rinsin unda ham
