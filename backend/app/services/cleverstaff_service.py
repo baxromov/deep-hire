@@ -10,7 +10,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-_MCP_TIMEOUT = 30
+_MCP_TIMEOUT = 120
 
 
 async def _call_mcp(arguments: dict) -> dict:
@@ -138,20 +138,22 @@ def _fix_open_url(url: str) -> str:
 
 
 def _extract_resume_doc(candidate: dict) -> dict:
-    """Return resume document metadata (open_url, filename) from the candidate's documents list."""
+    """Return resume document metadata from candidate's documents list."""
     documents = candidate.get("documents") or []
-    # Prefer a doc with a usable open_url; CS uses "CleverStaff" as type, so just pick first with URL
-    resume_doc = next(
-        (d for d in documents if d.get("open_url")),
-        None,
-    )
+    resume_doc = next((d for d in documents if d.get("open_url") or d.get("data_base64")), None)
     if resume_doc is None:
         return {}
-    return {
-        "cs_open_url": _fix_open_url(resume_doc["open_url"]),
+    result = {
         "filename": resume_doc.get("filename") or "resume.pdf",
         "cs_mimetype": resume_doc.get("mimetype") or "application/pdf",
     }
+    if resume_doc.get("open_url"):
+        result["cs_open_url"] = _fix_open_url(resume_doc["open_url"])
+    if resume_doc.get("data_base64"):
+        result["cs_data_base64"] = resume_doc["data_base64"]
+        logger.info("Resume data_base64 present for candidate id=%s (%d chars)",
+                    candidate.get("candidate_id"), len(resume_doc["data_base64"]))
+    return result
 
 
 def build_payload(candidate: dict) -> dict:
