@@ -21,13 +21,15 @@ async def _call_mcp(arguments: dict) -> dict:
 
     logger.info("MCP call → args=%s", arguments)
 
+    _PROTOCOL_VERSION = "2025-11-25"
+
     async with httpx.AsyncClient(timeout=_MCP_TIMEOUT) as client:
         init_r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
             "params": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": _PROTOCOL_VERSION,
                 "capabilities": {},
                 "clientInfo": {"name": "deep-hire-backend", "version": "1.0.0"},
             },
@@ -39,6 +41,8 @@ async def _call_mcp(arguments: dict) -> dict:
         if session_id:
             headers["Mcp-Session-Id"] = session_id
             logger.info("MCP session_id=%s", session_id)
+
+        headers["mcp-protocol-version"] = _PROTOCOL_VERSION
 
         await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
