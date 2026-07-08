@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from typing import Any
 from pydantic import BaseModel
 
 
@@ -22,19 +21,17 @@ class CandidateResponse(BaseModel):
     resume_url: Optional[str]
     relevance_score: Optional[int]
     is_vectorized: bool = False
-    matched_at: datetime
-    # Extra fields extracted from raw_resume_json for easy access
-    source: Optional[str] = None           # "xlsx" | "file" | "hh"
+    matched_at: Optional[datetime] = None
+    source: Optional[str] = None
     phone: Optional[str] = None
     comment: Optional[str] = None
-    score_reasoning: Optional[str] = None        # AI summary explanation
-    score_criteria: Optional[List[Any]] = None   # [{name, weight, score, comment}, ...]
+    score_reasoning: Optional[str] = None
+    score_criteria: Optional[List[Any]] = None
 
     @classmethod
-    def from_doc(cls, doc) -> "CandidateResponse":
+    def from_doc(cls, doc, match_result=None) -> "CandidateResponse":
         raw: dict = doc.raw_resume_json or {}
         resume_url = doc.resume_url
-        # CS candidates: use explicit cs_open_url, or fall back to documents[0].open_url
         if not resume_url and (doc.hh_resume_id or "").startswith("cs:"):
             cs_open_url = raw.get("cs_open_url")
             if not cs_open_url:
@@ -43,9 +40,15 @@ class CandidateResponse(BaseModel):
                     cs_open_url = docs[0].get("open_url")
             if cs_open_url:
                 resume_url = f"/api/candidates/{doc.id}/resume"
+
+        mr = match_result
+        # Score data: prefer MatchResult, fall back to raw_resume_json (legacy path)
+        score_criteria = (mr.score_criteria if mr and mr.score_criteria else None) or raw.get("score_criteria")
+        score_reasoning = (mr.score_reasoning if mr else None) or raw.get("score_reasoning")
+
         return cls(
             id=str(doc.id),
-            vacancy_id=str(doc.vacancy_id) if doc.vacancy_id else None,
+            vacancy_id=str(mr.vacancy_id) if mr else None,
             hh_resume_id=doc.hh_resume_id,
             first_name=doc.first_name,
             last_name=doc.last_name,
@@ -58,14 +61,14 @@ class CandidateResponse(BaseModel):
             skills=doc.skills,
             photo_url=doc.photo_url,
             resume_url=resume_url,
-            relevance_score=doc.relevance_score,
+            relevance_score=mr.relevance_score if mr else None,
             is_vectorized=doc.is_vectorized,
-            matched_at=doc.matched_at,
+            matched_at=mr.matched_at if mr else None,
             source=raw.get("source"),
             phone=raw.get("phone"),
             comment=raw.get("comment"),
-            score_reasoning=raw.get("score_reasoning"),
-            score_criteria=raw.get("score_criteria"),
+            score_reasoning=score_reasoning,
+            score_criteria=score_criteria,
         )
 
 
@@ -73,6 +76,6 @@ class CandidateDetailResponse(CandidateResponse):
     raw_resume_json: Dict = {}
 
     @classmethod
-    def from_doc(cls, doc) -> "CandidateDetailResponse":
-        base = CandidateResponse.from_doc(doc)
+    def from_doc(cls, doc, match_result=None) -> "CandidateDetailResponse":
+        base = CandidateResponse.from_doc(doc, match_result)
         return cls(**base.model_dump(), raw_resume_json=doc.raw_resume_json)

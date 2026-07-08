@@ -1142,6 +1142,64 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                             scored.append(({**raw, "_source": "db_search"}, final_sc))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
+                    # ── LLM scoring on top candidates (no-reranker path) ──────────
+                    LLM_SCORE_LIMIT = 20
+                    to_llm = scored[:LLM_SCORE_LIMIT]
+                    if to_llm:
+                        await emit({
+                            "step": "llm_scoring",
+                            "total": len(to_llm),
+                            "message": f"LLM оценивает топ-{len(to_llm)} кандидатов…",
+                        })
+                        sem_llm = asyncio.Semaphore(SCORE_CONCURRENCY)
+
+                        async def _llm_score_cosine(item: tuple) -> tuple:
+                            resume, cosine_sc = item
+                            async with sem_llm:
+                                cand_skills = [
+                                    s if isinstance(s, str) else s.get("name", "")
+                                    for s in (resume.get("skill_set") or [])
+                                ]
+                                raw_r = resume.get("raw_resume_json") or {}
+                                work_exp_r = (
+                                    raw_r.get("work_experience")
+                                    or raw_r.get("extracted", {}).get("experience")
+                                    or resume.get("work_experience")
+                                    or []
+                                )
+                                llm_sc, reasoning, criteria = await ai_service.score_candidate(
+                                    vacancy_title=vacancy.title or "",
+                                    vacancy_description=vacancy.description or "",
+                                    required_skills=vacancy.skills,
+                                    experience=vacancy.experience or "",
+                                    candidate_title=resume.get("title", ""),
+                                    candidate_skills=cand_skills,
+                                    work_experience=work_exp_r[:3],
+                                    criteria=vacancy.score_criteria,
+                                )
+                                final_sc = llm_sc if llm_sc > 0 else cosine_sc
+                                enriched = {**resume, "score_reasoning": reasoning, "score_criteria": criteria}
+                                return enriched, final_sc
+
+                        raw_results = await asyncio.gather(
+                            *[_llm_score_cosine(t) for t in to_llm],
+                            return_exceptions=True,
+                        )
+                        enriched_results: list[tuple] = []
+                        for i, res in enumerate(raw_results):
+                            if isinstance(res, Exception):
+                                enriched_results.append(to_llm[i])
+                            else:
+                                enriched_results.append(res)
+                        combined = enriched_results + scored[LLM_SCORE_LIMIT:]
+                        scored = [(r, s) for r, s in combined if s >= min_score]
+                        scored.sort(key=lambda x: x[1], reverse=True)
+                        await emit({
+                            "step": "llm_scored",
+                            "count": len(scored),
+                            "message": f"LLM оценка завершена — {len(scored)} кандидатов прошли порог ≥{min_score}%",
+                        })
+
                 for proc, (resume, sc) in enumerate(scored, 1):
                     name = (
                         resume.get("full_name")
@@ -1155,11 +1213,11 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         "count": proc, "total": len(scored), "matched": proc,
                     })
 
-                # Delete stale db_search results for this vacancy before saving fresh batch
-                from app.models.candidate import Candidate as CandidateModel
-                await CandidateModel.find({
+                # Delete stale db_search MatchResults for this vacancy before saving fresh batch
+                from app.models.match_result import MatchResult as MatchResultModel
+                await MatchResultModel.find({
                     "vacancy_id": vacancy.id,
-                    "raw_resume_json._source": "db_search",
+                    "source": "db_search",
                 }).delete()
 
                 count = await candidate_service.replace_candidates(vacancy, scored)

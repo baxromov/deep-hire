@@ -6,6 +6,7 @@ from qdrant_client import AsyncQdrantClient
 from app.config import settings
 from app.models.candidate import Candidate
 from app.models.hh_token import HHToken
+from app.models.match_result import MatchResult
 from app.models.user import User
 from app.models.vacancy import Vacancy
 
@@ -17,7 +18,7 @@ async def init_db() -> None:
     client = AsyncIOMotorClient(settings.mongo_uri)
     await init_beanie(
         database=client[settings.mongo_db],
-        document_models=[User, HHToken, Vacancy, Candidate],
+        document_models=[User, HHToken, Vacancy, Candidate, MatchResult],
     )
 
 

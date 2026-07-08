@@ -12,6 +12,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 from app.models.candidate import Candidate
+from app.models.match_result import MatchResult
 from app.models.vacancy import Vacancy, VacancyStatus
 from app.schemas.candidate import CandidateDetailResponse, CandidateResponse
 from app.services import ai_service, candidate_service, file_service, minio_service
@@ -33,14 +34,17 @@ async def list_candidates(
         skip=skip, limit=limit, vacancy_id=vacancy_id,
         search=search, sort_by=sort_by, source=source,
     )
-    return {"items": [CandidateResponse.from_doc(d) for d in items], "total": total}
+    return {"items": [CandidateResponse.from_doc(c, mr) for c, mr in items], "total": total}
 
 
 async def get_candidate(candidate_id: str):
     doc = await candidate_service.get_candidate(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    return CandidateDetailResponse.from_doc(doc)
+    match_result = await MatchResult.find(
+        {"hh_resume_id": doc.hh_resume_id}
+    ).sort("-matched_at").first_or_none()
+    return CandidateDetailResponse.from_doc(doc, match_result)
 
 
 async def get_candidate_resume(candidate_id: str):
@@ -112,8 +116,8 @@ async def get_candidate_resume(candidate_id: str):
 
 
 async def candidates_by_vacancy(vacancy_id: str):
-    docs = await candidate_service.get_candidates_for_vacancy(vacancy_id)
-    return [CandidateResponse.from_doc(d) for d in docs]
+    pairs = await candidate_service.get_candidates_for_vacancy(vacancy_id)
+    return [CandidateResponse.from_doc(c, mr) for c, mr in pairs]
 
 
 async def _process_one_file(filename: str, file_bytes: bytes) -> dict | None:
@@ -149,7 +153,6 @@ async def _process_one_file(filename: str, file_bytes: bytes) -> dict | None:
                 "minio_key": minio_key,
                 "experience": fields.get("experience") or [],
             },
-            "matched_at": datetime.now(timezone.utc),
             **{k: fields[k] for k in ("first_name", "last_name", "title", "area",
                                        "salary_amount", "salary_currency")
                if fields.get(k)},
@@ -313,10 +316,12 @@ async def import_from_xlsx(file: UploadFile = File(...)):
         for title, idx, score, reasoning, criteria in results
     }
 
+
     now = datetime.now(timezone.utc)
     imported = 0
     skipped = 0
     col = Candidate.get_motor_collection()
+    mr_col = MatchResult.get_motor_collection()
 
     for row in rows:
         internship = row["internship_name"] or ""
@@ -324,31 +329,47 @@ async def import_from_xlsx(file: UploadFile = File(...)):
         best_vacancy = vacancies[best_idx]
 
         hh_id = f"xlsx:{row['row_id']}"
+
+        # Candidate: person data only (no vacancy context)
         candidate_data = {
-            "vacancy_id": best_vacancy.id,
             "hh_resume_id": hh_id,
             "first_name": row["first_name"],
             "last_name": row["last_name"],
             "title": internship or None,
-            "relevance_score": best_score,
             "raw_resume_json": {
                 "source": "xlsx",
                 "phone": row["phone"],
                 "internship_name": internship,
                 "comment": row["comment"],
-                "score_reasoning": best_reasoning,
-                "score_criteria": best_criteria,
             },
-            "matched_at": now,
         }
-
-        # Atomic upsert — replaces non-atomic find_one+insert that caused duplicates
-        result = await col.update_one(
-            {"vacancy_id": best_vacancy.id, "hh_resume_id": hh_id},
+        cand_result = await col.update_one(
+            {"hh_resume_id": hh_id},
             {"$set": candidate_data},
             upsert=True,
         )
-        if result.upserted_id:
+        cand_id = cand_result.upserted_id
+        if cand_id is None:
+            doc_q = await col.find_one({"hh_resume_id": hh_id}, {"_id": 1})
+            cand_id = doc_q["_id"]
+
+        # MatchResult: vacancy-specific score data
+        mr_data = {
+            "vacancy_id": best_vacancy.id,
+            "candidate_id": cand_id,
+            "hh_resume_id": hh_id,
+            "relevance_score": best_score,
+            "score_reasoning": best_reasoning,
+            "score_criteria": best_criteria,
+            "source": "xlsx",
+            "matched_at": now,
+        }
+        mr_result = await mr_col.update_one(
+            {"vacancy_id": best_vacancy.id, "hh_resume_id": hh_id},
+            {"$set": mr_data},
+            upsert=True,
+        )
+        if mr_result.upserted_id:
             imported += 1
         else:
             skipped += 1
@@ -357,16 +378,22 @@ async def import_from_xlsx(file: UploadFile = File(...)):
 
 
 async def explain_score(candidate_id: str):
-    """Generate (or regenerate) score reasoning for a candidate via LLM and persist it."""
+    """Generate (or regenerate) score reasoning for a candidate via LLM and persist to MatchResult."""
+
     doc = await candidate_service.get_candidate(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    vacancy = None
-    if doc.vacancy_id:
-        vacancy = await Vacancy.find_one({"_id": doc.vacancy_id})
+    # Find existing MatchResult to determine vacancy context
+    existing_mr = await MatchResult.find(
+        {"hh_resume_id": doc.hh_resume_id}
+    ).sort("-matched_at").first_or_none()
 
-    # Pool candidates (vacancy_id=None): find the best approved vacancy using title + skill overlap
+    vacancy = None
+    if existing_mr:
+        vacancy = await Vacancy.find_one({"_id": existing_mr.vacancy_id})
+
+    # No MatchResult or vacancy gone: find the best approved vacancy by title + skill overlap
     if vacancy is None:
         vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
         if not vacancies:
@@ -387,11 +414,9 @@ async def explain_score(candidate_id: str):
     candidate_skills = doc.skills or []
     raw: dict = doc.raw_resume_json or {}
 
-    # Use internship_name from xlsx source if available
     if raw.get("source") == "xlsx":
         candidate_title = raw.get("internship_name") or candidate_title
 
-    # Extract work experience from raw data (Cleverstaff, file, or xlsx sources)
     raw_experience = (
         raw.get("work_experience")
         or raw.get("extracted", {}).get("experience")
@@ -411,21 +436,28 @@ async def explain_score(candidate_id: str):
 
     llm_ok = new_score > 0 or bool(reasoning)
     if llm_ok:
-        # Only persist when LLM returned something useful — don't overwrite good data with empty strings.
-        raw["score_reasoning"] = reasoning
-        raw["score_criteria"] = criteria
-        doc.raw_resume_json = raw
-        if new_score > 0:
-            doc.relevance_score = new_score
-        await doc.save()
+        mr_col = MatchResult.get_motor_collection()
+        prev_score = existing_mr.relevance_score if existing_mr else None
+        await mr_col.update_one(
+            {"vacancy_id": vacancy.id, "hh_resume_id": doc.hh_resume_id},
+            {"$set": {
+                "vacancy_id": vacancy.id,
+                "candidate_id": doc.id,
+                "hh_resume_id": doc.hh_resume_id,
+                "relevance_score": new_score if new_score > 0 else prev_score,
+                "score_reasoning": reasoning,
+                "score_criteria": criteria,
+                "matched_at": datetime.now(timezone.utc),
+            }},
+            upsert=True,
+        )
     else:
-        # LLM completely failed — surface the error so the frontend can show a retry prompt.
         raise HTTPException(
             status_code=503,
             detail="LLM scoring unavailable; existing score preserved.",
         )
 
-    effective_score = new_score if new_score > 0 else (doc.relevance_score or 0)
+    effective_score = new_score if new_score > 0 else (existing_mr.relevance_score if existing_mr else 0)
     return {"reasoning": reasoning, "criteria": criteria, "score": effective_score}
 
 
@@ -442,10 +474,12 @@ async def _run_rescore(resume: bool = False) -> None:
         _rescore_job.update({"status": "running", "processed": 0, "updated": 0,
                              "error": None, "done_keys": set()})
     else:
-        # Resume: keep done_keys and counters, just flip status back to running
         _rescore_job.update({"status": "running", "error": None})
 
     try:
+        from pymongo import UpdateOne
+        from bson import ObjectId
+
         vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
         if not vacancies:
             _rescore_job.update({"status": "done", "error": "No approved vacancies"})
@@ -456,7 +490,7 @@ async def _run_rescore(resume: bool = False) -> None:
             {"$match": {"raw_resume_json.source": "xlsx"}},
             {"$group": {
                 "_id": "$raw_resume_json.internship_name",
-                "candidate_ids": {"$push": {"$toString": "$_id"}},
+                "candidates": {"$push": {"id": {"$toString": "$_id"}, "hh_id": "$hh_resume_id"}},
                 "skills": {"$first": "$skills"},
             }},
         ]
@@ -469,10 +503,11 @@ async def _run_rescore(resume: bool = False) -> None:
 
         total = len(groups) + len(non_xlsx)
         _rescore_job["total"] = total
-        updated = 0
+        updated = _rescore_job["updated"]  # carry over on resume
         sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+        now = datetime.now(timezone.utc)
+        mr_col = MatchResult.get_motor_collection()
 
-        # helper: score one title against all vacancies (uses each vacancy's own weights)
         async def best_score_for(title: str, skills: list, work_experience: list | None = None) -> tuple[int, str, list, object]:
             async def _one(v: Vacancy) -> tuple[int, str, list]:
                 async with sem:
@@ -492,41 +527,44 @@ async def _run_rescore(resume: bool = False) -> None:
             sc, rs, cr = results[best_idx]
             return sc, rs, cr, vacancies[best_idx]
 
-        from bson import ObjectId
-
-        updated = _rescore_job["updated"]  # carry over on resume
-
-        # ── Score xlsx groups ──────────────────────────────────────────────────
+        # ── Score xlsx groups — upsert MatchResults ───────────────────────────
         for group in groups:
             internship = group["_id"] or ""
             group_key = f"xlsx::{internship}"
-
-            # Resume: skip already-processed groups
             if group_key in _rescore_job["done_keys"]:
                 continue
 
             skills = group.get("skills") or []
-            candidate_ids = group["candidate_ids"]
+            candidates_info = group["candidates"]
 
             sc, rs, cr, best_vacancy = await best_score_for(internship, skills)
 
-            col = Candidate.get_motor_collection()
-            oids = [ObjectId(cid) for cid in candidate_ids]
-            res = await col.update_many(
-                {"_id": {"$in": oids}},
-                {"$set": {
-                    "relevance_score": sc,
-                    "vacancy_id": best_vacancy.id,
-                    "raw_resume_json.score_reasoning": rs,
-                    "raw_resume_json.score_criteria": cr,
-                }},
-            )
-            updated += res.modified_count
+            mr_ops = []
+            for ci in candidates_info:
+                hh_id = ci["hh_id"]
+                cand_id = ObjectId(ci["id"])
+                mr_ops.append(UpdateOne(
+                    {"vacancy_id": best_vacancy.id, "hh_resume_id": hh_id},
+                    {"$set": {
+                        "vacancy_id": best_vacancy.id,
+                        "candidate_id": cand_id,
+                        "hh_resume_id": hh_id,
+                        "relevance_score": sc,
+                        "score_reasoning": rs,
+                        "score_criteria": cr,
+                        "source": "xlsx",
+                        "matched_at": now,
+                    }},
+                    upsert=True,
+                ))
+            if mr_ops:
+                res = await mr_col.bulk_write(mr_ops, ordered=False)
+                updated += res.upserted_count + res.modified_count
             _rescore_job["done_keys"].add(group_key)
             _rescore_job["processed"] += 1
             _rescore_job["updated"] = updated
 
-        # ── Score non-xlsx individually ────────────────────────────────────────
+        # ── Score non-xlsx individually — upsert MatchResults ─────────────────
         for doc in non_xlsx:
             doc_key = f"doc::{doc.id}"
             if doc_key in _rescore_job["done_keys"]:
@@ -544,20 +582,21 @@ async def _run_rescore(resume: bool = False) -> None:
             else:
                 work_experience = raw.get("work_experience") or []
 
-            sc, rs, cr, _best_vacancy = await best_score_for(title, skills, work_experience[:3])
+            sc, rs, cr, best_vacancy = await best_score_for(title, skills, work_experience[:3])
 
-            # Use direct update_one to avoid DuplicateKeyError on the
-            # (vacancy_id, hh_resume_id) unique compound index.
-            # We intentionally do NOT change vacancy_id here — only update
-            # the score + reasoning so the rescore never violates the index.
-            col = Candidate.get_motor_collection()
-            await col.update_one(
-                {"_id": doc.id},
+            await mr_col.update_one(
+                {"vacancy_id": best_vacancy.id, "hh_resume_id": doc.hh_resume_id},
                 {"$set": {
+                    "vacancy_id": best_vacancy.id,
+                    "candidate_id": doc.id,
+                    "hh_resume_id": doc.hh_resume_id,
                     "relevance_score": sc,
-                    "raw_resume_json.score_reasoning": rs,
-                    "raw_resume_json.score_criteria": cr,
+                    "score_reasoning": rs,
+                    "score_criteria": cr,
+                    "source": raw.get("source", "db"),
+                    "matched_at": now,
                 }},
+                upsert=True,
             )
             updated += 1
             _rescore_job["done_keys"].add(doc_key)
@@ -623,6 +662,7 @@ async def delete_candidate(candidate_id: str):
     doc = await candidate_service.get_candidate(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    await MatchResult.get_motor_collection().delete_many({"hh_resume_id": doc.hh_resume_id})
     if doc.hh_resume_id:
         await _delete_qdrant_points([_resume_point_id(doc.hh_resume_id)])
     await doc.delete()
@@ -634,7 +674,10 @@ async def delete_candidates_bulk(body: BulkDeleteBody):
     col = Candidate.get_motor_collection()
     oids = [ObjectId(cid) for cid in body.ids if cid]
     docs = await Candidate.find({"_id": {"$in": oids}}).to_list()
-    point_ids = [_resume_point_id(d.hh_resume_id) for d in docs if d.hh_resume_id]
+    hh_ids = [d.hh_resume_id for d in docs if d.hh_resume_id]
+    point_ids = [_resume_point_id(hh_id) for hh_id in hh_ids]
+    if hh_ids:
+        await MatchResult.get_motor_collection().delete_many({"hh_resume_id": {"$in": hh_ids}})
     result = await col.delete_many({"_id": {"$in": oids}})
     await _delete_qdrant_points(point_ids)
     return {"deleted": result.deleted_count}
@@ -647,6 +690,15 @@ async def clear_cleverstaff_candidates():
     from qdrant_client.http import models as qmodels
 
     col = Candidate.get_motor_collection()
+
+    # Collect CS hh_resume_ids before deleting, then remove their MatchResults
+    cs_docs = await col.find(
+        {"raw_resume_json.source": "cleverstaff"}, {"hh_resume_id": 1}
+    ).to_list(None)
+    cs_hh_ids = [d["hh_resume_id"] for d in cs_docs if d.get("hh_resume_id")]
+    if cs_hh_ids:
+        await MatchResult.get_motor_collection().delete_many({"hh_resume_id": {"$in": cs_hh_ids}})
+
     result = await col.delete_many({"raw_resume_json.source": "cleverstaff"})
 
     try:

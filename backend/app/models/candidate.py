@@ -1,13 +1,11 @@
-from datetime import datetime
 from typing import Dict, List, Optional
 
 import pymongo
-from beanie import Document, PydanticObjectId
+from beanie import Document
 from pydantic import Field
 
 
 class Candidate(Document):
-    vacancy_id: Optional[PydanticObjectId] = None
     hh_resume_id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -20,16 +18,14 @@ class Candidate(Document):
     skills: List[str] = []
     photo_url: Optional[str] = None
     resume_url: Optional[str] = None
-    relevance_score: Optional[int] = None
     is_vectorized: bool = False
     raw_resume_json: Dict = Field(default_factory=dict)
-    matched_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
         name = "candidates"
         indexes = [
             pymongo.IndexModel(
-                [("vacancy_id", pymongo.ASCENDING), ("hh_resume_id", pymongo.ASCENDING)],
+                [("hh_resume_id", pymongo.ASCENDING)],
                 unique=True,
             )
         ]
