@@ -16,6 +16,7 @@ async def _call_mcp(arguments: dict) -> dict:
     headers = {
         "Authorization": f"Bearer {settings.cleverstaff_mcp_token}",
         "Accept": "application/json, text/event-stream",
+        "Accept-Encoding": "gzip, deflate",
     }
 
     logger.info("MCP call → args=%s", arguments)
