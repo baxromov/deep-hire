@@ -1,68 +1,503 @@
- "documents": []}], "documents_note": "documents unavailable (BadGzipFile)"}
-serverda shu xato
-lekin mcp inspector bilan esam ochyapti
-bu esa browserdagi request
-Request URL
-http://172.31.174.11:8765/mcp
-Request Method
-POST
-Status Code
-200 OK
-Remote Address
-172.31.174.11:8765
-Referrer Policy
-strict-origin-when-cross-origin
-access-control-allow-origin
-*
-access-control-expose-headers
-mcp-session-id
-content-length
-699203
-content-type
-application/json
-date
-Wed, 08 Jul 2026 03:11:20 GMT
-mcp-session-id
-36d8976e1eb240d09f7ef8596b7d8ef0
-server
-uvicorn
-accept
-application/json, text/event-stream
-accept-encoding
-gzip, deflate
-accept-language
-ru,en;q=0.9,en-GB;q=0.8,en-US;q=0.7
-authorization
-Bearer BqPBeCUyLxVFKT6ZMpEyywk1tn1FybBY8JqFyrqcmRQ
-connection
-keep-alive
-content-length
-201
-content-type
-application/json
-host
-172.31.174.11:8765
-mcp-protocol-version
-2025-11-25
-mcp-session-id
-36d8976e1eb240d09f7ef8596b7d8ef0
-origin
-http://localhost:6274
-referer
-http://localhost:6274/
-user-agent
-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0
-{"method":"tools/call","params":{"name":"search_candidates","arguments":{"position":"Руководитель проектов / Project Manager"},"_meta":{"progressToken":11}},"jsonrpc":"2.0","id":11}
 {
-    "jsonrpc": "2.0",
-    "id": 11,
-    "result": {
-        "content": [
-            {
-                "type": "text",
-                "text": "{\"total\": 1, \"count\": 1, \"limit\": 20, \"offset\": 0, \"candidates\": [{\"candidate_id\": \"c00e2a4f693348dab98eaaf4e009cd59\", \"full_name\": \"Нуритдинов Эрнест\", \"position\": \"Руководитель проектов / Project Manager\", \"current_position\": null, \"current_work_place\": null, \"industry\": null, \"role_level\": null, \"experience\": 44, \"salary\": null, \"currency\": null, \"employment_type\": \"fullEmployment\", \"sex\": \"M\", \"region\": \"Tashkent, Uzbekistan\", \"skills\": [{\"skill\": \"Waterfall\", \"type\": \"general\", \"years\": 0}, {\"skill\": \"Scrum\", \"type\": \"general\", \"years\": 0}, {\"skill\": \"MS Excel\", \"type\": \"general\", \"years\": 0}, {\"skill\": \"Планирование бюджета\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Atlassian Jira\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Проектный менеджмент\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Постановка задач разработчикам\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Kanban\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Английский язык\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Agile Project Management\", \"type\": \"imported\", \"years\": null}, {\"skill\": \"Управление коммуникациями\", \"type\": \"imported\", \"years\": null}], \"education\": [{\"from_date\": null, \"to_date\": \"2024\", \"university\": \"Harbin Insitute of Technology\", \"speciality\": \"School of economics and management, E-commerce\"}], \"work_experience\": [{\"from_date\": \"Фев 2025\", \"to_date\": \"сейчас\", \"company\": \"SFXDX\", \"position\": \"Руководитель проектов\", \"description\": \"<p><div data-qa=\\\"resume-block-experience-description\\\" class=\\\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\\\"> <div class=\\\"text--qVoORhVlb9cOaw9w\\\"> <span><span>Руковожу кросс-функциональными командами для реализации проектов в сферах </span></p><p><span>финтеха/криптовалют и HR-tech с бюджетами до $500K+.</span></p><p><span> - Выполнил 95% майлстоунов в срок, сократил увеличение объема работ (scope creep), участвуя в работе с системными аналитиками и разработав стандартизированную структуру требований</span></p><p><span> - Улучшил коммуникацию с клиентами, что привело к росту повторных заказов и контрактам на сумму около $100K.</span></p><p><span> - Тесно сотрудничал с продуктовой командой для контроля объёма работ</span></p><p><span> - Руководил командами до 10 специалистов, а также отвечал за бюджеты и сроки выполнения проектов</span></p><p><span> - Подготовка отчетов для руководства</span></span></p>\"}, {\"from_date\": \"Июл 2024\", \"to_date\": \"Фев 2025\", \"company\": \"Whale Loop\", \"position\": \"Backend-разработчик\", \"description\": \"<p><div data-qa=\\\"resume-block-experience-description\\\" class=\\\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\\\"> <div class=\\\"text--qVoORhVlb9cOaw9w\\\"> <span><span>Разработал Telegram Web App для аналитики активов и отслеживания транзакций.</span></p><p></p><p><span> - Руководил всеми процессами разработки - от планирования архитектуры до тестирования и релиза</span></p><p><span> - Управлял командой front-end и back-end разработчиков</span></p><p><span> - Внедрил регулярные демо-созвоны со стейкхолдерами для демонстрации прогресса и получения обратной связи, что сократило время на согласование требований и ускорило принятие решений</span></span></p>\"}, {\"from_date\": \"Июл 2021\", \"to_date\": \"Июн 2024\", \"company\": \"Koodrick\", \"position\": \"Backend-разработчик\", \"description\": \"<p><div data-qa=\\\"resume-block-experience-description\\\" class=\\\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\\\"> <div class=\\\"text--qVoORhVlb9cOaw9w\\\"> <span><span>Разработал веб-платформу для управления затратами на топливо.</span></p><p></p><p><span> - Руководил разработкой приложения для оптимизации затрат на топливо: сервиса построения оптимального маршрута с учётом самых дешевых заправок по пути</span></span></p>\"}], \"languages\": [{\"name\": \"chinese\", \"level\": \"Intermediate\"}, {\"name\": \"english\", \"level\": \"Advanced\"}, {\"name\": \"russian\", \"level\": \"Native\"}], \"links\": [{\"resource_type\": \"hh\", \"value\": \"bd05225d000e54717700387ff2544a676a7446\", \"url\": \"https://tashkent.hh.uz/resume/bd05225d000e54717700387ff2544a676a7446?vacancyId=125653091&t=4837241395&resumeId=240415095&searchRid=1761131681093560460818137820f030&hhtmFrom=employer_vacancy_responses\"}], \"documents\": [{\"atm_id\": \"19614197fa284d3d9eeb3c6c3040b910\", \"type\": \"CleverStaff\", \"filename\": \"resume.pdf\", \"mimetype\": \"application/pdf\", \"size_bytes\": 519547, \"zipped\": false, \"hash\": \"c7ebe655cca297c2ac33d69598c967f2c6f1f099\", \"source\": \"CleverStaff\", \"uploaded\": \"2025-10-22 16:17:45.713881\", \"open_url\": \"http://0.0.0.0:8765/files/19614197fa284d3d9eeb3c6c3040b910\", \"data_base64\": \"JVBERi0xLjUKJbXtrvsKNCAwIG9iago8PC....", \"encoding\": \"base64\"}]}]}"
-            }
-        ],
-        "isError": false
+  "total": 15314,
+  "count": 3,
+  "limit": 3,
+  "offset": 9,
+  "candidates": [
+    {
+      "candidate_id": "012e1c0945904f3a8c53a6a18686861a",
+      "full_name": "Bakhodir Halmetov Kamiljanovich",
+      "position": "Руководитель",
+      "current_position": null,
+      "current_work_place": null,
+      "industry": null,
+      "role_level": null,
+      "experience": 610,
+      "salary": 80000000,
+      "currency": "USD",
+      "employment_type": "projectWork,underemployment,fullEmployment",
+      "sex": "M",
+      "region": "Tashkent, Uzbekistan",
+      "skills": [
+        {
+          "skill": "Водительское удостоверение категории B",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Пользователь ПК",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Проведение презентаций",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Подбор персонала",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Работа с большим объемом информации",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Умение работать в команде",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Работа в команде",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "MS Outlook",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Грамотная речь",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Обучение персонала",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Телефонные переговоры",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Внутренний контроль",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "MS PowerPoint",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Деловая переписка",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "1С: Предприятие 8",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Руководство коллективом",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Английский язык",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Организация мероприятий",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Внутренний аудит",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Деловое общение",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Взаимодействие с контрольными органами",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Деловая коммуникация",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Организаторские навыки",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Ведение переговоров",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Контроль исполнения решений",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Управление персоналом",
+          "type": "imported",
+          "years": null
+        }
+      ],
+      "education": [
+        {
+          "from_date": null,
+          "to_date": "2023",
+          "university": "Graduate School of Business and Entrepreneurship",
+          "speciality": "Master’s Diploma (MBA) , Master’s Diploma (MBA)"
+        },
+        {
+          "from_date": null,
+          "to_date": "2009",
+          "university": "Ургенчский государственный университет",
+          "speciality": "МАКРОЭКОНОМИКА, Бухгалтерский учет, анализ и аудит"
+        },
+        {
+          "from_date": null,
+          "to_date": "2005",
+          "university": "УзГУМЯ",
+          "speciality": "ПЕРЕВОДЧЕСКИЙ, Перевод и переводоведение"
+        }
+      ],
+      "work_experience": [
+        {
+          "from_date": "Янв 2023",
+          "to_date": "сейчас",
+          "company": "JSC \"APEX BANK\"",
+          "position": "Директор департамента внутреннего контроля и комплаенс",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>1. AML (ПОД/ФТ) - контроль операции и бизнес процессов по соблюдению законодательства в области по противодействию легализации доходов полученных от преступной деятельности финансирования терроризма и финансирования распространения оружия массового уничтожения</span></p><p><span>2. Санкционный комплаенс - контроль соблюдения местных и международных санкционных законодательства и нормы, контроль по международным операциям.</span></p><p><span>3. Антикоррупционный комплаенс - контроль по соблюдению законодательства по противодействию взятничества и коррупцию, управления конфликта интересов</span></p><p><span>4. Внутренный контоль - соблюдения норм и законодательных актов и ВНД банка по бизнес процессам</span></p><p><span>5. Управления комплаенс рисками - выявление, оценка и мониторинг комплаенс-рисков, связанных с банковской деятельностью, включая внедрение новых банковских продуктов</span></p><p></p><p><span>Эксперт в области комплаенса, управления рисками и внутреннего контроля с опытом разработки и внедрения систем AML/KYC, Anticorruption compliance как в банковском секторе, так и в организациях, работающих с криптоактивами. Успешно выстраиваю с нуля процессы мониторинга, анализа и предотвращения рисков, обеспечивая соответствие международным и локальным нормативным требованиям. Обладаю глубоким пониманием регуляторных стандартов, интеграции автоматизированных решений и построения эффективных стратегий по защите бизнеса от финансовых и санкционных рисков.</span></span></p>"
+        },
+        {
+          "from_date": "Июн 2021",
+          "to_date": "Янв 2023",
+          "company": "АО \"Узбекнефтегаз\"",
+          "position": "Заместитель начальника департамента финансового и комплаенс контроля",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>финансовый и комплаенс контроля во всех сферах нефтегазовой отрасли</span></p><p><span>Контрол соблюдении законодательсва в сфере противодействию коррупции и взятничества, конфликт интересов.</span></p><p><span>Соблюдении норм и правил, внутренных нормативных документов в бизнес процессах, финансовых операциях, закуп и проведения служебных расследование нарушении и злоупотребление служебных полномочии</span></span></p>"
+        },
+        {
+          "from_date": "Июн 2020",
+          "to_date": "Июн 2021",
+          "company": "АО \"Узбекнефтегаз\"",
+          "position": "Начальник комплаенс-контроля",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>финансовый и комплаенс контроля во всех сферах нефтегазовой отрасли</span></p><p><span>Контрол соблюдении законодательсва в сфере противодействию коррупции и взятничества, конфликт интересов.</span></p><p><span>Соблюдении норм и правил, внутренных нормативных документов в бизнес процессах, финансовых операциях, закуп и проведения служебных расследование нарушении и злоупотребление служебных полномочии</span></span></p>"
+        },
+        {
+          "from_date": "Сен 2019",
+          "to_date": "Июн 2020",
+          "company": "АКБ \"Tenge Bank\"",
+          "position": "Начальник управления внутреннего контроля",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>Осуществление комплаенс контроля, контроль всех банковских операции по противодействие легализации доходов полученных от преступной деятельностью и финансирования терроризма, распространения оружие массового уничтожении</span></span></p>"
+        },
+        {
+          "from_date": "Ноя 2018",
+          "to_date": "Авг 2019",
+          "company": "АКБ \"HAMKORBANK\"",
+          "position": "Главный специалист службы финансового мониторинга",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>Осуществление комплаенс контроля, контроль всех банковских операции по противодействие легализации доходов полученных от преступной деятельностью и финансирования терроризма, распространения оружие массового уничтожении</span></span></p>"
+        },
+        {
+          "from_date": "Фев 2018",
+          "to_date": "Ноя 2018",
+          "company": "Национальный банк ВЭД РУ",
+          "position": "Начальник Управления внутреннего контроля по противодействий легализации доходов полученных от преступной деятельности и финансированию терроризма, финансированию распространение оружие массового уничтожение",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>Осуществление комплаенс контроля, контроль всех банковских операции по противодействие легализации доходов полученных от преступной деятельностью и финансирования терроризма, распространения оружие массового уничтожении</span></span></p>"
+        },
+        {
+          "from_date": "Июн 2017",
+          "to_date": "Фев 2018",
+          "company": "Национальный банк ВЭД РУ",
+          "position": "Начальник отдел по контролю кредитных операций в Департаменте внутреннего контроля",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>Контроль всех кредитных операции по факту нецелевого использование и мошенничество</span></span></p>"
+        },
+        {
+          "from_date": "Апр 2008",
+          "to_date": "Июн 2017",
+          "company": "Национальный банк ВЭД РУ",
+          "position": "специалист 1,2 категорий, ведущий специалист, главный специалист, Начальник отдела",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>отдел кредитования, сектор валютно обменных операций, отдел по обслуживанию физических лиц, служба внутреннего контроля, отдел по контролю и надзору операций по привлечению средств вкладчиков и кредиторов, отдел внутреннего контроля кредитных операций в Департаменте внутреннего контроля.- оформления и выдача кредитов, контроль операций валютно обменных операций, внутренный контроль Контроль всех операций по вкладам физических лиц и по депозитам юридических лиц, мониторинг и контроль всех выданных кредитов</span></span></p>"
+        },
+        {
+          "from_date": "Сен 2005",
+          "to_date": "Июл 2006",
+          "company": "Школа №73 Яккасарайского района",
+          "position": "Учитель английского языка",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>учить детей</span></span></p>"
+        },
+        {
+          "from_date": "Мар 2001",
+          "to_date": "Ноя 2001",
+          "company": "СП \"Даритал\" обувной фабрика",
+          "position": "Сортировщик склада готовой продукций",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-2-4 magritte-text_style-primary___AQ7MW_4-2-4 magritte-text_typography-paragraph-3-regular___tEZmr_4-2-4\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span><span>сортировать всех готовых продукции</span></span></p>"
+        }
+      ],
+      "languages": [
+        {
+          "name": "english",
+          "level": "Proficient"
+        },
+        {
+          "name": "russian",
+          "level": "Proficient"
+        },
+        {
+          "name": "uzbek",
+          "level": "Native"
+        }
+      ],
+      "links": [
+        {
+          "resource_type": "hh",
+          "value": "7999638f0005d00ba300387ff2556a4967434b",
+          "url": "https://hh.uz/resume/7999638f0005d00ba300387ff2556a4967434b?vacancyId=126778882&simhash=126778882@009bcac2201428919fb898e07311c9c0&hhtmFromLabel=suitable_resumes&searchRid=1761043326016d6e6d970bd494e7d029&hhtmFrom=employer_vacancy_responses"
+        }
+      ],
+      "documents": [
+        {
+          "atm_id": "25a28fbcb4f941b4b42bc6ab5963d671",
+          "type": "CleverStaff",
+          "filename": "resume.pdf",
+          "mimetype": "application/pdf",
+          "size_bytes": 386688,
+          "source": "CleverStaff",
+          "uploaded": "2025-10-21 17:20:10.187764",
+          "open_url": "http://0.0.0.0:8765/files/25a28fbcb4f941b4b42bc6ab5963d671"
+        }
+      ]
+    },
+    {
+      "candidate_id": "0162ecad05764e3dae533755704adb94",
+      "full_name": "Андрей Сокол Андреевич",
+      "position": "MLOps",
+      "current_position": null,
+      "current_work_place": null,
+      "industry": null,
+      "role_level": null,
+      "experience": 610,
+      "salary": null,
+      "currency": null,
+      "employment_type": "projectWork,underemployment,fullEmployment",
+      "sex": "M",
+      "region": "Moscow, Russia",
+      "skills": [],
+      "education": [
+        {
+          "from_date": null,
+          "to_date": "2017",
+          "university": "Московский автомобильно-дорожный государственный технический университет, Москва",
+          "speciality": "Управление - Автоматизированные Системы Управления, Кандидат наук"
+        },
+        {
+          "from_date": null,
+          "to_date": "2014",
+          "university": "Московский автомобильно-дорожный государственный технический университет",
+          "speciality": "Управление - Автоматизированные Системы Управления, Специалист"
+        }
+      ],
+      "work_experience": [
+        {
+          "from_date": "Окт 2014",
+          "to_date": "сейчас",
+          "company": "ABN",
+          "position": "DevOps-инженер / MLOps-инженер / SRE",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_5-1-0 magritte-text_style-primary___AQ7MW_5-1-0 magritte-text_typography-paragraph-3-regular___tEZmr_5-1-0\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>1. Построение микросервисных конвееров полного цикла ML + MLOps, непрерывной доставки и обновления ML моделей на Dev/Stage/Release, подключение и обучение на GPU через Cuda, настройка инференса на FastAPI / ONNX / Triton / CatBoost и т.д., разворот нагруженных AI шлюзов с Rolling Updates и Zero Down Time, создание Baremetal Highload ML-кластеров, централизация метрик и моделей в MLFlow и KubeFlow, Jupyter Notebook инженерия, DVC, настройка мониторинга и алертинга деградации моделей, A/B тестирование и т.д.</p><p></p><p>2. Создание с нуля и работа с Kubernetes K8S, Docker, Rancher, FreeIPA, Dragonfly, Jaeger, Tarantool, SonarQube, KrakenD, Longhorn, GitLab, Nexus, Harbor, CI/CD, ArgoCD, Helm Charts, KeyCloak, Authentik, Nginx, Terraform, PHP-FPM, Apache, MySQL / MariaDB / Percona Galera, PostgreSQL, Patroni, Etcd, HAProxy, Redis, Valkey, KeyDB, Kafka, Bitrix, pfSense, Keepalived, ClickHouse, MongoDB, ELK, VMware vSphere, Proxmox, OpenVPN, WireGuard, Ansible, Zabbix, GrayLog, Grafana, Prometheus, Victoria Metrics, Bind, Sentry, GlitchTip, Percona Monitoring and Management и т.д.</p><p></p><p>3. Использование комбинирования Cloud + Baremetal в крупных и прочих провайдерах (Yandex Cloud, Mail Cloud Solution, Amazon AWS, MS Azure, Selectel, Google Cloud, Hetzner, Inferno, Fairy и т.д.) с целью оптимизации затрат и получения максимальных метрик эффективности/рентабельности/стоимости.</p><p></p><p>4. Работа с разными ОС (Rocky Linux, Alma Linux, Red Hat, Oracle Linux, Windows Server, FreeBSD, Debian, Ubuntu, Astra Linux, Alt Linux, RedOS, CentOS и т.д.) и вендорами оборудования (Yadro, Cisco, Dionis NX, Avaya, Unifi, Mikrotik, Keenetic, HPE, Supermicro, Intel, Navigator, Depo, QNAP, Synology и т.д.).</p><p></p><p>5. OSI, Routing, NAT, Firewall, VLAN, Aggregation, STP, VPN, Peering и т.д.</span></p>"
+        },
+        {
+          "from_date": "Апр 2013",
+          "to_date": "Окт 2014",
+          "company": "Центр международной торговли, ОАО",
+          "position": "DevOps-Инженер",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_5-1-0 magritte-text_style-primary___AQ7MW_5-1-0 magritte-text_typography-paragraph-3-regular___tEZmr_5-1-0\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>Kubernetes K8S, Docker (Compose, Swarm), GitLab, GitLab-CI, Registry, CI/CD, Proxmox, KVM, LXC, Cisco (2960, 3550, 3560, 3750, 6506, VXR 7206, ASR 1001 и т.д., VLAN, Routing, Aggregation, CDP, VTP, STP и т.д.), HPE (DL 360-380, StoreOnce, MSA и т.д.), IBM, Miktrotik, Windows Server (2008, 2012, 2016), Linux (Red Hat, Debian, CentOS, Ubuntu и т.д.), Unix (FreeBSD), Zabbix, Prometheus, Grafana, Symantec, Acronis, Nginx, PHP-FPM, Apache, MySQL, PostgreSQL, HAProxy, Bitrix, Bitrix 24, Bind, OpenVPN, WireGuard, PMG, Zimbra, iRedmail, Perl, Ansible, vSphere 6.5-6.7, QNAP, Synology, Oracle VM, ELK и т.д.</span></p>"
+        }
+      ],
+      "languages": [
+        {
+          "name": "english",
+          "level": "Upper_Intermediate"
+        },
+        {
+          "name": "russian",
+          "level": "Native"
+        }
+      ],
+      "links": [
+        {
+          "resource_type": "hh",
+          "value": "225116b4000fdd5d6d00387ff2745451786553",
+          "url": "https://tashkent.hh.uz/resume/225116b4000fdd5d6d00387ff2745451786553?hhtmFromLabel=related_resumes&searchRid=17785607116214d533acad636224a008&hhtmFrom=resume&contactsOpened=true"
+        }
+      ],
+      "documents": [
+        {
+          "atm_id": "28eb61f1818447e684014a7c7aa5aade",
+          "type": "CleverStaff",
+          "filename": "resume.pdf",
+          "mimetype": "application/pdf",
+          "size_bytes": 37736,
+          "source": "CleverStaff",
+          "uploaded": "2026-05-12 09:40:28.628121",
+          "open_url": "http://0.0.0.0:8765/files/28eb61f1818447e684014a7c7aa5aade"
+        }
+      ]
+    },
+    {
+      "candidate_id": "016e6d86f7bf43338c546ed91f4da0ed",
+      "full_name": "Эрназарова Шахноза Хикматиллаевна",
+      "position": "Переводчик, редактор, корректор (рус-узб)",
+      "current_position": null,
+      "current_work_place": null,
+      "industry": null,
+      "role_level": null,
+      "experience": 610,
+      "salary": null,
+      "currency": null,
+      "employment_type": "fullEmployment",
+      "sex": "F",
+      "region": "Tashkent, Uzbekistan",
+      "skills": [
+        {
+          "skill": "Наполнение контентом",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Точность и внимательность к деталям",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Деловое общение",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Ответственность",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Редактирование",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Руководство коллективом",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Редактирование текстов",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Копирайтинг",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Корректура текстов",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Деловая переписка",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Поиск информации в интернет",
+          "type": "imported",
+          "years": null
+        },
+        {
+          "skill": "Работа с большим объемом информации",
+          "type": "imported",
+          "years": null
+        }
+      ],
+      "education": [
+        {
+          "from_date": null,
+          "to_date": "2010",
+          "university": "НУУз",
+          "speciality": "Зарубежная филология, Английский язык"
+        }
+      ],
+      "work_experience": [
+        {
+          "from_date": "Ноя 2023",
+          "to_date": "сейчас",
+          "company": "АО «ЯНГИ БАНК»",
+          "position": "Главный редактор",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-3-1 magritte-text_style-primary___AQ7MW_4-3-1 magritte-text_typography-paragraph-3-regular___tEZmr_4-3-1\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>Перевод-адаптация, редактирование, корректирование рус-узб/узб-рус:</p><p>документация;</p><p>рекламные материалы.</span></p>"
+        },
+        {
+          "from_date": "Янв 2019",
+          "to_date": "сейчас",
+          "company": "Фриланс",
+          "position": "Переводчик-корректор",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-3-1 magritte-text_style-primary___AQ7MW_4-3-1 magritte-text_typography-paragraph-3-regular___tEZmr_4-3-1\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>Сотрудничала с известными компаниями как:</p><p>Bellissimo Pizza, Dodo Pizza, Eman, Handy, Meest China, KS Group, Этажи, Xon Saroy, Havas, Beeline, Borisov &amp; Irisov, Chocolate, WOSCU, GForce</span></p>"
+        },
+        {
+          "from_date": "Фев 2021",
+          "to_date": "Окт 2023",
+          "company": "Креативное маркетинговое агенство Division",
+          "position": "Переводчик-корректор",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-3-1 magritte-text_style-primary___AQ7MW_4-3-1 magritte-text_typography-paragraph-3-regular___tEZmr_4-3-1\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>Перевод и адаптация рус-узб/узб-рус рекламных текстов, слоганов, неймингов, постов для соцсетей, флаеров, песен и стихов</p><p>для рекламных роликов в рифму с сохранением смысла.</p><p>Корректура, вычитка, редактирование текстов;</p><p>устранение орфографических и пунктуационных ошибок, ошибок стилистического характера;</p><p>публикация и обновление контента на сайте;</p><p>транскрибация и перевод видеоконтента;</p><p>перевод и адаптация сайтов и лендинг страниц;</p><p>участие в создании слоганов и неймингов.</span></p>"
+        },
+        {
+          "from_date": "Июл 2013",
+          "to_date": "Июн 2020",
+          "company": "Средняя общеобразовательная школа № 41",
+          "position": "Преподаватель английского языка",
+          "description": "<p><div data-qa=\"resume-block-experience-description\" class=\"magritte-text___pbpft_4-3-1 magritte-text_style-primary___AQ7MW_4-3-1 magritte-text_typography-paragraph-3-regular___tEZmr_4-3-1\"> <div class=\"text--qVoORhVlb9cOaw9w\"> <span>Проводила уроки английского языка в начальных и старших, в русских и узбекских классах.</span></p>"
+        }
+      ],
+      "languages": [
+        {
+          "name": "english",
+          "level": "Advanced"
+        },
+        {
+          "name": "russian",
+          "level": "Proficient"
+        },
+        {
+          "name": "uzbek",
+          "level": "Native"
+        }
+      ],
+      "links": [
+        {
+          "resource_type": "hh",
+          "value": "536e70a6000b0b832b00387ff238764641736e",
+          "url": "https://hh.uz/resume/536e70a6000b0b832b00387ff238764641736e?query=редактор&searchRid=1763114646206d3b45567245db291026&hhtmFrom=resume_search_catalog&contactsOpened=true"
+        }
+      ],
+      "documents": [
+        {
+          "atm_id": "5639dee62f984621906db5162f7be0c6",
+          "type": "CleverStaff",
+          "filename": "resume.pdf",
+          "mimetype": "application/pdf",
+          "size_bytes": 501612,
+          "source": "CleverStaff",
+          "uploaded": "2025-11-14 15:05:24.758962",
+          "open_url": "http://0.0.0.0:8765/files/5639dee62f984621906db5162f7be0c6"
+        }
+      ]
     }
+  ]
 }
