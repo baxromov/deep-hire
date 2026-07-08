@@ -1,39 +1,107 @@
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1931, in post
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:30:11 +0000] "GET /_next/static/chunks/02i7dfk78~t~2.js HTTP/1.1" 200 11064 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
-backend-1   |     return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1716, in request
-backend-1   |     raise self._make_status_error_from_response(err.response) from None
-backend-1   | openai.BadRequestError: Error code: 400 - {'error': {'message': 'litellm.BadRequestError: You passed in model=gpt-oss:120b-cloud. There are no healthy deployments for this model. Received Model Group=gpt-oss:120b-cloud\nAvailable Model Group Fallbacks=None', 'type': None, 'param': None, 'code': '400'}}
-backend-1   | ERROR: app.services.ai_service: score_candidate: plain JSON also failed: Error code: 400 - {'error': {'message': 'litellm.BadRequestError: You passed in model=gpt-oss:120b-cloud. There are no healthy deployments for this model. Received Model Group=gpt-oss:120b-cloud\nAvailable Model Group Fallbacks=None', 'type': None, 'param': None, 'code': '400'}}
-backend-1   | Traceback (most recent call last):
-backend-1   |   File "/app/app/services/ai_service.py", line 360, in score_candidate
-backend-1   |     response = await llm.ainvoke(json_prompt)
-backend-1   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_core/language_models/chat_models.py", line 499, in ainvoke
-backend-1   |     llm_result = await self.agenerate_prompt(
-backend-1   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_core/language_models/chat_models.py", line 1860, in agenerate_prompt
-backend-1   |     return await self.agenerate(
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_core/language_models/chat_models.py", line 1818, in agenerate
-backend-1   |     raise exceptions[0]
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_core/language_models/chat_models.py", line 2151, in _agenerate_with_cache
-backend-1   |     result = await self._agenerate(
-backend-1   |              ^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_openai/chat_models/base.py", line 1960, in _agenerate
-backend-1   |     _handle_openai_bad_request(e)
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/langchain_openai/chat_models/base.py", line 1955, in _agenerate
-backend-1   |     raw_response = await self.async_client.with_raw_response.create(
-backend-1   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/_legacy_response.py", line 384, in wrapped
-backend-1   |     return cast(LegacyAPIResponse[R], await func(*args, **kwargs))
-backend-1   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/resources/chat/completions/completions.py", line 2814, in create
-backend-1   |     return await self._post(
-backend-1   |            ^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1931, in post
-backend-1   |     return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
-backend-1   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backend-1   |   File "/app/.venv/lib/python3.12/site-packages/openai/_base_client.py", line 1716, in request
-nginx-1     | 192.168.36.10 - - [08/Jul/2026:05:30:11 +0000] "
+10~x95jhs6ns3.js:1  GET http://172.31.174.11:8385/api/candidates/6a4ddc9fcfafec1e3712737c/resume 502 (Bad Gateway)
+
+bakhromovshb@genai-tst-jupiterhub01:~/deep-hire$ docker compose logs --tail 50
+frontend-1  | ▲ Next.js 16.2.4
+frontend-1  | - Local:         http://f29811088148:3001
+frontend-1  | - Network:       http://f29811088148:3001
+frontend-1  | ✓ Ready in 0ms
+backend-1   | INFO:     10.10.1.4:51812 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /api/auth/me HTTP/1.1" 200 143 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /ipotekabank-logo.png HTTP/1.1" 304 0 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=l5v2i HTTP/1.1" 200 295 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=l5v2i HTTP/1.1" 200 302 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=l5v2i HTTP/1.1" 200 292 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=l5v2i HTTP/1.1" 200 291 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /favicon.ico?favicon.0x3dzn~oxb6tn.ico HTTP/1.1" 200 25944 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=ypuun HTTP/1.1" 200 1085 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=a0zv5 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=4ivw0 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /admin/users?_rsc=yy73w HTTP/1.1" 200 542 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=16bat HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=1m1o5 HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /settings/integrations?_rsc=zjtep HTTP/1.1" 200 502 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=1ykvf HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /candidates?_rsc=146sl HTTP/1.1" 200 503 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=1cya1 HTTP/1.1" 200 682 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=gt96y HTTP/1.1" 200 307 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:17 +0000] "GET /vacancies?_rsc=nlizz HTTP/1.1" 200 502 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.1.4:51822 - "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:51844 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:51838 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:40948 - "GET /api/integrations/hh HTTP/1.1" 200 OK
+backend-1   | INFO: watchfiles.main: 11 changes detected
+backend-1   | INFO:     10.10.1.4:40966 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:40960 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:34 +0000] "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 10498 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f14" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:34 +0000] "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 2577 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /vacancies/6a4791c802cfe31e316c0ab0?_rsc=cbkj7 HTTP/1.1" 200 1270 "http://172.31.174.11:8385/vacancies" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 1317 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/talent-pool/status HTTP/1.1" 200 104 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:35 +0000] "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 42635 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:41 +0000] "GET /candidates/6a4de099cfafec1e37127f08?_rsc=884c3 HTTP/1.1" 200 1375 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:41 +0000] "GET /api/candidates/6a4de099cfafec1e37127f08 HTTP/1.1" 200 10178 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f08" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 1317 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/talent-pool/status HTTP/1.1" 200 104 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:44 +0000] "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 42635 "http://172.31.174.11:8385/vacancies/6a4791c802cfe31e316c0ab0" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:49 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:49 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:51 +0000] "GET /candidates/6a4de099cfafec1e37127f2c?_rsc=y9ius HTTP/1.1" 200 1270 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:51 +0000] "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 9001 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f2c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 9001 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f2c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:22:58 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:00 +0000] "GET /candidates/6a4de099cfafec1e37127f22?_rsc=y9ius HTTP/1.1" 200 1269 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:00 +0000] "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 4366 "http://172.31.174.11:8385/candidates/6a4de099cfafec1e37127f22" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:04 +0000] "GET /api/candidates/upload-status HTTP/1.1" 200 78 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:04 +0000] "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 11644 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 20469 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=40&limit=20&sort_by=score HTTP/1.1" 200 21567 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:06 +0000] "GET /api/candidates/?skip=60&limit=20&sort_by=score HTTP/1.1" 200 14129 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:07 +0000] "GET /candidates/6a4ddc9fcfafec1e3712737c?_rsc=y9ius HTTP/1.1" 200 1270 "http://172.31.174.11:8385/candidates" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:08 +0000] "GET /api/candidates/6a4ddc9fcfafec1e3712737c HTTP/1.1" 200 7227 "http://172.31.174.11:8385/candidates/6a4ddc9fcfafec1e3712737c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+nginx-1     | 192.168.36.10 - - [08/Jul/2026:09:23:08 +0000] "GET /api/candidates/6a4ddc9fcfafec1e3712737c/resume HTTP/1.1" 502 52 "http://172.31.174.11:8385/candidates/6a4ddc9fcfafec1e3712737c" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0" "-"
+backend-1   | INFO:     10.10.1.4:40980 - "GET /api/auth/me HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:40974 - "GET /api/candidates/6a4de099cfafec1e37127f31 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:52168 - "GET /api/auth/me HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:52156 - "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:52172 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:44692 - "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:44716 - "GET /api/auth/me HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:44704 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:44728 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:44740 - "GET /api/auth/me HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:46136 - "GET /api/candidates/6a4de099cfafec1e37127f14 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:46152 - "GET /api/vacancies/?skip=0&limit=20 HTTP/1.1" 200 OK
+backend-1   | /app/app/database.py:42: UserWarning: Api key is used with an insecure connection.
+backend-1   |   _qdrant_client = AsyncQdrantClient(
+backend-1   | INFO:     10.10.1.4:46160 - "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
+backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333/collections/hr-resume "HTTP/1.1 200 OK"
+backend-1   | INFO:     10.10.1.4:46162 - "GET /api/talent-pool/status HTTP/1.1" 200 OK
+backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333 "HTTP/1.1 200 OK"
+backend-1   | INFO:     10.10.1.4:46172 - "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
+backend-1   | INFO: watchfiles.main: 7 changes detected
+backend-1   | INFO:     10.10.1.4:33876 - "GET /api/candidates/6a4de099cfafec1e37127f08 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:33882 - "GET /api/vacancies/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
+backend-1   | INFO: httpx: HTTP Request: GET http://host.docker.internal:6333/collections/hr-resume "HTTP/1.1 200 OK"
+backend-1   | INFO:     10.10.1.4:33886 - "GET /api/talent-pool/status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:33896 - "GET /api/candidates/vacancy/6a4791c802cfe31e316c0ab0 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49322 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49310 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49332 - "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49336 - "GET /api/candidates/6a4de099cfafec1e37127f2c HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49348 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:49356 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41786 - "GET /api/candidates/6a4de099cfafec1e37127f22 HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41792 - "GET /api/candidates/upload-status HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41800 - "GET /api/candidates/?skip=0&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41816 - "GET /api/candidates/?skip=20&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41826 - "GET /api/candidates/?skip=40&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41828 - "GET /api/candidates/?skip=60&limit=20&sort_by=score HTTP/1.1" 200 OK
+backend-1   | INFO:     10.10.1.4:41842 - "GET /api/candidates/6a4ddc9fcfafec1e3712737c HTTP/1.1" 200 OK
+backend-1   | INFO: httpx: HTTP Request: GET http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9 "HTTP/1.1 500 Internal Server Error"
+backend-1   | ERROR: app.routers.candidates: CS resume fetch failed url=http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9: Server error '500 Internal Server Error' for url 'http://172.31.174.11:8765/files/234bcb9e7d5d4bdaad94148073553ad9'
+backend-1   | For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+backend-1   | INFO:     10.10.1.4:41858 - "GET /api/candidates/6a4ddc9fcfafec1e3712737c/resume HTTP/1.1" 502 Bad Gateway
