@@ -1062,7 +1062,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         # Blend reranker score (0–1 → 0–85) + skill bonus (0–15)
                         final_sc = min(100, int(rerank_sc * 85) + skill_bonus)
                         if final_sc >= min_score:
-                            scored.append(({**raw, "_source": "db_search"}, final_sc))
+                            scored.append(({**raw, "_source": "db_search", "_vector_score": final_sc}, final_sc))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
                     # LLM scoring on top candidates after reranker
@@ -1102,7 +1102,12 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                                 )
                                 # Fall back to reranker score if LLM failed (returns 0)
                                 final_sc = llm_sc if llm_sc > 0 else reranker_sc
-                                enriched = {**resume, "score_reasoning": reasoning, "score_criteria": criteria}
+                                enriched = {
+                                    **resume,
+                                    "score_reasoning": reasoning,
+                                    "score_criteria": criteria,
+                                    "_llm_score": llm_sc if llm_sc > 0 else None,
+                                }
                                 return enriched, final_sc
 
                         raw_results = await asyncio.gather(
@@ -1139,7 +1144,7 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         qdrant_sc = int(hit.get("_qdrant_score", 0) * 85)
                         final_sc = min(100, qdrant_sc + skill_bonus)
                         if final_sc >= min_score:
-                            scored.append(({**raw, "_source": "db_search"}, final_sc))
+                            scored.append(({**raw, "_source": "db_search", "_vector_score": final_sc}, final_sc))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
                     # ── LLM scoring on top candidates (no-reranker path) ──────────
@@ -1178,7 +1183,12 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                                     criteria=vacancy.score_criteria,
                                 )
                                 final_sc = llm_sc if llm_sc > 0 else cosine_sc
-                                enriched = {**resume, "score_reasoning": reasoning, "score_criteria": criteria}
+                                enriched = {
+                                    **resume,
+                                    "score_reasoning": reasoning,
+                                    "score_criteria": criteria,
+                                    "_llm_score": llm_sc if llm_sc > 0 else None,
+                                }
                                 return enriched, final_sc
 
                         raw_results = await asyncio.gather(

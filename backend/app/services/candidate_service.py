@@ -112,6 +112,8 @@ async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> i
                     "candidate_id": cand_id,
                     "hh_resume_id": hh_id,
                     "relevance_score": score,
+                    "vector_score": resume.get("_vector_score"),
+                    "llm_score": resume.get("_llm_score"),
                     "score_reasoning": resume.get("score_reasoning"),
                     "score_criteria": resume.get("score_criteria") or [],
                     "source": source,

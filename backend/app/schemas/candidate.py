@@ -20,6 +20,8 @@ class CandidateResponse(BaseModel):
     photo_url: Optional[str]
     resume_url: Optional[str]
     relevance_score: Optional[int]
+    vector_score: Optional[int] = None
+    llm_score: Optional[int] = None
     is_vectorized: bool = False
     matched_at: Optional[datetime] = None
     source: Optional[str] = None
@@ -62,6 +64,8 @@ class CandidateResponse(BaseModel):
             photo_url=doc.photo_url,
             resume_url=resume_url,
             relevance_score=mr.relevance_score if mr else None,
+            vector_score=mr.vector_score if mr else None,
+            llm_score=mr.llm_score if mr else None,
             is_vectorized=doc.is_vectorized,
             matched_at=mr.matched_at if mr else None,
             source=raw.get("source"),

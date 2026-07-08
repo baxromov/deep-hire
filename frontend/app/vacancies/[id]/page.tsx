@@ -279,7 +279,7 @@ type Props = { params: Promise<{ id: string }> };
 const labelOf = (val: string | null, opts: { value: string; label: string }[]) =>
   opts.find((o) => o.value === val)?.label ?? val;
 
-function CandidateRow({ candidate }: { candidate: Candidate }) {
+function CandidateRow({ candidate, score }: { candidate: Candidate; score: number | null }) {
   const router = useRouter();
   const name =
     [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") ||
@@ -324,18 +324,18 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
         </div>
       </td>
       <td className="px-3 py-3 pr-4">
-        {candidate.relevance_score != null && (
+        {score != null && (
           <div>
             <span
               className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                candidate.relevance_score >= 70
+                score >= 70
                   ? "bg-green-50 text-green-700"
-                  : candidate.relevance_score >= 40
+                  : score >= 40
                   ? "bg-yellow-50 text-yellow-700"
                   : "bg-red-50 text-red-600"
               }`}
             >
-              {candidate.relevance_score}%
+              {score}%
             </span>
             {candidate.score_criteria && candidate.score_criteria.length > 0 && (
               <div className="mt-1.5 space-y-0.5">
@@ -395,6 +395,8 @@ export default function VacancyDetailPage({ params }: Props) {
   const [dbResult, setDbResult] = useState<number | null>(null);
   const [dbMinScore, setDbMinScore] = useState(40);
 
+  const [resultTab, setResultTab] = useState<"llm" | "vector">("llm");
+
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);
   const poolSourceRef    = useRef<EventSource | null>(null);
@@ -421,9 +423,13 @@ export default function VacancyDetailPage({ params }: Props) {
     () => candidateApi.byVacancy(id).then((r) => r.data)
   );
 
-  const candidates = [...rawCandidates].sort(
-    (a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0)
+  const vectorCandidates = [...rawCandidates].sort(
+    (a, b) => (b.vector_score ?? b.relevance_score ?? 0) - (a.vector_score ?? a.relevance_score ?? 0)
   );
+  const llmCandidates = rawCandidates
+    .filter((c) => c.llm_score != null)
+    .sort((a, b) => (b.llm_score ?? 0) - (a.llm_score ?? 0));
+  const candidates = resultTab === "llm" ? llmCandidates : vectorCandidates;
 
   if (!vacancy) {
     return (
@@ -882,11 +888,40 @@ export default function VacancyDetailPage({ params }: Props) {
 
 
       {/* ── Candidates ──────────────────────────────────────────────────────── */}
-      {candidates.length > 0 && (
+      {rawCandidates.length > 0 && (
         <div id="candidates-section" className="mt-6">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Подходящие кандидаты ({candidates.length})
-          </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Подходящие кандидаты ({candidates.length})
+            </p>
+            <div className="flex items-center gap-1.5 rounded-full bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setResultTab("llm")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  resultTab === "llm" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                LLM оценка ({llmCandidates.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultTab("vector")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  resultTab === "vector" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Векторный поиск ({vectorCandidates.length})
+              </button>
+            </div>
+          </div>
+          {candidates.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
+              {resultTab === "llm"
+                ? "Нет кандидатов, оценённых LLM — запустите поиск по базе (DB Search)."
+                : "Нет кандидатов из векторного поиска."}
+            </div>
+          ) : (
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
             <table className="w-full text-left">
               <thead>
@@ -900,10 +935,17 @@ export default function VacancyDetailPage({ params }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {candidates.map((c) => <CandidateRow key={c.id} candidate={c} />)}
+                {candidates.map((c) => (
+                  <CandidateRow
+                    key={c.id}
+                    candidate={c}
+                    score={resultTab === "llm" ? c.llm_score : c.vector_score ?? c.relevance_score}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
+          )}
         </div>
       )}
 

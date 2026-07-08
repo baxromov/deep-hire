@@ -14,6 +14,8 @@ export interface Candidate {
   photo_url: string | null;
   resume_url: string | null;
   relevance_score: number | null;
+  vector_score: number | null;
+  llm_score: number | null;
   is_vectorized: boolean;
   matched_at: string;
   // Source & contact (from raw_resume_json)

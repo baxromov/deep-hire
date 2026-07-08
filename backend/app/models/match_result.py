@@ -12,6 +12,8 @@ class MatchResult(Document):
     candidate_id: PydanticObjectId
     hh_resume_id: str
     relevance_score: Optional[int] = None
+    vector_score: Optional[int] = None
+    llm_score: Optional[int] = None
     score_reasoning: Optional[str] = None
     score_criteria: List[Dict[str, Any]] = Field(default_factory=list)
     source: str = "db_search"
