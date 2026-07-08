@@ -128,17 +128,22 @@ async def sync_cleverstaff() -> dict:
 
         total_fetched += len(page)
 
-        # Log candidates where MCP server couldn't provide documents (e.g. BadGzipFile).
-        # We still index them using profile data (position, skills, experience).
-        for c in page:
-            note = c.get("documents_note") or ""
-            if note:
-                logger.info(
-                    "Candidate id=%s name=%r has documents_note: %s",
-                    c.get("candidate_id"), c.get("full_name"), note,
-                )
+        # Skip candidates without documents
+        page_with_docs = [
+            c for c in page
+            if any(d.get("open_url") for d in c.get("documents") or [])
+        ]
+        skipped = len(page) - len(page_with_docs)
+        if skipped:
+            for c in page:
+                if not any(d.get("open_url") for d in c.get("documents") or []):
+                    logger.info(
+                        "SKIP id=%s name=%r — no documents%s",
+                        c.get("candidate_id"), c.get("full_name"),
+                        f" ({c['documents_note']})" if c.get("documents_note") else "",
+                    )
 
-        if not page:
+        if not page_with_docs:
             offset += PAGE_LIMIT
             if global_total and offset >= global_total:
                 break
@@ -146,18 +151,15 @@ async def sync_cleverstaff() -> dict:
             continue
 
         # Batch-check Redis: which candidate_ids are already synced?
-        cids = [c.get("candidate_id", "") for c in page]
+        cids = [c.get("candidate_id", "") for c in page_with_docs]
         is_known = await redis.smismember(REDIS_KEY, *cids)
-        new_candidates = [c for c, known in zip(page, is_known) if not known]
-        known_candidates = [c for c, known in zip(page, is_known) if known]
+        new_candidates = [c for c, known in zip(page_with_docs, is_known) if not known]
+        known_candidates = [c for c, known in zip(page_with_docs, is_known) if known]
 
-        no_docs_count = sum(
-            1 for c in page
-            if not any(d.get("open_url") for d in c.get("documents") or [])
-        )
         logger.info(
-            "Page offset=%d: fetched=%d new=%d already_synced=%d no_open_url=%d",
-            offset, len(page), len(new_candidates), len(known_candidates), no_docs_count,
+            "Page offset=%d: fetched=%d with_docs=%d new=%d already_synced=%d skipped=%d",
+            offset, len(page), len(page_with_docs), len(new_candidates),
+            len(known_candidates), skipped,
         )
 
         # For already-synced candidates: patch cs_open_url if it was missing (no re-embedding)
