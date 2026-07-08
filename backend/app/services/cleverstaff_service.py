@@ -67,7 +67,7 @@ async def _call_mcp(arguments: dict) -> dict:
         data = r.json()
 
     raw_text = data["result"]["content"][0]["text"]
-    logger.info("MCP raw response (first 500 chars): %s", raw_text[:500])
+    logger.info("MCP raw response: %s", raw_text)
 
     result = json.loads(raw_text)
     candidates = result.get("candidates", [])
