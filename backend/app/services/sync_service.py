@@ -128,17 +128,17 @@ async def sync_cleverstaff() -> dict:
 
         total_fetched += len(page)
 
-        # Only process candidates that have at least one document with a usable open_url.
-        # Candidates without documents are skipped entirely — no file = not importable.
-        def _has_document(c: dict) -> bool:
-            return any(d.get("open_url") for d in c.get("documents") or [])
+        # Log candidates where MCP server couldn't provide documents (e.g. BadGzipFile).
+        # We still index them using profile data (position, skills, experience).
+        for c in page:
+            note = c.get("documents_note") or ""
+            if note:
+                logger.info(
+                    "Candidate id=%s name=%r has documents_note: %s",
+                    c.get("candidate_id"), c.get("full_name"), note,
+                )
 
-        page_with_docs = [c for c in page if _has_document(c)]
-        skipped_no_docs = len(page) - len(page_with_docs)
-        if skipped_no_docs:
-            logger.info("Skipping %d candidates with no document/open_url", skipped_no_docs)
-
-        if not page_with_docs:
+        if not page:
             offset += PAGE_LIMIT
             if global_total and offset >= global_total:
                 break
@@ -146,15 +146,18 @@ async def sync_cleverstaff() -> dict:
             continue
 
         # Batch-check Redis: which candidate_ids are already synced?
-        cids = [c.get("candidate_id", "") for c in page_with_docs]
+        cids = [c.get("candidate_id", "") for c in page]
         is_known = await redis.smismember(REDIS_KEY, *cids)
-        new_candidates = [c for c, known in zip(page_with_docs, is_known) if not known]
-        known_candidates = [c for c, known in zip(page_with_docs, is_known) if known]
+        new_candidates = [c for c, known in zip(page, is_known) if not known]
+        known_candidates = [c for c, known in zip(page, is_known) if known]
 
+        no_docs_count = sum(
+            1 for c in page
+            if not any(d.get("open_url") for d in c.get("documents") or [])
+        )
         logger.info(
-            "Page offset=%d: fetched=%d (with_docs=%d) new=%d already_synced=%d no_docs_skipped=%d",
-            offset, len(page), len(page_with_docs), len(new_candidates),
-            len(known_candidates), skipped_no_docs,
+            "Page offset=%d: fetched=%d new=%d already_synced=%d no_open_url=%d",
+            offset, len(page), len(new_candidates), len(known_candidates), no_docs_count,
         )
 
         # For already-synced candidates: patch cs_open_url if it was missing (no re-embedding)
@@ -168,7 +171,7 @@ async def sync_cleverstaff() -> dict:
                 hh_resume_id = f"cs:{cand.get('candidate_id', '')}"
                 stripped_docs = [
                     {k: v for k, v in d.items() if k != "data_base64"}
-                    for d in cand["documents"]
+                    for d in (cand.get("documents") or [])
                 ]
                 doc_patch_ops.append(UpdateOne(
                     {"hh_resume_id": hh_resume_id, "raw_resume_json.cs_open_url": {"$exists": False}},
