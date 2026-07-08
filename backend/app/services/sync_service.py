@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_KEY = "cleverstaff:synced_ids"
 BATCH_EMBED = 20    # candidates to embed per sub-batch
-PAGE_LIMIT = 10     # candidates per MCP page (each carries ~500KB PDF base64 → 10 ≈ 5MB safe)
+PAGE_LIMIT = 5      # MCP server fails (BadGzipFile) at limit>=6, so 5 is the safe max
 UPSERT_BATCH = 200  # points per Qdrant upsert call
 
 
