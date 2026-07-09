@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -124,8 +124,8 @@ function MethodCard({ id, icon, label, description, steps, badge, running, disab
           )}
         </div>
 
-        {/* Description */}
-        <p className="text-[11.5px] leading-relaxed text-gray-400">{description}</p>
+        {/* Description — clamped to 2 lines so cards in the same row stay equal height */}
+        <p className="line-clamp-2 min-h-[2.6em] text-[11.5px] leading-relaxed text-gray-400">{description}</p>
       </button>
 
       {/* Stop button — shown when running */}
@@ -197,16 +197,20 @@ const MATCH_PHASES = [
   { id: "done",   label: "Готово",     steps: ["done"] },
 ] as const;
 
+// HH search has no vector-reranking step (MCP tool searches, LLM reranks directly) — hide that phase
+type MatchPhase = (typeof MATCH_PHASES)[number];
+const HH_MATCH_PHASES: MatchPhase[] = MATCH_PHASES.filter((p) => p.id !== "vector");
+
 type PhaseStatus = "pending" | "active" | "done" | "skipped";
 
-function MatchTimeline({ steps, running }: { steps: MatchStep[]; running: boolean }) {
+function MatchTimeline({ steps, running, phases = MATCH_PHASES }: { steps: MatchStep[]; running: boolean; phases?: readonly MatchPhase[] }) {
   const stepNames = steps.map((s) => s.step);
   const lastStep = steps[steps.length - 1];
   const isDone = stepNames.includes("done");
 
   const getStatus = (phaseIdx: number): PhaseStatus => {
-    const phase = MATCH_PHASES[phaseIdx];
-    const next = MATCH_PHASES[phaseIdx + 1];
+    const phase = phases[phaseIdx];
+    const next = phases[phaseIdx + 1];
     const thisStarted = phase.steps.some((s) => stepNames.includes(s));
     const nextStarted = next ? next.steps.some((s) => stepNames.includes(s)) : false;
     if (isDone) return "done";
@@ -221,9 +225,9 @@ function MatchTimeline({ steps, running }: { steps: MatchStep[]; running: boolea
   return (
     <div className="mt-3 rounded-xl border border-pink-100 bg-pink-50/60 px-3 pt-3 pb-2">
       <div className="flex items-start">
-        {MATCH_PHASES.map((phase, idx) => {
+        {phases.map((phase, idx) => {
           const status = getStatus(idx);
-          const isLast = idx === MATCH_PHASES.length - 1;
+          const isLast = idx === phases.length - 1;
           const icons: Record<string, string> = { search: "🔍", vector: "⚡", llm: "🤖", done: "✅" };
           return (
             <div key={phase.id} className="flex flex-1 items-start">
@@ -279,15 +283,29 @@ type Props = { params: Promise<{ id: string }> };
 const labelOf = (val: string | null, opts: { value: string; label: string }[]) =>
   opts.find((o) => o.value === val)?.label ?? val;
 
-function CandidateRow({ candidate, score }: { candidate: Candidate; score: number | null }) {
+function CandidateRow({ candidate, score, onSaved }: { candidate: Candidate; score: number | null; onSaved: () => void }) {
   const router = useRouter();
+  const [saving, setSaving] = useState(false);
   const name =
     [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") ||
-    candidate.title ||
-    "Аноним";
+    "Без имени";
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
     : null;
+
+  const saveToDb = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      await candidateApi.save(candidate.id);
+      toast.success("Кандидат сохранён в базу");
+      onSaved();
+    } catch {
+      toast.error("Не удалось сохранить кандидата");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <tr
@@ -323,7 +341,26 @@ function CandidateRow({ candidate, score }: { candidate: Candidate; score: numbe
           )}
         </div>
       </td>
-      <td className="px-3 py-3 pr-4">
+      <td className="px-3 py-3">
+        {candidate.resume_url ? (
+          <a
+            href={candidate.resume_url.startsWith("/api/") ? `${API_BASE}${candidate.resume_url}` : candidate.resume_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors"
+          >
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            CV
+          </a>
+        ) : (
+          <span className="text-sm text-gray-300">—</span>
+        )}
+      </td>
+      <td className="px-3 py-3">
         {score != null && (
           <div>
             <span
@@ -339,17 +376,33 @@ function CandidateRow({ candidate, score }: { candidate: Candidate; score: numbe
             </span>
             {candidate.score_criteria && candidate.score_criteria.length > 0 && (
               <div className="mt-1.5 space-y-0.5">
-                {candidate.score_criteria.map((c, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{c.name}:</span>
-                    <span className={`text-[10px] font-semibold ${
-                      c.score >= 70 ? "text-green-600" : c.score >= 40 ? "text-yellow-600" : "text-red-500"
-                    }`}>{c.score}%</span>
-                  </div>
-                ))}
+                {candidate.score_criteria.map((c, i) => {
+                  const val = c.score ?? c.value ?? 0;
+                  return (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{c.name}:</span>
+                      <span className={`text-[10px] font-semibold ${
+                        val >= 70 ? "text-green-600" : val >= 40 ? "text-yellow-600" : "text-red-500"
+                      }`}>{val}%</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
+        )}
+      </td>
+      <td className="px-3 py-3 pr-4">
+        {!candidate.is_saved ? (
+          <button
+            onClick={saveToDb}
+            disabled={saving}
+            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+          >
+            {saving ? "…" : "Сохранить в базу"}
+          </button>
+        ) : (
+          <span className="text-sm text-gray-300">—</span>
         )}
       </td>
     </tr>
@@ -393,15 +446,22 @@ export default function VacancyDetailPage({ params }: Props) {
   const [dbMatching, setDbMatching] = useState(false);
   const [dbSteps, setDbSteps] = useState<MatchStep[]>([]);
   const [dbResult, setDbResult] = useState<number | null>(null);
-  const [dbMinScore, setDbMinScore] = useState(40);
 
-  const [resultTab, setResultTab] = useState<"llm" | "vector">("llm");
+  // Shared score threshold — applies to every active method (DB search, HH search)
+  const [minScore, setMinScore] = useState(40);
+
+  const [hhMatching, setHhMatching] = useState(false);
+  const [hhSteps, setHhSteps] = useState<MatchStep[]>([]);
+  const [hhResult, setHhResult] = useState<number | null>(null);
+
+  const [resultTab, setResultTab] = useState<"llm" | "vector" | "hh">("llm");
 
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);
   const poolSourceRef    = useRef<EventSource | null>(null);
   const liveSourceRef    = useRef<EventSource | null>(null);
   const dbSourceRef      = useRef<EventSource | null>(null);
+  const hhSourceRef      = useRef<EventSource | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -423,13 +483,18 @@ export default function VacancyDetailPage({ params }: Props) {
     () => candidateApi.byVacancy(id).then((r) => r.data)
   );
 
-  const vectorCandidates = [...rawCandidates].sort(
-    (a, b) => (b.vector_score ?? b.relevance_score ?? 0) - (a.vector_score ?? a.relevance_score ?? 0)
-  );
+  // Each candidate belongs to exactly one tab: HH-sourced first, then LLM-scored,
+  // then whatever's left goes to Vector — no more overlap between tabs.
+  const hhCandidates = rawCandidates
+    .filter((c) => c.source === "hh")
+    .sort((a, b) => (b.llm_score ?? b.relevance_score ?? 0) - (a.llm_score ?? a.relevance_score ?? 0));
   const llmCandidates = rawCandidates
-    .filter((c) => c.llm_score != null)
+    .filter((c) => c.source !== "hh" && c.llm_score != null)
     .sort((a, b) => (b.llm_score ?? 0) - (a.llm_score ?? 0));
-  const candidates = resultTab === "llm" ? llmCandidates : vectorCandidates;
+  const vectorCandidates = rawCandidates
+    .filter((c) => c.source !== "hh" && c.llm_score == null)
+    .sort((a, b) => (b.vector_score ?? b.relevance_score ?? 0) - (a.vector_score ?? a.relevance_score ?? 0));
+  const candidates = resultTab === "llm" ? llmCandidates : resultTab === "vector" ? vectorCandidates : hhCandidates;
 
   if (!vacancy) {
     return (
@@ -484,7 +549,7 @@ export default function VacancyDetailPage({ params }: Props) {
     }
   };
 
-  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching;
+  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching || hhMatching;
 
   // ── Smart Rematch ─────────────────────────────────────────────────────────
   const rematch = () => {
@@ -594,7 +659,7 @@ export default function VacancyDetailPage({ params }: Props) {
     setDbMatching(true);
     setDbSteps([]);
     setDbResult(null);
-    const url = matchingApi.matchFromDbStreamUrl(id, dbMinScore);
+    const url = matchingApi.matchFromDbStreamUrl(id, minScore);
     const source = new EventSource(url, { withCredentials: true });
     dbSourceRef.current = source;
     source.onmessage = (e) => {
@@ -633,6 +698,51 @@ export default function VacancyDetailPage({ params }: Props) {
     dbSourceRef.current = null;
     setDbMatching(false);
     setDbSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+  };
+
+  // ── HeadHunter (HH.ru) search ────────────────────────────────────────────
+  const matchFromHh = () => {
+    setHhMatching(true);
+    setHhSteps([]);
+    setHhResult(null);
+    const url = matchingApi.matchFromHhStreamUrl(id, minScore);
+    const source = new EventSource(url, { withCredentials: true });
+    hhSourceRef.current = source;
+    source.onmessage = (e) => {
+      const event: MatchStep = JSON.parse(e.data);
+      setHhSteps((prev) => [...prev, event]);
+      if (event.step === "done") {
+        source.close(); hhSourceRef.current = null;
+        setHhMatching(false);
+        setHhResult(event.matched ?? 0);
+        if ((event.matched ?? 0) > 0) {
+          toast.success(`Найдено ${event.matched} кандидатов на HH.ru`);
+          candidateApi.byVacancy(id).then((r) =>
+            mutateCandidates(r.data as Candidate[], { revalidate: false })
+          );
+        } else {
+          toast.info("Подходящих кандидатов не найдено.");
+        }
+        setTimeout(() => {
+          document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
+        }, 400);
+      }
+      if (event.step === "error") {
+        source.close(); hhSourceRef.current = null;
+        setHhMatching(false); toast.error(event.message);
+      }
+    };
+    source.onerror = () => {
+      source.close(); hhSourceRef.current = null; setHhMatching(false);
+      setHhSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+    };
+  };
+
+  const stopHh = () => {
+    hhSourceRef.current?.close();
+    hhSourceRef.current = null;
+    setHhMatching(false);
+    setHhSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
   };
 
   // ── File upload ───────────────────────────────────────────────────────────
@@ -742,33 +852,35 @@ export default function VacancyDetailPage({ params }: Props) {
             <span className="ml-auto text-[11px] text-gray-400">Наведите на карточку, чтобы увидеть как работает метод</span>
           </div>
 
+          {/* Shared score threshold — applies to every active method (DB search, HH search) */}
+          <div className="mb-3 flex items-center gap-2 px-1">
+            <span className="text-xs text-gray-500">Порог балла:</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={minScore}
+                disabled={anyRunning}
+                onChange={(e) => setMinScore(Math.max(0, Math.min(100, Number(e.target.value))))}
+                className="w-14 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-center focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+              />
+              <span className="text-xs text-gray-400">%</span>
+            </div>
+            <input
+              type="range" min={0} max={100} step={5}
+              value={minScore}
+              disabled={anyRunning}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+              className="w-40 h-1.5 accent-blue-500 disabled:opacity-50"
+            />
+          </div>
+
           {/* Method cards grid */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
 
             {/* ── Из нашей базы — ПЕРВЫЙ (активный) ── */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-xs text-gray-500">Порог балла:</span>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={dbMinScore}
-                    disabled={dbMatching}
-                    onChange={(e) => setDbMinScore(Math.max(0, Math.min(100, Number(e.target.value))))}
-                    className="w-14 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-center focus:outline-none focus:ring-1 focus:ring-pink-400 disabled:opacity-50"
-                  />
-                  <span className="text-xs text-gray-400">%</span>
-                </div>
-                <input
-                  type="range" min={0} max={100} step={5}
-                  value={dbMinScore}
-                  disabled={dbMatching}
-                  onChange={(e) => setDbMinScore(Number(e.target.value))}
-                  className="flex-1 h-1.5 accent-pink-500 disabled:opacity-50"
-                />
-              </div>
               <MethodCard
                 id="db"
                 icon={
@@ -782,9 +894,9 @@ export default function VacancyDetailPage({ params }: Props) {
                   "Embed вакансии → поиск top-N в Qdrant",
                   "Кросс-энкодер переранжирует результаты",
                   "LLM оценивает каждого кандидата (0–100)",
-                  `Сохраняет кандидатов с баллом ≥ ${dbMinScore}%`,
+                  `Сохраняет кандидатов с баллом ≥ ${minScore}%`,
                 ]}
-                badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{dbMinScore}%</span>}
+                badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{minScore}%</span>}
                 running={dbMatching}
                 disabled={anyRunning && !dbMatching}
                 result={dbResult}
@@ -799,22 +911,30 @@ export default function VacancyDetailPage({ params }: Props) {
               )}
             </div>
 
-            {/* Умный поиск HH — Скоро */}
-            <div className="relative">
-              <div className="pointer-events-none select-none opacity-70">
-                <MethodCard
-                  id="rematch"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-                  label="Умный поиск HH"
-                  description="Поиск по HH.uz через ИИ-запросы"
-                  steps={["ИИ генерирует поисковые запросы", "Поиск резюме на HH.uz", "Оценка кандидатов Ollama"]}
-                  running={false} disabled={true} result={null} onClick={() => {}}
-                  accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
-                />
-              </div>
-              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
-              </div>
+            {/* Умный поиск HH */}
+            <div className="space-y-2">
+              <MethodCard
+                id="rematch"
+                icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
+                label="Умный поиск HH"
+                description="LLM заполняет параметры поиска по вакансии, ищет на HH.ru и оценивает по критериям"
+                steps={[
+                  "LLM формирует параметры поиска (текст, регион, опыт…) по вакансии",
+                  "Поиск резюме на HH.ru через MCP",
+                  "LLM оценивает каждого кандидата по критериям вакансии",
+                  `Сохраняет кандидатов с баллом ≥ ${minScore}%`,
+                ]}
+                badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
+                running={hhMatching}
+                disabled={anyRunning && !hhMatching}
+                result={hhResult}
+                onClick={hhMatching ? stopHh : matchFromHh}
+                onStop={stopHh}
+                accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
+              />
+              {(hhMatching || hhSteps.length > 0) && (
+                <MatchTimeline steps={hhSteps} running={hhMatching} phases={HH_MATCH_PHASES} />
+              )}
             </div>
 
             {/* Векторный пул — Скоро */}
@@ -913,13 +1033,24 @@ export default function VacancyDetailPage({ params }: Props) {
               >
                 Векторный поиск ({vectorCandidates.length})
               </button>
+              <button
+                type="button"
+                onClick={() => setResultTab("hh")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  resultTab === "hh" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                HH ({hhCandidates.length})
+              </button>
             </div>
           </div>
           {candidates.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
               {resultTab === "llm"
                 ? "Нет кандидатов, оценённых LLM — запустите поиск по базе (DB Search)."
-                : "Нет кандидатов из векторного поиска."}
+                : resultTab === "vector"
+                ? "Нет кандидатов из векторного поиска."
+                : "Нет кандидатов с HH.ru — запустите поиск выше."}
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -931,7 +1062,9 @@ export default function VacancyDetailPage({ params }: Props) {
                   <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Город</th>
                   <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Зарплата</th>
                   <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Навыки</th>
-                  <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400">Совпадение</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Резюме</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Совпадение</th>
+                  <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -939,7 +1072,8 @@ export default function VacancyDetailPage({ params }: Props) {
                   <CandidateRow
                     key={c.id}
                     candidate={c}
-                    score={resultTab === "llm" ? c.llm_score : c.vector_score ?? c.relevance_score}
+                    score={resultTab === "vector" ? c.vector_score ?? c.relevance_score : c.llm_score}
+                    onSaved={() => candidateApi.byVacancy(id).then((r) => mutateCandidates(r.data as Candidate[], { revalidate: false }))}
                   />
                 ))}
               </tbody>

@@ -108,6 +108,8 @@ export const matchingApi = {
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-live-pool`),
   matchFromDbStreamUrl: (vacancyId: string, minScore = 60) =>
     `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-db-stream?min_score=${minScore}`,
+  matchFromHhStreamUrl: (vacancyId: string, minScore = 60) =>
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-stream?min_score=${minScore}`,
 };
 
 // --- Talent Pool ---
@@ -175,6 +177,8 @@ export const candidateApi = {
     api.post<{ reasoning: string; score: number; criteria: import("@/types/candidate").ScoreCriterion[] }>(
       `/api/candidates/${id}/explain-score`
     ),
+  save: (id: string) =>
+    api.post<import("@/types/candidate").Candidate>(`/api/candidates/${id}/save`),
   rescoreAll: (resume = false) =>
     api.post<{ status: string }>(`/api/candidates/rescore-all?resume=${resume}`),
   rescoreStatus: () =>

@@ -11,7 +11,10 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+from beanie import PydanticObjectId
+
 from app.models.candidate import Candidate
+from app.models.match_candidate_hit import MatchCandidateHit
 from app.models.match_result import MatchResult
 from app.models.vacancy import Vacancy, VacancyStatus
 from app.schemas.candidate import CandidateDetailResponse, CandidateResponse
@@ -38,9 +41,11 @@ async def list_candidates(
 
 
 async def get_candidate(candidate_id: str):
-    doc = await candidate_service.get_candidate(candidate_id)
+    doc = await candidate_service.get_candidate_or_hit(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    if isinstance(doc, MatchCandidateHit):
+        return CandidateDetailResponse.from_hit(doc)
     match_result = await MatchResult.find(
         {"hh_resume_id": doc.hh_resume_id}
     ).sort("-matched_at").first_or_none()
@@ -51,7 +56,7 @@ async def get_candidate_resume(candidate_id: str):
     import httpx
     from app.config import settings as app_settings
 
-    doc = await candidate_service.get_candidate(candidate_id)
+    doc = await candidate_service.get_candidate_or_hit(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -69,7 +74,7 @@ async def get_candidate_resume(candidate_id: str):
         stored_docs = raw.get("documents") or []
         if stored_docs:
             cs_open_url = stored_docs[0].get("open_url")
-    if cs_open_url and (doc.hh_resume_id or "").startswith("cs:"):
+    if cs_open_url:
         # Cleverstaff MCP server reports 0.0.0.0 as the file host.
         # Replace it with the actual MCP server host so the backend can reach it.
         parsed_file = urlparse(cs_open_url)
@@ -117,7 +122,15 @@ async def get_candidate_resume(candidate_id: str):
 
 async def candidates_by_vacancy(vacancy_id: str):
     pairs = await candidate_service.get_candidates_for_vacancy(vacancy_id)
-    return [CandidateResponse.from_doc(c, mr) for c, mr in pairs]
+    responses = [CandidateResponse.from_doc(c, mr) for c, mr in pairs]
+
+    # Unconfirmed HH search hits — staged separately so they don't pollute Candidate
+    # until a recruiter explicitly saves them.
+    hits = await MatchCandidateHit.find({"vacancy_id": PydanticObjectId(vacancy_id)}).to_list()
+    responses += [CandidateResponse.from_hit(h) for h in hits]
+
+    responses.sort(key=lambda r: r.relevance_score or 0, reverse=True)
+    return responses
 
 
 async def _process_one_file(filename: str, file_bytes: bytes) -> dict | None:
@@ -378,22 +391,27 @@ async def import_from_xlsx(file: UploadFile = File(...)):
 
 
 async def explain_score(candidate_id: str):
-    """Generate (or regenerate) score reasoning for a candidate via LLM and persist to MatchResult."""
+    """Generate (or regenerate) score reasoning for a candidate via LLM and persist to MatchResult
+    (or, for an unconfirmed staged HH hit, directly to its MatchCandidateHit row)."""
 
-    doc = await candidate_service.get_candidate(candidate_id)
+    doc = await candidate_service.get_candidate_or_hit(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    is_hit = isinstance(doc, MatchCandidateHit)
 
-    # Find existing MatchResult to determine vacancy context
-    existing_mr = await MatchResult.find(
-        {"hh_resume_id": doc.hh_resume_id}
-    ).sort("-matched_at").first_or_none()
-
+    # Find existing MatchResult / the hit's own vacancy to determine vacancy context
+    existing_mr = None
     vacancy = None
-    if existing_mr:
-        vacancy = await Vacancy.find_one({"_id": existing_mr.vacancy_id})
+    if is_hit:
+        vacancy = await Vacancy.find_one({"_id": doc.vacancy_id})
+    else:
+        existing_mr = await MatchResult.find(
+            {"hh_resume_id": doc.hh_resume_id}
+        ).sort("-matched_at").first_or_none()
+        if existing_mr:
+            vacancy = await Vacancy.find_one({"_id": existing_mr.vacancy_id})
 
-    # No MatchResult or vacancy gone: find the best approved vacancy by title + skill overlap
+    # No MatchResult/hit vacancy, or vacancy gone: find the best approved vacancy by title + skill overlap
     if vacancy is None:
         vacancies = await Vacancy.find({"status": VacancyStatus.approved}).to_list()
         if not vacancies:
@@ -436,28 +454,39 @@ async def explain_score(candidate_id: str):
 
     llm_ok = new_score > 0 or bool(reasoning)
     if llm_ok:
-        mr_col = MatchResult.get_motor_collection()
-        prev_score = existing_mr.relevance_score if existing_mr else None
-        await mr_col.update_one(
-            {"vacancy_id": vacancy.id, "hh_resume_id": doc.hh_resume_id},
-            {"$set": {
-                "vacancy_id": vacancy.id,
-                "candidate_id": doc.id,
-                "hh_resume_id": doc.hh_resume_id,
-                "relevance_score": new_score if new_score > 0 else prev_score,
-                "score_reasoning": reasoning,
-                "score_criteria": criteria,
-                "matched_at": datetime.now(timezone.utc),
-            }},
-            upsert=True,
-        )
+        prev_score = doc.relevance_score if is_hit else (existing_mr.relevance_score if existing_mr else None)
+        if is_hit:
+            await MatchCandidateHit.get_motor_collection().update_one(
+                {"_id": doc.id},
+                {"$set": {
+                    "relevance_score": new_score if new_score > 0 else prev_score,
+                    "score_reasoning": reasoning,
+                    "score_criteria": criteria,
+                    "matched_at": datetime.now(timezone.utc),
+                }},
+            )
+        else:
+            mr_col = MatchResult.get_motor_collection()
+            await mr_col.update_one(
+                {"vacancy_id": vacancy.id, "hh_resume_id": doc.hh_resume_id},
+                {"$set": {
+                    "vacancy_id": vacancy.id,
+                    "candidate_id": doc.id,
+                    "hh_resume_id": doc.hh_resume_id,
+                    "relevance_score": new_score if new_score > 0 else prev_score,
+                    "score_reasoning": reasoning,
+                    "score_criteria": criteria,
+                    "matched_at": datetime.now(timezone.utc),
+                }},
+                upsert=True,
+            )
     else:
         raise HTTPException(
             status_code=503,
             detail="LLM scoring unavailable; existing score preserved.",
         )
 
-    effective_score = new_score if new_score > 0 else (existing_mr.relevance_score if existing_mr else 0)
+    effective_score = new_score if new_score > 0 else (prev_score or 0)
     return {"reasoning": reasoning, "criteria": criteria, "score": effective_score}
 
 
@@ -658,8 +687,19 @@ def _resume_point_id(hh_resume_id: str) -> int:
     return int(hashlib.sha1(hh_resume_id.encode()).hexdigest(), 16) % (2 ** 53)
 
 
+async def save_candidate(candidate_id: str):
+    """Confirm an unconfirmed HH-sourced candidate into the permanent candidate database."""
+    doc = await candidate_service.save_candidate(candidate_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    match_result = await MatchResult.find(
+        {"hh_resume_id": doc.hh_resume_id}
+    ).sort("-matched_at").first_or_none()
+    return CandidateResponse.from_doc(doc, match_result)
+
+
 async def delete_candidate(candidate_id: str):
-    doc = await candidate_service.get_candidate(candidate_id)
+    doc = await candidate_service.get_candidate_or_hit(candidate_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Candidate not found")
     await MatchResult.get_motor_collection().delete_many({"hh_resume_id": doc.hh_resume_id})
@@ -787,6 +827,7 @@ async def vectorize_all():
                     continue
                 qdrant_items.append({
                     "id": f"db:{c.hh_resume_id}",
+                    "candidate_id": str(c.id),
                     "hh_resume_id": c.hh_resume_id,
                     "title": c.title or "",
                     "skills": c.skills or [],
@@ -852,6 +893,7 @@ router.add_api_route("/bulk", delete_candidates_bulk, methods=["DELETE"])
 router.add_api_route("/cleverstaff", clear_cleverstaff_candidates, methods=["DELETE"])
 router.add_api_route("/vacancy/{vacancy_id}", candidates_by_vacancy, methods=["GET"])
 router.add_api_route("/{candidate_id}/explain-score", explain_score, methods=["POST"])
+router.add_api_route("/{candidate_id}/save", save_candidate, methods=["POST"])
 router.add_api_route("/{candidate_id}/resume", get_candidate_resume, methods=["GET"])
 router.add_api_route("/{candidate_id}", get_candidate, methods=["GET"])
 router.add_api_route("/{candidate_id}", delete_candidate, methods=["DELETE"])

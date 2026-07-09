@@ -11,6 +11,7 @@ services:
       REDIS_URL:       "redis://host.docker.internal:6379"
       MINIO_ENDPOINT:  "host.docker.internal:9000"
       QDRANT_URL:      "http://host.docker.internal:6333"
+      HF_HUB_OFFLINE:  "1"    # model allaqachon build vaqtida yuklab olingan — reload'da HF'ga chiqmasin
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

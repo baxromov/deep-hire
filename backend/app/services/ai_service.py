@@ -51,10 +51,20 @@ class ResumeFields(BaseModel):
     salary_currency: Optional[str] = Field(None, description="Salary currency: UZS, RUB, USD, or EUR")
 
 
+class Criterion(BaseModel):
+    name: str = Field(..., description="Criterion name")
+    weight: int = Field(..., description="Criterion weight percentage")
+    score: int = Field(..., ge=0, le=100, description="Score for this criterion, 0-100")
+    comment: str = Field("", description="Short comment in Russian")
+
+
 class ScoreResult(BaseModel):
     score: int = Field(..., ge=0, le=100, description="Match score 0-100")
     reasoning: str = Field(..., description="1-2 sentences in Russian explaining the verdict")
-    criteria: List[Dict[str, Any]] = Field(default_factory=list)
+    # A fixed sub-schema (not Dict[str, Any]) so structured-output calls are forced to use
+    # the "score" key consistently — an unconstrained dict let the LLM emit "value" instead
+    # of "score" for some models, which the frontend doesn't read, silently hiding criteria.
+    criteria: List[Criterion] = Field(default_factory=list)
 
 
 class SearchQueries(BaseModel):
@@ -341,7 +351,7 @@ async def score_candidate(
         llm = _get_llm()
         structured = llm.with_structured_output(ScoreResult)
         result_obj: ScoreResult = await structured.ainvoke(prompt)
-        criteria_out = result_obj.criteria or []
+        criteria_out = [c.model_dump() for c in result_obj.criteria] if result_obj.criteria else []
         if not criteria_out:
             criteria_out = [{"name": c["name"], "weight": c["weight"], "score": result_obj.score, "comment": ""} for c in crit]
         return result_obj.score, result_obj.reasoning, criteria_out

@@ -17,6 +17,7 @@ export interface Candidate {
   vector_score: number | null;
   llm_score: number | null;
   is_vectorized: boolean;
+  is_saved: boolean;
   matched_at: string;
   // Source & contact (from raw_resume_json)
   source: string | null;       // "xlsx" | "file" | "hh" | null
@@ -30,6 +31,9 @@ export interface ScoreCriterion {
   name: string;
   weight: number;
   score: number;
+  // Some older/legacy records stored the per-criterion score under "value" instead
+  // of "score" — kept optional here so display code can fall back to it.
+  value?: number;
   comment: string;
 }
 

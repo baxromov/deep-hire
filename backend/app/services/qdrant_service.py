@@ -37,8 +37,13 @@ async def ensure_collection(client: AsyncQdrantClient) -> None:
         logger.debug("Qdrant collection '%s' already exists", settings.qdrant_collection)
 
 
-def _resume_payload(resume: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract indexable payload fields from a raw HH.uz resume JSON."""
+def _resume_payload(resume: Dict[str, Any], candidate_id: Optional[str] = None) -> Dict[str, Any]:
+    """Extract indexable payload fields from a raw HH.uz resume JSON.
+
+    candidate_id, when set, back-references the Mongo Candidate._id this vector
+    belongs to — lets a later search recognize "this person is already in our DB"
+    instead of treating every hit as a brand-new candidate.
+    """
     area = resume.get("area") or {}
     salary = resume.get("salary") or {}
 
@@ -65,6 +70,7 @@ def _resume_payload(resume: Dict[str, Any]) -> Dict[str, Any]:
         "schedule": (resume.get("schedule") or {}).get("id") or "",
         "last_indexed_at": datetime.now(timezone.utc).isoformat(),
         "raw_resume_json": resume,
+        "candidate_id": candidate_id,
     }
 
 
@@ -72,10 +78,12 @@ async def upsert_candidates(
     client: AsyncQdrantClient,
     resumes: List[Dict[str, Any]],
     vectors: List[List[float]],
+    candidate_ids: Optional[List[Optional[str]]] = None,
 ) -> int:
     """Upsert resume vectors into Qdrant. Returns count of upserted points."""
     points = []
-    for resume, vector in zip(resumes, vectors):
+    ids = candidate_ids or [None] * len(resumes)
+    for resume, vector, candidate_id in zip(resumes, vectors, ids):
         resume_id = resume.get("id") or ""
         if not resume_id or not vector:
             continue
@@ -85,7 +93,7 @@ async def upsert_candidates(
             qmodels.PointStruct(
                 id=point_id,
                 vector=vector,
-                payload=_resume_payload(resume),
+                payload=_resume_payload(resume, candidate_id),
             )
         )
 

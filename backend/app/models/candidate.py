@@ -19,6 +19,7 @@ class Candidate(Document):
     photo_url: Optional[str] = None
     resume_url: Optional[str] = None
     is_vectorized: bool = False
+    is_saved: bool = True  # False for hh matches not yet confirmed into the candidate database
     raw_resume_json: Dict = Field(default_factory=dict)
 
     class Settings:

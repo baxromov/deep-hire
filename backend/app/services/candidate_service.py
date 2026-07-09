@@ -1,12 +1,23 @@
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import pymongo
 from beanie import PydanticObjectId
 
+from app.database import get_qdrant
 from app.models.candidate import Candidate
+from app.models.match_candidate_hit import MatchCandidateHit
 from app.models.match_result import MatchResult
 from app.models.vacancy import Vacancy
+from app.services import qdrant_service
+from app.services.embedding_service import build_resume_text, embed
+
+logger = logging.getLogger(__name__)
+
+# Cosine-similarity floor for treating a fresh HH search hit as "already in our DB"
+# (same resume vectorized previously via CleverStaff sync / vectorize-all / a prior save).
+HH_DEDUP_SCORE_THRESHOLD = 0.95
 
 
 def _parse_candidate(resume: Dict[str, Any]) -> Dict:
@@ -33,10 +44,21 @@ def _parse_candidate(resume: Dict[str, Any]) -> Dict:
     gender = gender_raw.get("id") if isinstance(gender_raw, dict) else gender_raw
 
     title = resume.get("title") or resume.get("position") or resume.get("current_position")
-    hh_resume_id = resume.get("id") or resume.get("candidate_id") or ""
+
+    hh_resume_id = resume.get("id") or ""
+    if not hh_resume_id and resume.get("candidate_id"):
+        # CleverStaff-shaped resumes only carry "candidate_id" (their own native id, no
+        # "cs:" prefix) — prefix it to match sync_service's convention so this resume
+        # dedupes against the already-synced Candidate instead of becoming a duplicate.
+        prefix = "cs:" if resume.get("source") == "cleverstaff" else ""
+        hh_resume_id = f"{prefix}{resume['candidate_id']}"
 
     skills_raw = resume.get("skill_set") or resume.get("skills") or []
-    skills = [s if isinstance(s, str) else s.get("name", "") for s in skills_raw]
+    # HH-shaped skill dicts use "name"; CleverStaff-shaped ones use "skill".
+    skills = [
+        s if isinstance(s, str) else (s.get("name") or s.get("skill") or "")
+        for s in skills_raw
+    ]
 
     return {
         "hh_resume_id": hh_resume_id,
@@ -55,78 +77,122 @@ def _parse_candidate(resume: Dict[str, Any]) -> Dict:
     }
 
 
-async def replace_candidates(vacancy: Vacancy, scored_resumes: List[tuple]) -> int:
-    """Upsert Candidates (person data) and MatchResults (vacancy-specific scores).
+async def _link_or_stage(
+    vacancy: Vacancy,
+    resume: Dict[str, Any],
+    score: int,
+    existing_candidate_id: Optional[str],
+    source: str,
+    mr_col,
+    hit_col,
+    now: datetime,
+    existing_hh_resume_id: Optional[str] = None,
+) -> str:
+    """Write one scored resume as either a MatchResult link (existing_candidate_id known)
+    or a MatchCandidateHit staging row (candidate_id unknown — never touches Candidate).
 
-    Candidate is keyed by hh_resume_id only — person record, never touched for vacancy context.
-    MatchResult is keyed by (vacancy_id, hh_resume_id) — score and criteria per vacancy match.
+    When linking, the MatchResult MUST be keyed on the existing Candidate's own
+    hh_resume_id (existing_hh_resume_id) — not this resume's hh_resume_id, which can
+    differ (e.g. a CleverStaff-synced "cs:123" person resurfacing in a fresh HH.ru
+    search as "hh:456"). Getting this wrong silently breaks the join that renders the
+    row in the UI (name/skills/resume/score all vanish) even though the link succeeded.
+
+    Returns "linked" or "staged", or "" if the resume has no hh_resume_id to key on.
     """
-    from pymongo import UpdateOne
+    data = _parse_candidate(resume)
+    if not data["hh_resume_id"]:
+        return ""
 
-    cand_col = Candidate.get_motor_collection()
-    mr_col = MatchResult.get_motor_collection()
-    now = datetime.now(timezone.utc)
+    score_fields = {
+        "relevance_score": score,
+        "vector_score": resume.get("_vector_score"),
+        "llm_score": resume.get("_llm_score"),
+        "score_reasoning": resume.get("score_reasoning"),
+        "score_criteria": resume.get("score_criteria") or [],
+        "matched_at": now,
+    }
 
-    parsed = []
-    for resume, score in scored_resumes:
-        data = _parse_candidate(resume)
-        if not data["hh_resume_id"]:
-            continue
-        parsed.append((data, score, resume))
-
-    if not parsed:
-        return 0
-
-    # 1. Upsert Candidates by hh_resume_id (person data only, no vacancy context)
-    cand_ops = [
-        UpdateOne(
-            {"hh_resume_id": d["hh_resume_id"]},
-            {"$set": d},
+    if existing_candidate_id:
+        # Already a real candidate — link the score, don't touch Candidate/staging.
+        hh_resume_id = existing_hh_resume_id or data["hh_resume_id"]
+        await mr_col.update_one(
+            {"vacancy_id": vacancy.id, "hh_resume_id": hh_resume_id},
+            {"$set": {
+                "vacancy_id": vacancy.id,
+                "candidate_id": PydanticObjectId(existing_candidate_id),
+                "hh_resume_id": hh_resume_id,
+                "source": source,
+                **score_fields,
+            }},
             upsert=True,
         )
-        for d, _, _ in parsed
-    ]
-    await cand_col.bulk_write(cand_ops, ordered=False)
+        return "linked"
 
-    # 2. Fetch candidate _ids for MatchResult foreign key
-    hh_ids = [d["hh_resume_id"] for d, _, _ in parsed]
-    cands = await cand_col.find(
-        {"hh_resume_id": {"$in": hh_ids}},
-        {"_id": 1, "hh_resume_id": 1},
-    ).to_list(None)
-    hh_to_id = {c["hh_resume_id"]: c["_id"] for c in cands}
+    await hit_col.update_one(
+        {"vacancy_id": vacancy.id, "hh_resume_id": data["hh_resume_id"]},
+        {"$set": {**data, "vacancy_id": vacancy.id, "source": source, **score_fields}},
+        upsert=True,
+    )
+    return "staged"
 
-    # 3. Upsert MatchResults by (vacancy_id, hh_resume_id)
-    mr_ops = []
-    for data, score, resume in parsed:
-        hh_id = data["hh_resume_id"]
-        cand_id = hh_to_id.get(hh_id)
-        if not cand_id:
-            continue
-        source = resume.get("_source") or resume.get("source") or "db_search"
-        mr_ops.append(
-            UpdateOne(
-                {"vacancy_id": vacancy.id, "hh_resume_id": hh_id},
-                {"$set": {
-                    "vacancy_id": vacancy.id,
-                    "candidate_id": cand_id,
-                    "hh_resume_id": hh_id,
-                    "relevance_score": score,
-                    "vector_score": resume.get("_vector_score"),
-                    "llm_score": resume.get("_llm_score"),
-                    "score_reasoning": resume.get("score_reasoning"),
-                    "score_criteria": resume.get("score_criteria") or [],
-                    "source": source,
-                    "matched_at": now,
-                }},
-                upsert=True,
-            )
+
+async def stage_hh_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: str = "hh") -> Dict[str, int]:
+    """Persist fresh HH.ru search hits without polluting the permanent Candidate collection.
+
+    Each hit is checked against the permanent Qdrant pool by re-embedding it: a
+    near-identical vector (>= HH_DEDUP_SCORE_THRESHOLD) means this person is already
+    a real Candidate (e.g. synced from CleverStaff, or saved from an earlier search)
+    — see _link_or_stage. Use this for resumes fetched live from HH.ru, where we
+    don't yet know if the person is already in our DB.
+    """
+    qdrant = await get_qdrant()
+    await qdrant_service.ensure_collection(qdrant)
+
+    mr_col = MatchResult.get_motor_collection()
+    hit_col = MatchCandidateHit.get_motor_collection()
+    now = datetime.now(timezone.utc)
+    counts = {"linked": 0, "staged": 0}
+
+    for resume, score in scored_resumes:
+        vector = await embed(build_resume_text(resume))
+        existing = await qdrant_service.search_candidates(
+            qdrant, vector, top_k=1, score_threshold=HH_DEDUP_SCORE_THRESHOLD,
+        ) if vector else []
+        existing_candidate_id = existing[0].get("candidate_id") if existing else None
+        existing_hh_resume_id = existing[0].get("hh_resume_id") if existing else None
+
+        outcome = await _link_or_stage(
+            vacancy, resume, score, existing_candidate_id, source, mr_col, hit_col, now,
+            existing_hh_resume_id,
         )
+        if outcome:
+            counts[outcome] += 1
 
-    if not mr_ops:
-        return 0
-    result = await mr_col.bulk_write(mr_ops, ordered=False)
-    return result.upserted_count + result.modified_count
+    return counts
+
+
+async def stage_pool_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: str) -> Dict[str, int]:
+    """Persist permanent-pool search hits (db_search/talent_pool) without polluting Candidate.
+
+    Unlike stage_hh_hits, each resume here was already retrieved from a Qdrant hit in
+    the permanent pool, so its candidate_id (if any) is already known — pass it through
+    via resume["_candidate_id"] instead of re-embedding/re-searching. A resume with no
+    candidate_id came from a source that never created a Mongo Candidate (e.g. raw
+    talent-pool ingestion) and must be staged, not silently turned into a new Candidate.
+    """
+    mr_col = MatchResult.get_motor_collection()
+    hit_col = MatchCandidateHit.get_motor_collection()
+    now = datetime.now(timezone.utc)
+    counts = {"linked": 0, "staged": 0}
+
+    for resume, score in scored_resumes:
+        outcome = await _link_or_stage(
+            vacancy, resume, score, resume.get("_candidate_id"), source, mr_col, hit_col, now,
+        )
+        if outcome:
+            counts[outcome] += 1
+
+    return counts
 
 
 async def get_candidates_for_vacancy(
@@ -167,7 +233,9 @@ async def get_all_candidates(
             return [], 0
 
         hh_ids = [mr.hh_resume_id for mr in match_results]
-        cand_query: dict = {"hh_resume_id": {"$in": hh_ids}}
+        # Only saved (confirmed) candidates belong in the global candidate database view —
+        # unconfirmed HH matches live only in the per-vacancy matched list until saved.
+        cand_query: dict = {"hh_resume_id": {"$in": hh_ids}, "is_saved": {"$ne": False}}
         if source:
             cand_query["raw_resume_json.source"] = source
         if search:
@@ -202,7 +270,7 @@ async def get_all_candidates(
         return pairs[skip : skip + limit], total
 
     # No vacancy filter: simple Candidate list, return without MatchResult
-    query: dict = {}
+    query: dict = {"is_saved": {"$ne": False}}
     if source:
         query["raw_resume_json.source"] = source
     if search:
@@ -230,3 +298,91 @@ async def get_all_candidates(
 
 async def get_candidate(candidate_id: str) -> Optional[Candidate]:
     return await Candidate.get(PydanticObjectId(candidate_id))
+
+
+async def get_candidate_or_hit(candidate_id: str):
+    """Look up a real Candidate first, then fall back to a staged (unsaved) MatchCandidateHit.
+
+    Lets detail/resume/score-explain views work for HH search results that haven't
+    been confirmed into the permanent database yet.
+    """
+    oid = PydanticObjectId(candidate_id)
+    doc = await Candidate.get(oid)
+    if doc:
+        return doc
+    return await MatchCandidateHit.get(oid)
+
+
+async def save_candidate(candidate_id: str) -> Optional[Candidate]:
+    """Confirm an unconfirmed candidate into the permanent candidate database.
+
+    `candidate_id` may be a real Candidate._id (legacy is_saved=False row — just
+    flip the flag) or a MatchCandidateHit._id (staged HH search hit — promote it
+    into a real Candidate, index it in the permanent Qdrant pool, link the
+    MatchResult, then drop the staging row).
+    """
+    doc = await Candidate.get(PydanticObjectId(candidate_id))
+    if doc:
+        if not doc.is_saved:
+            doc.is_saved = True
+            await doc.save()
+        return doc
+
+    hit = await MatchCandidateHit.get(PydanticObjectId(candidate_id))
+    if not hit:
+        return None
+
+    cand_col = Candidate.get_motor_collection()
+    fields = {
+        "hh_resume_id": hit.hh_resume_id,
+        "first_name": hit.first_name,
+        "last_name": hit.last_name,
+        "age": hit.age,
+        "gender": hit.gender,
+        "area": hit.area,
+        "title": hit.title,
+        "salary_amount": hit.salary_amount,
+        "salary_currency": hit.salary_currency,
+        "skills": hit.skills,
+        "photo_url": hit.photo_url,
+        "resume_url": hit.resume_url,
+        "raw_resume_json": hit.raw_resume_json,
+    }
+    await cand_col.update_one(
+        {"hh_resume_id": hit.hh_resume_id},
+        {"$set": {**fields, "is_saved": True}},
+        upsert=True,
+    )
+    new_doc = await Candidate.find_one({"hh_resume_id": hit.hh_resume_id})
+
+    try:
+        vector = await embed(build_resume_text(hit.raw_resume_json or fields))
+        if vector:
+            qdrant = await get_qdrant()
+            await qdrant_service.ensure_collection(qdrant)
+            resume_for_index = {**(hit.raw_resume_json or {}), "id": hit.hh_resume_id}
+            await qdrant_service.upsert_candidates(
+                qdrant, [resume_for_index], [vector], [str(new_doc.id)],
+            )
+    except Exception as exc:
+        logger.warning("save_candidate: Qdrant indexing failed for %s (non-fatal): %s", hit.hh_resume_id, exc)
+
+    mr_col = MatchResult.get_motor_collection()
+    await mr_col.update_one(
+        {"vacancy_id": hit.vacancy_id, "hh_resume_id": hit.hh_resume_id},
+        {"$set": {
+            "vacancy_id": hit.vacancy_id,
+            "candidate_id": new_doc.id,
+            "hh_resume_id": hit.hh_resume_id,
+            "relevance_score": hit.relevance_score,
+            "vector_score": hit.vector_score,
+            "llm_score": hit.llm_score,
+            "score_reasoning": hit.score_reasoning,
+            "score_criteria": hit.score_criteria,
+            "source": "hh",
+            "matched_at": hit.matched_at,
+        }},
+        upsert=True,
+    )
+    await hit.delete()
+    return new_doc

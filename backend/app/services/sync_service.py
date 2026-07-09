@@ -26,28 +26,25 @@ def _point_id(candidate_id: str) -> int:
 
 
 async def _upsert_batch(qdrant, candidates: list[dict], vectors: list[list[float]]) -> int:
-    points = []
-    mongo_ops = []
-    now = datetime.now(timezone.utc)
+    valid = [(cand, vec) for cand, vec in zip(candidates, vectors) if vec]
+    if not valid:
+        logger.debug("_upsert_batch: no valid vectors — skipping")
+        return 0
 
-    for cand, vec in zip(candidates, vectors):
-        if not vec:
-            continue
+    now = datetime.now(timezone.utc)
+    mongo_ops = []
+    hh_resume_ids = []
+
+    for cand, _ in valid:
         cid = cand.get("candidate_id", "")
         hh_resume_id = f"cs:{cid}"
-
-        payload = cs.build_payload(cand)
-        points.append(qmodels.PointStruct(
-            id=_point_id(cid),
-            vector=vec,
-            payload=payload,
-        ))
+        hh_resume_ids.append(hh_resume_id)
 
         full_name = cand.get("full_name") or ""
         name_parts = full_name.split(" ", 1)
         skills = [s["skill"] for s in cand.get("skills", []) if s.get("skill")]
         salary = cand.get("salary")
-        raw_json = payload["raw_resume_json"]
+        raw_json = cs.build_payload(cand)["raw_resume_json"]
 
         # Filter targets only pool records (vacancy_id=None).
         # $setOnInsert keeps vacancy_id=None on new inserts; on update the $set
@@ -74,20 +71,34 @@ async def _upsert_batch(qdrant, candidates: list[dict], vectors: list[list[float
             upsert=True,
         ))
 
-    if not points:
-        logger.debug("_upsert_batch: no valid vectors — skipping")
-        return 0
+    # Mongo upsert runs first so each point can carry the resulting Candidate._id —
+    # lets a later vector search recognize "already in our DB" instead of re-adding it.
+    col = Candidate.get_motor_collection()
+    result = await col.bulk_write(mongo_ops, ordered=False)
+    logger.debug("MongoDB bulk_write: upserted=%d modified=%d",
+                 result.upserted_count, result.modified_count)
+
+    docs = await col.find(
+        {"hh_resume_id": {"$in": hh_resume_ids}}, {"_id": 1, "hh_resume_id": 1}
+    ).to_list(None)
+    hh_to_id = {d["hh_resume_id"]: str(d["_id"]) for d in docs}
+
+    points = []
+    for cand, vec in valid:
+        cid = cand.get("candidate_id", "")
+        hh_resume_id = f"cs:{cid}"
+        payload = cs.build_payload(cand)
+        payload["candidate_id"] = hh_to_id.get(hh_resume_id)
+        points.append(qmodels.PointStruct(
+            id=_point_id(cid),
+            vector=vec,
+            payload=payload,
+        ))
 
     for i in range(0, len(points), UPSERT_BATCH):
         batch_slice = points[i:i + UPSERT_BATCH]
         await qdrant.upsert(collection_name=settings.qdrant_collection, points=batch_slice)
         logger.debug("Qdrant upsert: %d points (slice %d–%d)", len(batch_slice), i, i + len(batch_slice))
-
-    if mongo_ops:
-        col = Candidate.get_motor_collection()
-        result = await col.bulk_write(mongo_ops, ordered=False)
-        logger.debug("MongoDB bulk_write: upserted=%d modified=%d",
-                     result.upserted_count, result.modified_count)
 
     return len(points)
 

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _MCP_TIMEOUT = 120
 
 
-async def _call_mcp(arguments: dict) -> dict:
+async def _call_mcp(tool_name: str, arguments: dict) -> dict:
     headers = {
         "Authorization": f"Bearer {settings.cleverstaff_mcp_token}",
         "Accept": "application/json, text/event-stream",
@@ -50,14 +50,14 @@ async def _call_mcp(arguments: dict) -> dict:
             "method": "notifications/initialized",
         })
 
-        logger.info("MCP tools/call search_candidates offset=%s limit=%s",
-                    arguments.get("offset"), arguments.get("limit"))
+        logger.info("MCP tools/call %s offset=%s limit=%s",
+                    tool_name, arguments.get("offset"), arguments.get("limit"))
         r = await client.post(settings.cleverstaff_mcp_url, headers=headers, json={
             "jsonrpc": "2.0",
             "id": 2,
             "method": "tools/call",
             "params": {
-                "name": "search_candidates",
+                "name": tool_name,
                 "arguments": arguments,
             },
         })
@@ -114,7 +114,7 @@ def _parse_sse(body: str) -> dict:
 
 async def fetch_candidates(offset: int = 0, limit: int = 100) -> dict:
     """Return {"total": N, "count": M, "candidates": [...]}."""
-    return await _call_mcp({"limit": limit, "offset": offset})
+    return await _call_mcp("search_candidates", {"limit": limit, "offset": offset})
 
 
 def build_embedding_text(candidate: dict) -> str:

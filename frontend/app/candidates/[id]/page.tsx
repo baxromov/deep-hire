@@ -1,9 +1,10 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { CandidateDetail } from "@/types/candidate";
 import { candidateApi, API_BASE } from "@/lib/api";
 import useSWR from "swr";
@@ -31,10 +32,34 @@ export default function CandidateDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
 
-  const { data: candidate } = useSWR<CandidateDetail>(
+  const { data: candidate, mutate } = useSWR<CandidateDetail>(
     `candidate-${id}`,
     () => candidateApi.get(id).then((r) => r.data)
   );
+  const [explaining, setExplaining] = useState(false);
+  const [showMethod, setShowMethod] = useState(false);
+
+  const explainScore = async () => {
+    setExplaining(true);
+    try {
+      const { data } = await candidateApi.explainScore(id);
+      await mutate(
+        (prev) => prev && {
+          ...prev,
+          relevance_score: data.score,
+          llm_score: data.score,
+          score_reasoning: data.reasoning,
+          score_criteria: data.criteria,
+        },
+        { revalidate: false }
+      );
+      toast.success("Оценка обновлена");
+    } catch {
+      toast.error("Не удалось получить объяснение оценки");
+    } finally {
+      setExplaining(false);
+    }
+  };
 
   if (!candidate) {
     return (
@@ -193,6 +218,103 @@ export default function CandidateDetailPage({ params }: Props) {
           </Section>
         </div>
       )}
+
+      {/* Match score — same badge/criteria style as the vacancy results table */}
+      {(candidate.llm_score != null || candidate.relevance_score != null || candidate.score_reasoning || (candidate.score_criteria && candidate.score_criteria.length > 0)) && (() => {
+        const score = candidate.llm_score ?? candidate.relevance_score;
+        return (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
+            <Section title="Оценка по вакансии">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {score != null && (
+                    <span
+                      className={`rounded-md px-2.5 py-1 text-sm font-semibold ${
+                        score >= 70
+                          ? "bg-green-50 text-green-700"
+                          : score >= 40
+                          ? "bg-yellow-50 text-yellow-700"
+                          : "bg-red-50 text-red-600"
+                      }`}
+                    >
+                      {score}%
+                    </span>
+                  )}
+                  {candidate.vector_score != null && (
+                    <span className="text-xs text-gray-400">Вектор: {candidate.vector_score}%</span>
+                  )}
+                </div>
+                <button
+                  onClick={explainScore}
+                  disabled={explaining}
+                  className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {explaining ? "Оценка…" : "Объяснить оценку"}
+                </button>
+              </div>
+              {candidate.score_reasoning && (
+                <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <span className="text-lg leading-none">💡</span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Summary</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-amber-900">{candidate.score_reasoning}</p>
+                  </div>
+                </div>
+              )}
+              {candidate.score_criteria && candidate.score_criteria.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {candidate.score_criteria.map((c, i) => {
+                    const val = c.score ?? c.value ?? 0;
+                    const tone =
+                      val >= 70
+                        ? { card: "border-green-200 bg-green-50/70", badge: "bg-green-600 text-white", text: "text-green-900" }
+                        : val >= 40
+                        ? { card: "border-yellow-200 bg-yellow-50/70", badge: "bg-yellow-500 text-white", text: "text-yellow-900" }
+                        : { card: "border-red-200 bg-red-50/70", badge: "bg-red-500 text-white", text: "text-red-900" };
+                    return (
+                      <div key={i} className={`rounded-lg border p-3 ${tone.card}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-medium ${tone.text}`}>
+                            {c.name} <span className="text-xs font-normal opacity-60">· вес {c.weight}%</span>
+                          </p>
+                          <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-bold ${tone.badge}`}>{val}%</span>
+                        </div>
+                        {c.comment && (
+                          <p className={`mt-1.5 text-xs leading-relaxed opacity-80 ${tone.text}`}>{c.comment}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {candidate.score_criteria && candidate.score_criteria.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowMethod((v) => !v)}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <span className={`inline-block transition-transform ${showMethod ? "rotate-90" : ""}`}>▸</span>
+                    ⓘ Как считается итоговый балл?
+                  </button>
+                  {showMethod && (
+                    <div className="mt-1.5 rounded-lg bg-gray-50 p-3 text-xs leading-relaxed text-gray-500">
+                      <p>
+                        Итоговый балл — средневзвешенная сумма оценок по каждому критерию вакансии,
+                        округлённая до целого числа:
+                      </p>
+                      <p className="mt-1.5 font-mono text-[11px] text-gray-600">
+                        {candidate.score_criteria
+                          .map((c) => `${c.weight}% × «${c.name}»`)
+                          .join(" + ")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Section>
+          </div>
+        );
+      })()}
 
       {/* Skills */}
       {candidate.skills.length > 0 && (

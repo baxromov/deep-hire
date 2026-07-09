@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.database import get_qdrant
 from app.models.vacancy import VacancyStatus
-from app.services import ai_service, candidate_service, file_service, hh_service, minio_service, vacancy_service
+from app.services import ai_service, candidate_service, file_service, hh_mcp_service, hh_service, minio_service, vacancy_service
 from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch, rerank
 from app.services.ingestion_service import _fetch_resume_page
 from app.services.qdrant_service import (
@@ -42,6 +42,14 @@ TOP_N: int = settings.match_top_n
 
 LIVE_POOL_PAGES: int = settings.live_pool_pages
 LIVE_POOL_PER_PAGE: int = settings.live_pool_per_page
+
+# Vacancy.experience bucket → minimum years, for hh MCP search filters
+HH_EXPERIENCE_MIN_YEARS = {
+    "noExperience": 0,
+    "between1And3": 1,
+    "between3And6": 3,
+    "moreThan6": 6,
+}
 
 
 def _make_scorer(vacancy, sem: asyncio.Semaphore):
@@ -160,11 +168,16 @@ async def rematch(vacancy_id: str):
     finally:
         await delete_temp_collection(qdrant, tmp_collection)
 
-    count = await candidate_service.replace_candidates(vacancy, top)
+    from app.models.match_candidate_hit import MatchCandidateHit
+    from app.models.match_result import MatchResult as MatchResultModel
+    await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh_search"}).delete()
+    await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh_search"}).delete()
+    staged = await candidate_service.stage_hh_hits(vacancy, top, source="hh_search")
+    count = staged["linked"] + staged["staged"]
     vacancy.last_matched_at = datetime.now(timezone.utc)
     await vacancy.save()
 
-    logger.info("rematch: saved %d top candidates from %d total for vacancy %s", count, len(all_resumes), vacancy_id)
+    logger.info("rematch: matched %d top candidates from %d total for vacancy %s", count, len(all_resumes), vacancy_id)
     return {"matched": count, "total": count, "last_matched_at": vacancy.last_matched_at}
 
 
@@ -273,7 +286,7 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
         qdrant = await get_qdrant()
         await ensure_collection(qdrant)
         resume_vec = await embed(text[:4000])
-        await upsert_candidates(qdrant, [qdrant_resume], [resume_vec])
+        await upsert_candidates(qdrant, [qdrant_resume], [resume_vec], [str(candidate_oid)])
         logger.info("match_from_file: indexed file:%s into main Qdrant collection", file_hash)
     except Exception as exc:
         logger.warning("match_from_file: Qdrant indexing failed (non-fatal): %s", exc)
@@ -288,7 +301,7 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
             pool_hits = await search_candidates(qdrant, file_vector, top_k=settings.pool_top_k)
             if pool_hits:
                 resumes_to_score = [
-                    hit["raw_resume_json"]
+                    {**hit["raw_resume_json"], "_candidate_id": hit.get("candidate_id")}
                     for hit in pool_hits[:settings.pool_rescore_n]
                     if hit.get("raw_resume_json")
                 ]
@@ -301,7 +314,8 @@ async def match_from_file(vacancy_id: str, file: UploadFile = File(...)):
                 good.sort(key=lambda x: x[1], reverse=True)
                 top = good[:settings.pool_top_n]
                 tagged = [({**r, "_source": "talent_pool"}, s) for r, s in top]
-                pool_count = await candidate_service.replace_candidates(vacancy, tagged)
+                staged = await candidate_service.stage_pool_hits(vacancy, tagged, source="talent_pool")
+                pool_count = staged["linked"] + staged["staged"]
     except Exception as exc:
         logger.warning("match_from_file: pool search failed: %s", exc)
 
@@ -461,7 +475,12 @@ async def rematch_stream(vacancy_id: str):
 
                 # ---------- save & finish ----------
 
-                count = await candidate_service.replace_candidates(vacancy, top)
+                from app.models.match_candidate_hit import MatchCandidateHit
+                from app.models.match_result import MatchResult as MatchResultModel
+                await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh_search"}).delete()
+                await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh_search"}).delete()
+                staged = await candidate_service.stage_hh_hits(vacancy, top, source="hh_search")
+                count = staged["linked"] + staged["staged"]
                 vacancy.last_matched_at = datetime.now(timezone.utc)
                 await vacancy.save()
 
@@ -469,7 +488,7 @@ async def rematch_stream(vacancy_id: str):
                     "step": "done",
                     "matched": count,
                     "total_collected": len(all_resumes),
-                    "message": f"Done! Saved top {count} candidates (from {len(all_resumes)} collected, ranked by vector similarity).",
+                    "message": f"Done! Matched top {count} candidates (from {len(all_resumes)} collected, ranked by vector similarity).",
                 })
 
             except Exception as exc:
@@ -533,7 +552,7 @@ async def match_from_pool(vacancy_id: str):
         return {"matched": 0, "total": 0, "last_matched_at": vacancy.last_matched_at}
 
     resumes_to_score = [
-        hit["raw_resume_json"]
+        {**hit["raw_resume_json"], "_candidate_id": hit.get("candidate_id")}
         for hit in pool_hits[:settings.pool_rescore_n]
         if hit.get("raw_resume_json")
     ]
@@ -549,7 +568,8 @@ async def match_from_pool(vacancy_id: str):
 
     # Tag each resume with source before saving
     tagged = [({**r, "_source": "talent_pool"}, s) for r, s in top]
-    count = await candidate_service.replace_candidates(vacancy, tagged)
+    staged = await candidate_service.stage_pool_hits(vacancy, tagged, source="talent_pool")
+    count = staged["linked"] + staged["staged"]
     vacancy.last_matched_at = datetime.now(timezone.utc)
     await vacancy.save()
 
@@ -647,7 +667,7 @@ async def match_from_pool_stream(vacancy_id: str):
                 })
 
                 resumes_to_score = [
-                    hit["raw_resume_json"]
+                    {**hit["raw_resume_json"], "_candidate_id": hit.get("candidate_id")}
                     for hit in pool_hits[:settings.pool_rescore_n]
                     if hit.get("raw_resume_json")
                 ]
@@ -680,7 +700,8 @@ async def match_from_pool_stream(vacancy_id: str):
 
                 top = good[:settings.pool_top_n]
                 tagged = [({**r, "_source": "talent_pool"}, s) for r, s in top]
-                count = await candidate_service.replace_candidates(vacancy, tagged)
+                staged = await candidate_service.stage_pool_hits(vacancy, tagged, source="talent_pool")
+                count = staged["linked"] + staged["staged"]
                 vacancy.last_matched_at = datetime.now(timezone.utc)
                 await vacancy.save()
 
@@ -861,7 +882,13 @@ async def _run_live_pool_pipeline(vacancy, emit) -> tuple[int, int]:
         # Step 7 — Save top pool_top_n (10) to MongoDB
         top = good[:settings.pool_top_n]
         tagged = [({**r, "_source": "live_pool"}, s) for r, s in top]
-        count = await candidate_service.replace_candidates(vacancy, tagged)
+
+        from app.models.match_candidate_hit import MatchCandidateHit
+        from app.models.match_result import MatchResult as MatchResultModel
+        await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "live_pool"}).delete()
+        await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "live_pool"}).delete()
+        staged = await candidate_service.stage_hh_hits(vacancy, tagged, source="live_pool")
+        count = staged["linked"] + staged["staged"]
         vacancy.last_matched_at = datetime.now(timezone.utc)
         await vacancy.save()
 
@@ -1062,12 +1089,15 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         # Blend reranker score (0–1 → 0–85) + skill bonus (0–15)
                         final_sc = min(100, int(rerank_sc * 85) + skill_bonus)
                         if final_sc >= min_score:
-                            scored.append(({**raw, "_source": "db_search", "_vector_score": final_sc}, final_sc))
+                            scored.append((
+                                {**raw, "_source": "db_search", "_vector_score": final_sc, "_candidate_id": hit.get("candidate_id")},
+                                final_sc,
+                            ))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
                     # LLM scoring on top candidates after reranker
                     # Falls back to reranker score if LLM fails or returns 0
-                    LLM_SCORE_LIMIT = 20
+                    LLM_SCORE_LIMIT = 10
                     to_llm = scored[:LLM_SCORE_LIMIT]
                     if to_llm:
                         await emit({
@@ -1144,11 +1174,14 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         qdrant_sc = int(hit.get("_qdrant_score", 0) * 85)
                         final_sc = min(100, qdrant_sc + skill_bonus)
                         if final_sc >= min_score:
-                            scored.append(({**raw, "_source": "db_search", "_vector_score": final_sc}, final_sc))
+                            scored.append((
+                                {**raw, "_source": "db_search", "_vector_score": final_sc, "_candidate_id": hit.get("candidate_id")},
+                                final_sc,
+                            ))
                     scored.sort(key=lambda x: x[1], reverse=True)
 
                     # ── LLM scoring on top candidates (no-reranker path) ──────────
-                    LLM_SCORE_LIMIT = 20
+                    LLM_SCORE_LIMIT = 10
                     to_llm = scored[:LLM_SCORE_LIMIT]
                     if to_llm:
                         await emit({
@@ -1223,14 +1256,17 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                         "count": proc, "total": len(scored), "matched": proc,
                     })
 
-                # Delete stale db_search MatchResults for this vacancy before saving fresh batch
+                # Delete stale db_search MatchResults/staged hits for this vacancy before saving fresh batch
+                from app.models.match_candidate_hit import MatchCandidateHit
                 from app.models.match_result import MatchResult as MatchResultModel
                 await MatchResultModel.find({
                     "vacancy_id": vacancy.id,
                     "source": "db_search",
                 }).delete()
+                await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "db_search"}).delete()
 
-                count = await candidate_service.replace_candidates(vacancy, scored)
+                staged = await candidate_service.stage_pool_hits(vacancy, scored, source="db_search")
+                count = staged["linked"] + staged["staged"]
                 vacancy.last_matched_at = now
                 await vacancy.save()
 
@@ -1260,6 +1296,153 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
     )
 
 
+async def match_from_hh_stream(vacancy_id: str, min_score: int = Query(MIN_SCORE, ge=0, le=100)):
+    """SSE: LLM fills HH MCP search params from the vacancy, searches HeadHunter via
+    search_candidate_hh, LLM-scores results against vacancy criteria, auto-saves top
+    matches with source='hh'."""
+
+    async def event_stream():
+        queue: asyncio.Queue[dict | None] = asyncio.Queue()
+
+        async def emit(event: dict) -> None:
+            await queue.put(event)
+
+        async def run() -> None:
+            try:
+                vacancy = await vacancy_service.get_vacancy(vacancy_id)
+                if not vacancy:
+                    await emit({"step": "error", "message": "Vacancy not found."}); return
+                if vacancy.status != VacancyStatus.approved:
+                    await emit({"step": "error", "message": "Vacancy must be approved."}); return
+
+                # ── LLM fills the HH search params from the vacancy ──────────────
+                await emit({"step": "planning", "message": "LLM формирует параметры поиска по вакансии…"})
+                extracted = await ai_service.extract_fields(vacancy.description or vacancy.title or "")
+                skill_list = extracted.get("skills") or vacancy.skills or []
+                # Keep the free-text query broad (title, or a few top skills) — a long
+                # comma-joined skill list reads as an overly-narrow AND-style query to HH.
+                text = vacancy.title or (", ".join(skill_list[:5]) if skill_list else "")
+
+                hh_params: dict = {
+                    "text": text,
+                    "region": vacancy.area,
+                    "min_experience": HH_EXPERIENCE_MIN_YEARS.get(vacancy.experience),
+                    "min_salary": vacancy.salary_from,
+                    "max_salary": vacancy.salary_to,
+                    "currency": vacancy.currency if (vacancy.salary_from or vacancy.salary_to) else None,
+                    "employment": [vacancy.employment_type] if vacancy.employment_type else None,
+                    "schedule": [vacancy.schedule] if vacancy.schedule else None,
+                }
+                await emit({
+                    "step": "embedding",
+                    "message": f"Параметры: текст=«{text[:80]}», регион={vacancy.area or '—'}, "
+                               f"опыт от {hh_params['min_experience'] if hh_params['min_experience'] is not None else '—'} лет",
+                })
+
+                await emit({"step": "searching", "message": "Поиск резюме на HH.ru…"})
+                result = await hh_mcp_service.search_candidates_hh(**hh_params, limit=10, page=0)
+                raw_candidates = result.get("candidates", [])
+
+                # Tool itself hints to drop the most specific filter when nothing matches —
+                # retry once without min_experience before giving up.
+                if not raw_candidates and hh_params.get("min_experience") is not None:
+                    await emit({"step": "searching", "message": "Ничего не найдено — повторяю поиск без фильтра по опыту…"})
+                    retry_params = {**hh_params, "min_experience": None}
+                    result = await hh_mcp_service.search_candidates_hh(**retry_params, limit=10, page=0)
+                    raw_candidates = result.get("candidates", [])
+
+                await emit({
+                    "step": "fetched",
+                    "count": len(raw_candidates),
+                    "total": result.get("total", 0),
+                    "message": f"HH returned {len(raw_candidates)} candidates (pool: {result.get('total', 0):,}).",
+                })
+
+                if not raw_candidates:
+                    await emit({"step": "done", "matched": 0, "total": 0, "message": "No candidates found on HH.ru."})
+                    return
+
+                adapted = [hh_mcp_service.adapt_hh_candidate(c) for c in raw_candidates]
+
+                await emit({
+                    "step": "llm_scoring",
+                    "total": len(adapted),
+                    "message": f"LLM scoring {len(adapted)} HH candidates against vacancy criteria…",
+                })
+                sem = asyncio.Semaphore(SCORE_CONCURRENCY)
+
+                async def _score(resume: dict) -> tuple[dict, int]:
+                    async with sem:
+                        sc, reasoning, criteria = await ai_service.score_candidate(
+                            vacancy_title=vacancy.title or "",
+                            vacancy_description=vacancy.description or "",
+                            required_skills=vacancy.skills,
+                            experience=vacancy.experience or "",
+                            candidate_title=resume.get("position") or resume.get("title") or "",
+                            candidate_skills=resume.get("skill_set") or [],
+                            work_experience=(resume.get("work_experience") or [])[:3],
+                            criteria=vacancy.score_criteria,
+                        )
+                        return {
+                            **resume,
+                            "_source": "hh",
+                            "score_reasoning": reasoning,
+                            "score_criteria": criteria,
+                            "_llm_score": sc if sc > 0 else None,
+                        }, sc
+
+                raw_results = await asyncio.gather(*[_score(r) for r in adapted], return_exceptions=True)
+                scored = [r for r in raw_results if not isinstance(r, Exception)]
+                good = sorted([(r, s) for r, s in scored if s >= min_score], key=lambda x: x[1], reverse=True)
+                await emit({
+                    "step": "llm_scored",
+                    "count": len(good),
+                    "total": len(scored),
+                    "message": f"{len(good)}/{len(scored)} passed ≥{min_score}%.",
+                })
+
+                for i, (resume, sc) in enumerate(good, 1):
+                    name = resume.get("full_name") or resume.get("position") or "Unknown"
+                    await emit({
+                        "step": "scoring",
+                        "count": i, "total": len(good), "matched": i,
+                        "message": f"[{i}/{len(good)}] \"{name}\" → {sc}% ✓",
+                    })
+
+                from app.models.match_candidate_hit import MatchCandidateHit
+                from app.models.match_result import MatchResult as MatchResultModel
+                await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
+                await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
+                staged = await candidate_service.stage_hh_hits(vacancy, good, source="hh")
+                count = staged["linked"] + staged["staged"]
+                vacancy.last_matched_at = datetime.now(timezone.utc)
+                await vacancy.save()
+
+                await emit({
+                    "step": "done",
+                    "matched": count, "total": len(good),
+                    "message": f"Done. {staged['linked']} already in DB, {staged['staged']} new from HH.ru.",
+                })
+            except Exception as exc:
+                logger.error("match_from_hh_stream error: %s", exc, exc_info=True)
+                await emit({"step": "error", "message": f"HH search failed: {exc}"})
+            finally:
+                await queue.put(None)
+
+        asyncio.create_task(run())
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 router.add_api_route("/vacancies/{vacancy_id}/rematch", rematch, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/rematch-stream", rematch_stream, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/status", rematch_status, methods=["GET"])
@@ -1269,3 +1452,4 @@ router.add_api_route("/vacancies/{vacancy_id}/match-from-pool-stream", match_fro
 router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool", match_from_live_pool, methods=["POST"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-live-pool-stream", match_from_live_pool_stream, methods=["GET"])
 router.add_api_route("/vacancies/{vacancy_id}/match-from-db-stream", match_from_db_stream, methods=["GET"])
+router.add_api_route("/vacancies/{vacancy_id}/match-from-hh-stream", match_from_hh_stream, methods=["GET"])

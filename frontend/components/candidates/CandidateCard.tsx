@@ -48,8 +48,7 @@ export function CandidateCard({
   const router = useRouter();
 
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
-    || candidate.title
-    || "Аноним";
+    || "Без имени";
 
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
