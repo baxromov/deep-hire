@@ -1,0 +1,974 @@
+<title>DeepHire — Архитектура и Data-Flow</title>
+<style>
+  :root{
+    --bg:#EEF1F6;
+    --bg-panel:#FFFFFF;
+    --bg-raised:#F7F9FC;
+    --ink:#182231;
+    --ink-dim:#5B6472;
+    --ink-faint:#8892A0;
+    --border:#CBD3DE;
+    --border-soft:#DCE2EA;
+    --grid-line:rgba(24,34,49,0.07);
+
+    --cat-client:#5B6472;
+    --cat-proxy:#4F5FBF;
+    --cat-app:#0E7A72;
+    --cat-app-fill:#E4F3F1;
+    --cat-infra:#2E8C93;
+    --cat-infra-fill:#E7F3F4;
+    --cat-external:#B8791F;
+    --cat-external-fill:#FBF0DE;
+
+    --line-request:#C43D3D;
+    --line-data:#6C5CD9;
+    --line-response:#1E7FB8;
+    --line-idle:#B7C0CC;
+
+    --font-mono:'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',ui-sans-serif,system-ui,sans-serif;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E141C;
+    --bg-panel:#161E29;
+    --bg-raised:#1B2431;
+    --ink:#E9EDF3;
+    --ink-dim:#9AA6B6;
+    --ink-faint:#6C7889;
+    --border:#2C394A;
+    --border-soft:#243040;
+    --grid-line:rgba(255,255,255,0.055);
+
+    --cat-client:#9AA6B6;
+    --cat-proxy:#8B98F0;
+    --cat-app:#4FC9BE;
+    --cat-app-fill:#132E2C;
+    --cat-infra:#5CC2CA;
+    --cat-infra-fill:#122A2E;
+    --cat-external:#E3A94C;
+    --cat-external-fill:#2E2410;
+
+    --line-request:#E8685F;
+    --line-data:#9B8CF0;
+    --line-response:#4FB4E8;
+    --line-idle:#3A4657;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E141C;
+      --bg-panel:#161E29;
+      --bg-raised:#1B2431;
+      --ink:#E9EDF3;
+      --ink-dim:#9AA6B6;
+      --ink-faint:#6C7889;
+      --border:#2C394A;
+      --border-soft:#243040;
+      --grid-line:rgba(255,255,255,0.055);
+
+      --cat-client:#9AA6B6;
+      --cat-proxy:#8B98F0;
+      --cat-app:#4FC9BE;
+      --cat-app-fill:#132E2C;
+      --cat-infra:#5CC2CA;
+      --cat-infra-fill:#122A2E;
+      --cat-external:#E3A94C;
+      --cat-external-fill:#2E2410;
+
+      --line-request:#E8685F;
+      --line-data:#9B8CF0;
+      --line-response:#4FB4E8;
+      --line-idle:#3A4657;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:1440px;
+    margin:0 auto;
+    padding:28px 24px 60px;
+  }
+
+  header.top{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    padding-bottom:20px;
+    border-bottom:1px solid var(--border-soft);
+    margin-bottom:22px;
+  }
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--cat-app);
+    margin:0 0 8px;
+  }
+  h1{
+    font-family:var(--font-mono);
+    font-size:26px;
+    font-weight:700;
+    margin:0 0 8px;
+    text-wrap:balance;
+    letter-spacing:-.01em;
+  }
+  .lede{
+    font-size:14px;
+    color:var(--ink-dim);
+    max-width:66ch;
+    line-height:1.55;
+    margin:0;
+  }
+  .lede code{font-family:var(--font-mono);font-size:12.5px;background:var(--bg-raised);border:1px solid var(--border-soft);padding:1px 5px;border-radius:4px;}
+  .top-meta{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+    text-align:right;
+    line-height:1.7;
+  }
+
+  .hh-callout{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(240px,1fr));
+    gap:12px;
+    background:var(--cat-external-fill);
+    border:1px solid var(--cat-external);
+    border-radius:10px;
+    padding:12px 16px;
+    margin-bottom:18px;
+  }
+  .hh-callout .col b{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--cat-external);
+    display:block;
+    margin-bottom:3px;
+  }
+  .hh-callout .col p{
+    margin:0;
+    font-size:12.5px;
+    color:var(--ink-dim);
+    line-height:1.5;
+  }
+  .hh-callout .col code{font-family:var(--font-mono);font-size:11.5px;background:var(--bg-panel);border:1px solid var(--border-soft);padding:0 4px;border-radius:3px;color:var(--ink);}
+
+  .flow-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .flow-tab{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    background:var(--bg-panel);
+    border:1px solid var(--border);
+    color:var(--ink-dim);
+    padding:9px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    text-align:left;
+    line-height:1.4;
+    transition:border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .flow-tab b{display:block;color:var(--ink);font-weight:600;font-size:12.5px;}
+  .flow-tab span{display:block;color:var(--ink-faint);font-size:10.5px;margin-top:2px;}
+  .flow-tab:hover{border-color:var(--cat-app);}
+  .flow-tab.active{
+    border-color:var(--cat-app);
+    background:var(--cat-app-fill);
+  }
+  .flow-tab.active b{color:var(--cat-app);}
+
+  .controls{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    background:var(--bg-panel);
+    border:1px solid var(--border-soft);
+    border-radius:10px;
+    padding:10px 16px;
+    margin-bottom:20px;
+  }
+  .btn{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    color:var(--ink);
+    padding:8px 13px;
+    border-radius:7px;
+    cursor:pointer;
+  }
+  .btn:hover{border-color:var(--cat-app);}
+  .btn:focus-visible, .flow-tab:focus-visible, .step:focus-visible{outline:2px solid var(--cat-app);outline-offset:2px;}
+  .btn.primary{
+    background:var(--cat-app);
+    border-color:var(--cat-app);
+    color:#fff;
+    min-width:118px;
+    justify-content:center;
+  }
+  .speed{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--ink-dim);
+    margin-left:auto;
+  }
+  .speed input{accent-color:var(--cat-app);}
+  .progress{
+    font-family:var(--font-mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+    min-width:52px;
+  }
+
+  .stage{
+    display:grid;
+    grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);
+    gap:20px;
+    align-items:start;
+  }
+  @media (max-width:1000px){
+    .stage{grid-template-columns:1fr;}
+  }
+
+  .diagram-panel{
+    background:var(--bg-panel);
+    border:1px solid var(--border-soft);
+    border-radius:12px;
+    padding:14px;
+  }
+  svg{width:100%;height:auto;display:block;}
+
+  .node rect{stroke-width:1.6;}
+  .node rect.inprocess{stroke-dasharray:6 4;}
+  .node text{font-family:var(--font-mono);}
+  .node .label{font-size:13.5px;font-weight:700;}
+  .node .sub{font-size:9.4px;letter-spacing:.01em;}
+  .node.active-node rect{filter:drop-shadow(0 0 7px currentColor);}
+
+  .group-box{fill:none;stroke-dasharray:5 4;rx:14;}
+  .group-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.03em;}
+
+  .base-edge{stroke:var(--line-idle);stroke-width:1.4;fill:none;}
+  .active-edge{fill:none;stroke-width:3;stroke-linejoin:round;transition:stroke .2s ease;}
+  .flow-dot{r:6;}
+  .flow-dot-halo{r:12;opacity:.28;}
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:16px;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px solid var(--border-soft);
+    font-family:var(--font-mono);
+    font-size:10.8px;
+    color:var(--ink-dim);
+  }
+  .legend .item{display:flex;align-items:center;gap:6px;}
+  .swatch{width:16px;height:3px;border-radius:2px;display:inline-block;}
+  .dot-swatch{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .dash-swatch{width:16px;height:0;border-top:2px dashed var(--cat-app);display:inline-block;}
+
+  .steps-panel{
+    background:var(--bg-panel);
+    border:1px solid var(--border-soft);
+    border-radius:12px;
+    padding:16px;
+  }
+  .steps-panel h2{
+    font-family:var(--font-mono);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-faint);
+    margin:0 0 12px;
+  }
+  .step-list{
+    list-style:none;
+    margin:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    max-height:640px;
+    overflow-y:auto;
+  }
+  .step{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding:9px 10px;
+    border-radius:8px;
+    border:1px solid transparent;
+    cursor:pointer;
+    background:transparent;
+    text-align:left;
+    width:100%;
+    font-family:var(--font-sans);
+  }
+  .step:hover{background:var(--bg-raised);}
+  .step .idx{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    color:var(--ink-faint);
+    min-width:20px;
+    padding-top:2px;
+  }
+  .step .body{flex:1;min-width:0;}
+  .step .route{
+    font-family:var(--font-mono);
+    font-size:10.2px;
+    color:var(--ink-faint);
+    margin-bottom:3px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    flex-wrap:wrap;
+  }
+  .step .route .tag{
+    font-size:9px;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    padding:1px 6px;
+    border-radius:4px;
+    border:1px solid currentColor;
+  }
+  .step p{margin:0;font-size:12.8px;line-height:1.5;color:var(--ink-dim);}
+  .step p code{font-family:var(--font-mono);font-size:11.3px;background:var(--bg-raised);border:1px solid var(--border-soft);padding:0 4px;border-radius:3px;color:var(--ink);}
+  .step.current{
+    background:var(--bg-raised);
+    border-color:var(--border);
+  }
+  .step.current p{color:var(--ink);}
+  .step.past{opacity:.55;}
+
+  footer.note{
+    margin-top:22px;
+    font-size:12px;
+    color:var(--ink-faint);
+    line-height:1.6;
+    max-width:96ch;
+  }
+  footer.note b{color:var(--ink-dim);}
+
+  @media (prefers-reduced-motion: reduce){
+    .flow-dot, .active-edge{transition:none;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <p class="eyebrow">Схема системы · deep-hire</p>
+      <h1>DeepHire — Архитектура и Data-Flow</h1>
+      <p class="lede">
+        AI-платформа подбора персонала на базе HH.uz. <code>nginx</code> (<code>:8385</code>) распределяет запросы между
+        <code>frontend</code> (Next.js) и <code>backend</code> (FastAPI); backend работает с общим стеком <code>shared-services</code>
+        на сервере (MongoDB, Redis, Qdrant, MinIO) и с внешними системами — HH.uz REST API, MCP-сервером (шлюз Cleverstaff)
+        и Ollama/LiteLLM.
+      </p>
+    </div>
+    <div class="top-meta">
+      shared-services-net · host.docker.internal<br>
+      front-office-pro · agentic-rag · deep-hire<br>
+      используют общую инфраструктуру
+    </div>
+  </header>
+
+  <div class="hh-callout">
+    <div class="col">
+      <b>① HH.uz REST API — прямое подключение</b>
+      <p>
+        <code>hh_service.py</code> напрямую ходит на <code>api.hh.uz</code> (OAuth-токен, <code>/resumes</code>, <code>/resumes/{id}</code>) —
+        глобальный семафор ≤3 параллельных запроса, кеш поиска в Redis. Используется в «Smart Rematch».
+      </p>
+    </div>
+    <div class="col">
+      <b>② MCP-сервер — <code>172.31.174.11:8765/mcp</code></b>
+      <p>
+        Отдельный шлюз (JSON-RPC поверх HTTP), даёт два инструмента: <code>search_candidate_hh</code>
+        (проксированный поиск по HH.ru) и <code>search_candidates</code> (собственная база Cleverstaff).
+        Используется в «Поиск через MCP» и в фоновой синхронизации Cleverstaff.
+      </p>
+    </div>
+  </div>
+
+  <div class="flow-tabs" id="flowTabs" role="tablist"></div>
+
+  <div class="controls">
+    <button class="btn" id="btnPrev" title="Предыдущий шаг">◀ Назад</button>
+    <button class="btn primary" id="btnPlay">▶ Play</button>
+    <button class="btn" id="btnNext" title="Следующий шаг">Далее ▶</button>
+    <span class="progress" id="progressLabel">1 / 10</span>
+    <div class="speed">
+      Скорость
+      <input type="range" id="speedRange" min="0.5" max="2.5" step="0.25" value="1">
+      <span id="speedLabel">1×</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="diagram-panel">
+      <svg id="svgRoot" viewBox="0 0 1320 800" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Диаграмма архитектуры DeepHire">
+        <defs>
+          <marker id="arrow-request" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--line-request)"></path>
+          </marker>
+          <marker id="arrow-data" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--line-data)"></path>
+          </marker>
+          <marker id="arrow-response" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--line-response)"></path>
+          </marker>
+        </defs>
+
+        <g id="baseEdges"></g>
+
+        <rect class="group-box" id="groupInfra" stroke="var(--cat-infra)"></rect>
+        <text class="group-label" id="groupInfraLabel" fill="var(--cat-infra)"></text>
+
+        <rect class="group-box" id="groupExternal" stroke="var(--cat-external)"></rect>
+        <text class="group-label" id="groupExternalLabel" fill="var(--cat-external)"></text>
+
+        <g id="nodesLayer"></g>
+
+        <g id="activeEdgeLayer"></g>
+        <g id="dotLayer"></g>
+      </svg>
+
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--line-request)"></span> Запрос (user → backend)</span>
+        <span class="item"><span class="swatch" style="background:var(--line-data)"></span> Движение данных (backend ↔ сервисы)</span>
+        <span class="item"><span class="swatch" style="background:var(--line-response)"></span> Ответ (backend → user)</span>
+        <span class="item"><span class="dot-swatch" style="background:var(--cat-app)"></span> Слой приложения</span>
+        <span class="item"><span class="dot-swatch" style="background:var(--cat-infra)"></span> Общая инфраструктура</span>
+        <span class="item"><span class="dot-swatch" style="background:var(--cat-external)"></span> Внешний сервис</span>
+        <span class="item"><span class="dash-swatch"></span> Выполняется in-process (без сети)</span>
+      </div>
+    </div>
+
+    <div class="steps-panel">
+      <h2 id="stepsTitle">Шаги</h2>
+      <ul class="step-list" id="stepList"></ul>
+    </div>
+  </div>
+
+  <footer class="note">
+    <b>Примечание:</b> MongoDB, Redis, Qdrant, MinIO и Langfuse запускаются централизованно на сервере в репозитории <code>shared-services</code>
+    (<code>docker-compose.yml</code>) и делятся между <code>front-office-pro</code>, <code>agentic-rag</code> и <code>deep-hire</code> через сеть
+    <code>shared-services-net</code>. Сам deep-hire поднимает в своём <code>docker-compose.yml</code> только <code>backend</code>/<code>frontend</code>/<code>nginx</code>,
+    а к остальному подключается через <code>host.docker.internal</code>.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NODES = {
+    user:       {x:560, y:40,  w:190, h:58, cat:'client',   label:'Пользователь',            sub:'Браузер'},
+    nginx:      {x:560, y:150, w:190, h:58, cat:'proxy',    label:'Nginx',                    sub:':8385 · reverse proxy'},
+    frontend:   {x:190, y:260, w:180, h:58, cat:'app',      label:'Frontend',                 sub:'Next.js 16 · :3001'},
+    backend:    {x:760, y:260, w:180, h:58, cat:'app',      label:'Backend',                  sub:'FastAPI · :8000'},
+    reranker:   {x:980, y:260, w:200, h:58, cat:'app',      label:'Cross-encoder reranker',   sub:'bge-reranker-v2-m3 · in-process', inprocess:true},
+    mongo:      {x:480, y:440, w:150, h:54, cat:'infra',    label:'MongoDB',                  sub:'основная БД · :27017'},
+    redis:      {x:660, y:440, w:150, h:54, cat:'infra',    label:'Redis',                    sub:'кеш/токены · :6379'},
+    qdrant:     {x:840, y:440, w:150, h:54, cat:'infra',    label:'Qdrant',                   sub:'векторная БД · :6333'},
+    minio:      {x:1020,y:440, w:150, h:54, cat:'infra',    label:'MinIO',                    sub:'файлы резюме · :9000'},
+    hh:         {x:480, y:650, w:190, h:58, cat:'external', label:'HH.uz REST API',           sub:'OAuth · /resumes'},
+    mcp:        {x:760, y:650, w:190, h:58, cat:'external', label:'MCP-сервер',                sub:':8765 · шлюз Cleverstaff'},
+    ollama:     {x:1040,y:650, w:190, h:58, cat:'external', label:'Ollama / LiteLLM',          sub:'LLM + эмбеддинги'}
+  };
+
+  var CAT_COLOR = {
+    client:'var(--cat-client)',
+    proxy:'var(--cat-proxy)',
+    app:'var(--cat-app)',
+    infra:'var(--cat-infra)',
+    external:'var(--cat-external)'
+  };
+  var CAT_FILL = {
+    client:'var(--bg-raised)',
+    proxy:'var(--bg-raised)',
+    app:'var(--cat-app-fill)',
+    infra:'var(--cat-infra-fill)',
+    external:'var(--cat-external-fill)'
+  };
+  var TYPE_COLOR = {
+    request:'var(--line-request)',
+    data:'var(--line-data)',
+    response:'var(--line-response)'
+  };
+  var TYPE_LABEL = { request:'Запрос', data:'Данные', response:'Ответ' };
+
+  // Backend fans out to infra/external nodes via dedicated clear lanes so
+  // lines never cross an unrelated node's box (see LANE_INFRA_Y / BUS_X below).
+  var ROUTE_TYPE = {
+    'backend__mongo':'infra', 'backend__redis':'infra', 'backend__qdrant':'infra',
+    'backend__hh':'external', 'backend__mcp':'external', 'backend__ollama':'external'
+  };
+  var LANE_INFRA_Y = 360;   // clear gap between app row (bottom 289) and infra row (top 413)
+  var BUS_X = 1250;          // right-margin bus, clear of every node's x-range
+  var LANE_EXT_Y = 545;      // clear gap between infra row (bottom 467) and external row (top 621)
+
+  var FLOWS = [
+    {
+      id:'login', tabLabel:'Вход', tabSub:'JWT-аутентификация',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"Пользователь вводит логин и пароль на странице входа."},
+        {from:'frontend',to:'nginx',type:'request',text:"Frontend отправляет <code>POST /api/auth/login</code> (<code>auth.py</code>)."},
+        {from:'nginx',to:'backend',type:'request',text:"Nginx проксирует запрос на <code>backend:8000</code>."},
+        {from:'backend',to:'mongo',type:'data',text:"<code>auth_service.py</code> ищет пользователя в коллекции <code>User</code> и проверяет пароль через <code>bcrypt.checkpw</code>."},
+        {from:'backend',to:'nginx',type:'response',text:"Backend создаёт JWT (HS256, срок 7 дней) и возвращает <code>access_token</code>."},
+        {from:'nginx',to:'frontend',type:'response',text:"Ответ передаётся frontend'у."},
+        {from:'frontend',to:'user',type:'response',text:"Токен сохраняется в браузере, пользователь попадает в панель."}
+      ]
+    },
+    {
+      id:'hh-integration', tabLabel:'HH.uz интеграция', tabSub:'OAuth · Settings → Integrations',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"На странице <b>Settings → Integrations</b> нажимается «Подключить HH.uz»."},
+        {from:'frontend',to:'nginx',type:'request',text:"<code>GET /api/integrations/hh/connect-url</code> (<code>integrations.py</code>)."},
+        {from:'nginx',to:'backend',type:'request',text:"Запрос проксируется на backend."},
+        {from:'backend',to:'hh',type:'data',text:"Backend формирует OAuth-ссылку на <code>hh.uz/oauth/authorize</code> (<code>state = user_id</code>, поддержка нескольких HH-аккаунтов на пользователя)."},
+        {from:'backend',to:'nginx',type:'response',text:"URL авторизации возвращается frontend'у."},
+        {from:'nginx',to:'user',type:'response',text:"Браузер переходит на hh.uz — пользователь подтверждает доступ (вне этой архитектуры)."},
+        {from:'user',to:'nginx',type:'request',text:"HH.uz возвращает браузер на <code>/api/integrations/hh/callback?code=...&state=...</code>."},
+        {from:'nginx',to:'backend',type:'request',text:"Callback проксируется на backend."},
+        {from:'backend',to:'hh',type:'data',text:"<code>hh_service.exchange_code_for_user</code> обменивает <code>code</code> на access/refresh токены на <code>hh.uz/oauth/token</code>."},
+        {from:'backend',to:'redis',type:'data',text:"Токен кешируется в Redis по ключу <code>hh:token:{user_id}</code>."},
+        {from:'backend',to:'mongo',type:'data',text:"Токен сохраняется как документ <code>HHToken</code> — привязан к пользователю, поддерживает мульти-аккаунт."},
+        {from:'backend',to:'nginx',type:'response',text:"Redirect на <code>/settings/integrations?connected=1</code>."},
+        {from:'nginx',to:'user',type:'response',text:"Пользователь видит подключённый HH.uz-аккаунт."}
+      ]
+    },
+    {
+      id:'smart-rematch', tabLabel:'Smart Rematch', tabSub:'прямой поиск по HH.uz REST',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"На странице вакансии нажимается <b>Smart Rematch</b>."},
+        {from:'frontend',to:'nginx',type:'request',text:"<code>GET /api/matching/vacancies/{id}/rematch-stream</code> (SSE-поток)."},
+        {from:'nginx',to:'backend',type:'request',text:"Nginx проксирует запрос, буферизация отключена (<code>X-Accel-Buffering: no</code>)."},
+        {from:'backend',to:'ollama',type:'data',text:"<code>ai_service.generate_search_queries</code> — LLM формирует поисковые запросы по вакансии."},
+        {from:'backend',to:'hh',type:'data',text:"<code>hh_service</code> ищет резюме на <code>api.hh.uz/resumes</code> по каждому запросу (кешированный OAuth-токен, кеш результатов в Redis <code>hh:search:*</code>, семафор ≤3 параллельных запроса) и подгружает детали резюме."},
+        {from:'backend',to:'qdrant',type:'data',text:"Все найденные резюме векторизуются (<code>embed_batch</code>) и индексируются во временную коллекцию <code>tmp_rematch_{id}</code>; вакансия ищется по cosine similarity — top 50, коллекция сразу удаляется."},
+        {from:'backend',to:'mongo',type:'data',text:"Лучшие кандидаты сохраняются как <code>MatchResult</code>/<code>MatchCandidateHit</code> — базовая оценка это векторное сходство (LLM-скоринг — опциональный флаг <code>USE_LLM_SCORING</code>)."},
+        {from:'backend',to:'nginx',type:'response',text:"Прогресс и итог передаются через SSE."},
+        {from:'nginx',to:'frontend',type:'response',text:"События долетают до frontend'а в реальном времени."},
+        {from:'frontend',to:'user',type:'response',text:"Список кандидатов обновляется по мере поступления."}
+      ]
+    },
+    {
+      id:'hh-mcp', tabLabel:'Поиск через MCP', tabSub:'search_candidate_hh',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"Нажимается альтернативный способ подбора «Поиск на HH через MCP»."},
+        {from:'frontend',to:'nginx',type:'request',text:"<code>GET /api/matching/vacancies/{id}/match-from-hh-stream</code>."},
+        {from:'nginx',to:'backend',type:'request',text:"Запрос проксируется на backend."},
+        {from:'backend',to:'ollama',type:'data',text:"<code>ai_service.extract_fields</code> — LLM формирует параметры поиска (текст, регион, опыт, зарплата) из описания вакансии."},
+        {from:'backend',to:'mcp',type:'data',text:"<code>hh_mcp_service</code> вызывает MCP-инструмент <code>search_candidate_hh</code> на <code>172.31.174.11:8765/mcp</code> (JSON-RPC: <code>initialize</code> → <code>tools/call</code>, ответ через SSE)."},
+        {from:'backend',to:'ollama',type:'data',text:"Каждый полученный кандидат оценивается LLM (<code>ai_service.score_candidate</code>) по критериям вакансии."},
+        {from:'backend',to:'mongo',type:'data',text:"Кандидаты с оценкой ≥ порога сохраняются с <code>source=hh</code>."},
+        {from:'backend',to:'nginx',type:'response',text:"Прогресс передаётся через SSE."},
+        {from:'nginx',to:'frontend',type:'response',text:"События долетают до frontend'а."},
+        {from:'frontend',to:'user',type:'response',text:"Список кандидатов обновляется на странице."}
+      ]
+    },
+    {
+      id:'talent-pool', tabLabel:'Talent Pool', tabSub:'поиск по готовому Qdrant',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"Нажимается <b>Match from Pool</b>."},
+        {from:'frontend',to:'nginx',type:'request',text:"Запрос отправляется на nginx."},
+        {from:'nginx',to:'backend',type:'request',text:"Запрос проксируется на backend."},
+        {from:'backend',to:'ollama',type:'data',text:"<code>embedding_service</code> векторизует текст вакансии (модель bge-m3)."},
+        {from:'backend',to:'qdrant',type:'data',text:"Поиск по основной коллекции <code>uzbek_candidates</code> — cosine similarity, top-K с фильтрами по региону и зарплате."},
+        {from:'backend',to:'ollama',type:'data',text:"Top-N результатов повторно оцениваются — по умолчанию векторным скором; LLM-оценка включается флагом <code>USE_LLM_SCORING</code>."},
+        {from:'backend',to:'mongo',type:'data',text:"Кандидаты с оценкой ≥60% сохраняются, <code>source=talent_pool</code>."},
+        {from:'backend',to:'nginx',type:'response',text:"Результат JSON возвращается."},
+        {from:'nginx',to:'frontend',type:'response',text:"Ответ передаётся frontend'у."},
+        {from:'frontend',to:'user',type:'response',text:"Список кандидатов отображается — пул уже наполнен, поэтому быстрее."}
+      ]
+    },
+    {
+      id:'db-rerank', tabLabel:'DB-поиск + reranker', tabSub:'cross-encoder уточнение',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"Нажимается <b>Match from DB</b> с настраиваемым порогом оценки."},
+        {from:'frontend',to:'nginx',type:'request',text:"<code>GET /api/matching/vacancies/{id}/match-from-db-stream</code>."},
+        {from:'nginx',to:'backend',type:'request',text:"Запрос проксируется на backend."},
+        {from:'backend',to:'qdrant',type:'data',text:"Прямой поиск по основной коллекции Qdrant, без промежуточного обращения к MongoDB."},
+        {from:'backend',to:'reranker',type:'data',text:"Если включён <code>USE_RERANKER</code> — топ-30 кандидатов переоцениваются локальной моделью <code>BAAI/bge-reranker-v2-m3</code>, загруженной в память backend (без сетевого вызова, кеш в <code>~/.cache/huggingface</code>)."},
+        {from:'backend',to:'ollama',type:'data',text:"Финальные топ-10 дополнительно оцениваются LLM по критериям вакансии; при сбое используется оценка reranker'а."},
+        {from:'backend',to:'mongo',type:'data',text:"Результаты сохраняются, <code>source=db_search</code>."},
+        {from:'backend',to:'nginx',type:'response',text:"Прогресс передаётся через SSE."},
+        {from:'nginx',to:'frontend',type:'response',text:"События долетают до frontend'а."},
+        {from:'frontend',to:'user',type:'response',text:"Список кандидатов обновляется на странице."}
+      ]
+    },
+    {
+      id:'match-file', tabLabel:'Match from File', tabSub:'загрузка резюме PDF/DOCX',
+      steps:[
+        {from:'user',to:'frontend',type:'request',text:"Выбирается файл резюме — PDF или DOCX, до 10 МБ."},
+        {from:'frontend',to:'nginx',type:'request',text:"Multipart <code>POST /api/matching/vacancies/{id}/match-from-file</code>."},
+        {from:'nginx',to:'backend',type:'request',text:"Файл проксируется на backend (<code>client_max_body_size 100m</code>)."},
+        {from:'backend',to:'minio',type:'data',text:"<code>file_service</code> извлекает текст, <code>minio_service</code> сохраняет оригинал файла в бакет <code>deephire-uploads</code>."},
+        {from:'backend',to:'ollama',type:'data',text:"<code>ai_service.extract_resume_fields</code> — LLM извлекает имя/должность/навыки/зарплату; <code>score_candidate</code> оценивает соответствие вакансии."},
+        {from:'backend',to:'qdrant',type:'data',text:"Резюме индексируется в основную коллекцию, затем его текст используется как запрос для поиска похожих кандидатов в пуле."},
+        {from:'backend',to:'mongo',type:'data',text:"Кандидат сохраняется (<code>hh_resume_id=file:&lt;hash&gt;</code>), похожие из пула — как отдельные записи."},
+        {from:'backend',to:'nginx',type:'response',text:"Результат JSON возвращается."},
+        {from:'nginx',to:'frontend',type:'response',text:"Ответ передаётся frontend'у."},
+        {from:'frontend',to:'user',type:'response',text:"Карточка кандидата и процент соответствия отображаются."}
+      ]
+    },
+    {
+      id:'cleverstaff-sync', tabLabel:'Cleverstaff sync', tabSub:'фон · без пользователя',
+      steps:[
+        {from:'backend',to:'mcp',type:'data',text:"APScheduler (ежедневно в 02:00) запускает <code>sync_service.sync_cleverstaff</code> → MCP-инструмент <code>search_candidates</code> (собственная база Cleverstaff, постранично по 1 записи — сервер нестабилен при большем размере страницы)."},
+        {from:'backend',to:'redis',type:'data',text:"Redis-множество <code>cleverstaff:synced_ids</code> проверяется, чтобы пропустить уже обработанных кандидатов (инкрементальная синхронизация)."},
+        {from:'backend',to:'ollama',type:'data',text:"Новые кандидаты векторизуются батчами по 20 (<code>embedding_service.embed_batch</code>)."},
+        {from:'backend',to:'qdrant',type:'data',text:"Векторы записываются в <code>uzbek_candidates</code> батчами по 200 (upsert)."},
+        {from:'backend',to:'mongo',type:'data',text:"Кандидаты сохраняются как записи пула (<code>vacancy_id=None</code>) — доступны для Talent Pool и DB-поиска."}
+      ]
+    }
+  ];
+
+  // ---- geometry helpers ----------------------------------------------------
+  function borderPoint(node, towardX, towardY){
+    var dx = towardX - node.x, dy = towardY - node.y;
+    if (dx === 0 && dy === 0) return {x:node.x, y:node.y};
+    var sx = dx !== 0 ? (node.w/2) / Math.abs(dx) : Infinity;
+    var sy = dy !== 0 ? (node.h/2) / Math.abs(dy) : Infinity;
+    var s = Math.min(sx, sy);
+    return {x: node.x + dx*s, y: node.y + dy*s};
+  }
+  function pairKey(k1,k2){ return [k1,k2].sort().join('__'); }
+
+  function infraElbow(target){
+    var bx = NODES.backend.x, by = NODES.backend.y + NODES.backend.h/2;
+    var tx = target.x, ty = target.y - target.h/2;
+    return [{x:bx,y:by},{x:bx,y:LANE_INFRA_Y},{x:tx,y:LANE_INFRA_Y},{x:tx,y:ty}];
+  }
+  function externalElbow(target){
+    var bx = NODES.backend.x, by = NODES.backend.y + NODES.backend.h/2;
+    var tx = target.x, ty = target.y - target.h/2;
+    return [
+      {x:bx,y:by}, {x:bx,y:LANE_INFRA_Y},
+      {x:BUS_X,y:LANE_INFRA_Y}, {x:BUS_X,y:LANE_EXT_Y},
+      {x:tx,y:LANE_EXT_Y}, {x:tx,y:ty}
+    ];
+  }
+  function pathPointsFor(fromKey, toKey){
+    var type = ROUTE_TYPE[pairKey(fromKey, toKey)];
+    if (type === 'infra'){
+      var targetI = fromKey === 'backend' ? NODES[toKey] : NODES[fromKey];
+      return infraElbow(targetI);
+    }
+    if (type === 'external'){
+      var targetE = fromKey === 'backend' ? NODES[toKey] : NODES[fromKey];
+      return externalElbow(targetE);
+    }
+    var a = NODES[fromKey], b = NODES[toKey];
+    var p1 = borderPoint(a, b.x, b.y);
+    var p2 = borderPoint(b, a.x, a.y);
+    return [p1, p2];
+  }
+  function pointsToStr(points){
+    return points.map(function(p){ return p.x + ',' + p.y; }).join(' ');
+  }
+  function pointAtFraction(points, t){
+    var segLens = [], total = 0;
+    for (var i=0;i<points.length-1;i++){
+      var dx = points[i+1].x-points[i].x, dy = points[i+1].y-points[i].y;
+      var len = Math.sqrt(dx*dx+dy*dy);
+      segLens.push(len); total += len;
+    }
+    if (total === 0) return points[0];
+    var dist = t * total;
+    for (var j=0;j<segLens.length;j++){
+      if (dist <= segLens[j] || j === segLens.length-1){
+        var frac = segLens[j] > 0 ? Math.min(1, dist/segLens[j]) : 1;
+        var p0 = points[j], p1 = points[j+1];
+        return {x:p0.x+(p1.x-p0.x)*frac, y:p0.y+(p1.y-p0.y)*frac};
+      }
+      dist -= segLens[j];
+    }
+    return points[points.length-1];
+  }
+
+  var svgNS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs){
+    var e = document.createElementNS(svgNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // ---- static map: nodes + dim base edges -----------------------------------
+  var baseEdgesLayer = document.getElementById('baseEdges');
+  var seenPairs = {};
+  FLOWS.forEach(function(flow){
+    flow.steps.forEach(function(step){
+      var pk = pairKey(step.from, step.to);
+      if (seenPairs[pk]) return;
+      seenPairs[pk] = true;
+      var pts = pathPointsFor(step.from, step.to);
+      baseEdgesLayer.appendChild(el('polyline', {
+        class:'base-edge', points:pointsToStr(pts)
+      }));
+    });
+  });
+
+  var nodesLayer = document.getElementById('nodesLayer');
+  var nodeRects = {};
+  Object.keys(NODES).forEach(function(key){
+    var n = NODES[key];
+    var g = el('g', {class:'node', 'data-node':key});
+    var rect = el('rect', {
+      x:n.x - n.w/2, y:n.y - n.h/2, width:n.w, height:n.h, rx:9,
+      fill:CAT_FILL[n.cat], stroke:CAT_COLOR[n.cat], style:'color:'+CAT_COLOR[n.cat],
+      class: n.inprocess ? 'inprocess' : ''
+    });
+    var label = el('text', {class:'label', x:n.x, y:n.y - 3, 'text-anchor':'middle', fill:'var(--ink)'});
+    label.textContent = n.label;
+    var sub = el('text', {class:'sub', x:n.x, y:n.y + 15, 'text-anchor':'middle', fill:'var(--ink-faint)'});
+    sub.textContent = n.sub;
+    g.appendChild(rect); g.appendChild(label); g.appendChild(sub);
+    nodesLayer.appendChild(g);
+    nodeRects[key] = g;
+  });
+
+  // group boxes around infra + external clusters
+  function fitGroupBox(rectEl, labelEl, keys, caption){
+    var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    keys.forEach(function(k){
+      var n = NODES[k];
+      minX = Math.min(minX, n.x-n.w/2); maxX = Math.max(maxX, n.x+n.w/2);
+      minY = Math.min(minY, n.y-n.h/2); maxY = Math.max(maxY, n.y+n.h/2);
+    });
+    var pad = 22;
+    rectEl.setAttribute('x', minX-pad); rectEl.setAttribute('y', minY-pad-18);
+    rectEl.setAttribute('width', (maxX-minX)+pad*2);
+    rectEl.setAttribute('height', (maxY-minY)+pad*2+18);
+    labelEl.setAttribute('x', minX-pad+10);
+    labelEl.setAttribute('y', minY-pad-4);
+    labelEl.textContent = caption;
+  }
+  fitGroupBox(document.getElementById('groupInfra'), document.getElementById('groupInfraLabel'),
+    ['mongo','redis','qdrant','minio'], "ОБЩАЯ ИНФРАСТРУКТУРА — shared-services (сервер)");
+  fitGroupBox(document.getElementById('groupExternal'), document.getElementById('groupExternalLabel'),
+    ['hh','mcp','ollama'], "ВНЕШНИЕ СЕРВИСЫ");
+
+  // ---- flow tabs --------------------------------------------------------
+  var tabsWrap = document.getElementById('flowTabs');
+  FLOWS.forEach(function(flow, i){
+    var b = document.createElement('button');
+    b.className = 'flow-tab';
+    b.setAttribute('role','tab');
+    b.innerHTML = '<b>'+flow.tabLabel+'</b><span>'+flow.tabSub+'</span>';
+    b.addEventListener('click', function(){ selectFlow(i); });
+    tabsWrap.appendChild(b);
+  });
+
+  // ---- state --------------------------------------------------------------
+  var state = { flowIndex:0, stepIndex:0, playing:false, speed:1, animFrame:null, animStart:0 };
+  var STEP_MS = 1600;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var activeEdgeLayer = document.getElementById('activeEdgeLayer');
+  var dotLayer = document.getElementById('dotLayer');
+  var stepListEl = document.getElementById('stepList');
+  var stepsTitleEl = document.getElementById('stepsTitle');
+  var progressLabel = document.getElementById('progressLabel');
+  var playBtn = document.getElementById('btnPlay');
+
+  function currentFlow(){ return FLOWS[state.flowIndex]; }
+
+  function selectFlow(i){
+    state.flowIndex = i;
+    state.stepIndex = 0;
+    stopPlaying();
+    renderTabs();
+    renderStepList();
+    renderStep(0, false);
+  }
+
+  function renderTabs(){
+    var tabs = tabsWrap.querySelectorAll('.flow-tab');
+    tabs.forEach(function(t, i){ t.classList.toggle('active', i === state.flowIndex); });
+  }
+
+  function renderStepList(){
+    var flow = currentFlow();
+    stepsTitleEl.textContent = 'Шаги — ' + flow.tabLabel;
+    stepListEl.innerHTML = '';
+    flow.steps.forEach(function(step, i){
+      var li = document.createElement('li');
+      li.className = 'step';
+      li.tabIndex = 0;
+      li.setAttribute('data-step', i);
+      var color = TYPE_COLOR[step.type];
+      li.innerHTML =
+        '<span class="idx">' + String(i+1).padStart(2,'0') + '</span>' +
+        '<span class="body">' +
+          '<span class="route" style="color:'+color+'">' +
+            NODES[step.from].label + ' → ' + NODES[step.to].label +
+            '<span class="tag">'+TYPE_LABEL[step.type]+'</span>' +
+          '</span>' +
+          '<p>' + step.text + '</p>' +
+        '</span>';
+      li.addEventListener('click', function(){ stopPlaying(); renderStep(i, false); });
+      li.addEventListener('keydown', function(ev){
+        if (ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); stopPlaying(); renderStep(i, false); }
+      });
+      stepListEl.appendChild(li);
+    });
+  }
+
+  function markStepListState(){
+    var items = stepListEl.querySelectorAll('.step');
+    items.forEach(function(li, i){
+      li.classList.toggle('current', i === state.stepIndex);
+      li.classList.toggle('past', i < state.stepIndex);
+    });
+    var current = stepListEl.querySelector('.step.current');
+    if (current && current.scrollIntoView) current.scrollIntoView({block:'nearest'});
+  }
+
+  function clearNodeHighlights(){
+    Object.keys(nodeRects).forEach(function(k){ nodeRects[k].classList.remove('active-node'); });
+  }
+
+  function drawActiveEdge(step, progress){
+    activeEdgeLayer.innerHTML = '';
+    dotLayer.innerHTML = '';
+    var pts = pathPointsFor(step.from, step.to);
+    var color = TYPE_COLOR[step.type];
+    var marker = 'url(#arrow-' + step.type + ')';
+
+    activeEdgeLayer.appendChild(el('polyline', {
+      class:'active-edge', points:pointsToStr(pts),
+      stroke:color, 'marker-end':marker
+    }));
+
+    var pos = pointAtFraction(pts, progress);
+    dotLayer.appendChild(el('circle', {class:'flow-dot-halo', cx:pos.x, cy:pos.y, fill:color}));
+    dotLayer.appendChild(el('circle', {class:'flow-dot', cx:pos.x, cy:pos.y, fill:color, stroke:'var(--bg-panel)', 'stroke-width':1.5}));
+  }
+
+  function highlightNodes(step, progress){
+    clearNodeHighlights();
+    var fromEl = nodeRects[step.from], toEl = nodeRects[step.to];
+    var fromColor = TYPE_COLOR[step.type];
+    if (progress < 0.5){ fromEl.classList.add('active-node'); fromEl.style.color = fromColor; }
+    else { toEl.classList.add('active-node'); toEl.style.color = fromColor; }
+  }
+
+  function renderStep(i, animate){
+    var flow = currentFlow();
+    if (i < 0) i = 0;
+    if (i > flow.steps.length - 1) i = flow.steps.length - 1;
+    state.stepIndex = i;
+    var step = flow.steps[i];
+    progressLabel.textContent = (i+1) + ' / ' + flow.steps.length;
+    markStepListState();
+
+    if (state.animFrame) { cancelAnimationFrame(state.animFrame); state.animFrame = null; }
+
+    if (!animate || reduceMotion){
+      drawActiveEdge(step, 1);
+      highlightNodes(step, 1);
+      if (state.playing) scheduleNext();
+      return;
+    }
+
+    var duration = STEP_MS / state.speed;
+    var start = null;
+    function tick(ts){
+      if (!start) start = ts;
+      var t = Math.min(1, (ts - start) / duration);
+      var eased = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+      drawActiveEdge(step, eased);
+      highlightNodes(step, eased);
+      if (t < 1){
+        state.animFrame = requestAnimationFrame(tick);
+      } else {
+        state.animFrame = null;
+        if (state.playing) scheduleNext();
+      }
+    }
+    state.animFrame = requestAnimationFrame(tick);
+  }
+
+  var nextTimer = null;
+  function scheduleNext(){
+    clearTimeout(nextTimer);
+    var pause = 550 / state.speed;
+    nextTimer = setTimeout(function(){
+      var flow = currentFlow();
+      if (state.stepIndex >= flow.steps.length - 1){
+        stopPlaying();
+        return;
+      }
+      renderStep(state.stepIndex + 1, true);
+    }, pause);
+  }
+
+  function stopPlaying(){
+    state.playing = false;
+    clearTimeout(nextTimer);
+    if (state.animFrame) { cancelAnimationFrame(state.animFrame); state.animFrame = null; }
+    playBtn.innerHTML = '▶ Play';
+  }
+  function startPlaying(){
+    var flow = currentFlow();
+    if (state.stepIndex >= flow.steps.length - 1) state.stepIndex = -1;
+    state.playing = true;
+    playBtn.innerHTML = '⏸ Play';
+    renderStep(state.stepIndex + 1, true);
+  }
+
+  document.getElementById('btnPlay').addEventListener('click', function(){
+    if (state.playing) stopPlaying(); else startPlaying();
+  });
+  document.getElementById('btnPrev').addEventListener('click', function(){
+    stopPlaying();
+    renderStep(state.stepIndex - 1, false);
+  });
+  document.getElementById('btnNext').addEventListener('click', function(){
+    stopPlaying();
+    var flow = currentFlow();
+    renderStep(Math.min(state.stepIndex + 1, flow.steps.length - 1), false);
+  });
+  var speedRange = document.getElementById('speedRange');
+  var speedLabel = document.getElementById('speedLabel');
+  speedRange.addEventListener('input', function(){
+    state.speed = parseFloat(speedRange.value);
+    speedLabel.textContent = (Math.round(state.speed * 100) / 100) + '×';
+  });
+
+  // ---- init -----------------------------------------------------------
+  renderTabs();
+  renderStepList();
+  renderStep(0, false);
+})();
+</script>
