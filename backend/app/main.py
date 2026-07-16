@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 from app.database import close_qdrant, close_redis, init_db
 from app.models.user import User
-from app.routers import ai, areas, candidates, matching, talent_pool, vacancies
+from app.routers import ai, areas, candidates, hh_vacancies, matching, talent_pool, vacancies
 from app.routers import auth, integrations
 from app.services import ai_service, embedding_service, hh_service
 from app.services.auth_service import ensure_admin_exists
@@ -68,6 +68,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(integrations.router)
 app.include_router(vacancies.router)
+app.include_router(hh_vacancies.router)
 app.include_router(candidates.router)
 app.include_router(matching.router)
 app.include_router(talent_pool.router)

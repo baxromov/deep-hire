@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { aiApi } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/context";
 import { AIFields } from "@/types/vacancy";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function DescriptionInput({ onExtracted }: Props) {
+  const { t } = useLocale();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +25,7 @@ export function DescriptionInput({ onExtracted }: Props) {
       const res = await aiApi.extractFromText(text);
       onExtracted(res.data);
     } catch {
-      setError("Не удалось извлечь поля. Попробуйте снова или заполните вручную.");
+      setError(t("vacancyForm.aiExtractError"));
     } finally {
       setLoading(false);
     }
@@ -33,7 +35,7 @@ export function DescriptionInput({ onExtracted }: Props) {
     <div className="space-y-3">
       <Textarea
         rows={8}
-        placeholder="Вставьте или напечатайте описание вакансии. ИИ автоматически извлечёт структурированные поля."
+        placeholder={t("vacancyForm.aiDescriptionPlaceholder")}
         value={text}
         onChange={(e) => setText(e.target.value)}
         className="resize-none"
@@ -41,7 +43,7 @@ export function DescriptionInput({ onExtracted }: Props) {
       {error && <p className="text-sm text-red-500">{error}</p>}
       <div className="flex justify-end">
         <Button onClick={extract} disabled={loading || !text.trim()}>
-          {loading ? "Извлечение..." : "Извлечь с помощью ИИ"}
+          {loading ? t("vacancyForm.aiExtracting") : t("vacancyForm.aiExtractButton")}
         </Button>
       </div>
     </div>

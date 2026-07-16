@@ -20,7 +20,8 @@ export interface Candidate {
   is_saved: boolean;
   matched_at: string;
   // Source & contact (from raw_resume_json)
-  source: string | null;       // "xlsx" | "file" | "hh" | null
+  source: string | null;       // "xlsx" | "file" | "hh" | null — the candidate's ORIGINAL ingestion source
+  match_source: string | null; // the METHOD that produced this vacancy match — "db_search" | "hh" | "hh_responses" | null
   phone: string | null;
   comment: string | null;
   score_reasoning: string | null;

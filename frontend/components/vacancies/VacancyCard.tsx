@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Vacancy, EXPERIENCE_OPTIONS } from "@/types/vacancy";
+import { useLocale } from "@/lib/i18n/context";
 
 function fmt(from: number | null, to: number | null, currency: string) {
   const f = from ? new Intl.NumberFormat("ru-RU").format(from) : null;
@@ -14,17 +15,38 @@ function fmt(from: number | null, to: number | null, currency: string) {
 const expLabel = (v: string | null) =>
   EXPERIENCE_OPTIONS.find((o) => o.value === v)?.label ?? v;
 
-export function VacancyCard({ vacancy }: { vacancy: Vacancy }) {
+export function VacancyCard({
+  vacancy,
+  selectable = false,
+  selected = false,
+  onToggle,
+}: {
+  vacancy: Vacancy;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (id: string) => void;
+}) {
   const router = useRouter();
+  const { t } = useLocale();
 
   return (
     <tr
-      className="group cursor-pointer hover:bg-green-50/50 transition-colors"
+      className={`group cursor-pointer hover:bg-green-50/50 transition-colors ${selected ? "bg-green-50/50" : ""}`}
       onClick={() => router.push(`/vacancies/${vacancy.id}`)}
     >
-      <td className="py-3.5 pl-5 pr-3">
+      {selectable && (
+        <td className="py-3.5 pl-5 pr-2 w-8" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle?.(vacancy.id)}
+            className="h-4 w-4 rounded border-gray-300 text-green-700 focus:ring-green-500 cursor-pointer"
+          />
+        </td>
+      )}
+      <td className={`py-3.5 pr-3 ${selectable ? "pl-1" : "pl-5"}`}>
         <span className="font-semibold text-slate-800 group-hover:text-green-700 transition-colors">
-          {vacancy.title || <span className="text-slate-300 italic font-normal">Без названия</span>}
+          {vacancy.title || <span className="text-slate-300 italic font-normal">{t("vacancyCard.untitled")}</span>}
         </span>
       </td>
       <td className="px-3 py-3.5">

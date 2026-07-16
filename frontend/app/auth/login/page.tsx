@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLocale } from "@/lib/i18n/context";
+import { LOCALES, LOCALE_LABELS } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
+  const { locale, setLocale } = useLocale();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +33,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="-mx-8 -my-8 flex h-screen overflow-hidden bg-gray-50">
+    <div className="-mx-8 -my-8 flex h-screen overflow-hidden bg-gray-50 relative">
+      {/* Language switcher */}
+      <div className="absolute top-4 right-4 z-10 flex gap-0.5 rounded-lg bg-white border border-gray-200 p-0.5 shadow-sm">
+        {LOCALES.map((l) => (
+          <button
+            key={l}
+            onClick={() => setLocale(l)}
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              locale === l ? "bg-green-600 text-white" : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            {LOCALE_LABELS[l]}
+          </button>
+        ))}
+      </div>
+
       {/* Left brand panel – green gradient stays as bank identity */}
       <div className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between bg-gradient-to-br from-green-600 to-green-800 p-10 relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.07]"

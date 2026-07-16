@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { aiApi } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/context";
 import { AIFields } from "@/types/vacancy";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function FileUploadZone({ onExtracted }: Props) {
+  const { t } = useLocale();
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,7 +23,7 @@ export function FileUploadZone({ onExtracted }: Props) {
       const res = await aiApi.extractFromFile(file);
       onExtracted(res.data);
     } catch {
-      setError("Не удалось извлечь поля. Попробуйте снова или заполните вручную.");
+      setError(t("vacancyForm.aiExtractError"));
     } finally {
       setLoading(false);
     }
@@ -53,21 +55,21 @@ export function FileUploadZone({ onExtracted }: Props) {
       {loading ? (
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-          <p className="text-sm text-gray-500">ИИ извлекает поля...</p>
+          <p className="text-sm text-gray-500">{t("vacancyForm.aiExtractingFile")}</p>
         </div>
       ) : (
         <>
           <div className="mb-3 text-4xl">📄</div>
-          <p className="font-medium text-gray-700">Перетащите PDF или DOCX файл сюда</p>
-          <p className="mt-1 text-sm text-gray-400">или</p>
+          <p className="font-medium text-gray-700">{t("vacancyForm.dropFilePrompt")}</p>
+          <p className="mt-1 text-sm text-gray-400">{t("vacancyForm.orLabel")}</p>
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             className="mt-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline"
           >
-            выбрать файл
+            {t("vacancyForm.chooseFileButton")}
           </button>
-          <p className="mt-3 text-xs text-gray-400">ИИ автоматически заполнит поля вакансии</p>
+          <p className="mt-3 text-xs text-gray-400">{t("vacancyForm.aiAutoFillHint")}</p>
         </>
       )}
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}

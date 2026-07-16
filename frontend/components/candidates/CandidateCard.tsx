@@ -4,34 +4,39 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Candidate } from "@/types/candidate";
 import { API_BASE } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/context";
 
 function VectorBadge({ isVectorized }: { isVectorized: boolean }) {
+  const { t } = useLocale();
   if (isVectorized) {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
         <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
-        Вектор
+        {t("candidateShared.vectorized")}
       </span>
     );
   }
   return <span className="text-xs text-gray-300">—</span>;
 }
 
-const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
-  xlsx:        { label: "Excel",       cls: "bg-green-50 text-green-700" },
-  file:        { label: "Загрузка",    cls: "bg-purple-50 text-purple-700" },
-  hh:          { label: "HH",          cls: "bg-blue-50 text-blue-700" },
-  cleverstaff: { label: "Cleverstaff", cls: "bg-teal-50 text-teal-700" },
+const SOURCE_KEYS: Record<string, { key: string; cls: string }> = {
+  xlsx:        { key: "candidateShared.sourceExcel",       cls: "bg-green-50 text-green-700" },
+  file:        { key: "candidateShared.sourceFile",        cls: "bg-purple-50 text-purple-700" },
+  hh:          { key: "candidateShared.sourceHh",          cls: "bg-blue-50 text-blue-700" },
+  cleverstaff: { key: "candidateShared.sourceCleverstaff", cls: "bg-teal-50 text-teal-700" },
 };
 
 function SourceBadge({ source }: { source: string | null }) {
+  const { t } = useLocale();
   if (!source) return null;
-  const cfg = SOURCE_LABELS[source] ?? { label: source, cls: "bg-gray-100 text-gray-500" };
+  const cfg = SOURCE_KEYS[source];
+  const label = cfg ? t(cfg.key) : source;
+  const cls = cfg?.cls ?? "bg-gray-100 text-gray-500";
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cfg.cls}`}>
-      {cfg.label}
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>
+      {label}
     </span>
   );
 }
@@ -46,9 +51,10 @@ export function CandidateCard({
   onToggle?: (id: string) => void;
 }) {
   const router = useRouter();
+  const { t } = useLocale();
 
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
-    || "Без имени";
+    || t("candidateShared.noName");
 
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
@@ -139,7 +145,7 @@ export function CandidateCard({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            CV
+            {t("candidateShared.cvLink")}
           </a>
         ) : (
           <span className="text-sm text-gray-300">—</span>

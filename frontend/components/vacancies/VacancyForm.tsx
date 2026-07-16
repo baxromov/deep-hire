@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { areasApi } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/context";
+import { CriteriaEditor } from "@/components/vacancies/CriteriaEditor";
 import {
   CURRENCY_OPTIONS,
   EMPLOYMENT_OPTIONS,
@@ -26,6 +28,7 @@ function hasOptionalValues(dv?: Record<string, any>) {
 }
 
 export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: Props) {
+  const { t } = useLocale();
   const [showOptional, setShowOptional] = useState(() => hasOptionalValues(defaultValues));
 
   // Area list state
@@ -131,30 +134,14 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
   };
 
   const DEFAULT_CRITERIA = [
-    { name: "Соответствие должности", weight: 45 },
-    { name: "Навыки и инструменты",   weight: 40 },
-    { name: "Уровень опыта",          weight: 15 },
+    { name: t("vacancyForm.criteriaDefaultRoleMatch"), weight: 45 },
+    { name: t("vacancyForm.criteriaDefaultSkillsTools"), weight: 40 },
+    { name: t("vacancyForm.criteriaDefaultExperienceLevel"), weight: 15 },
   ];
 
   const [criteria, setCriteria] = useState<{ name: string; weight: number }[]>(
     () => defaultValues?.score_criteria?.length ? defaultValues.score_criteria : DEFAULT_CRITERIA
   );
-
-  function changeWeight(idx: number, newVal: number) {
-    const clamped = Math.max(0, Math.min(100, isNaN(newVal) ? 0 : newVal));
-    setCriteria(prev => prev.map((c, i) => i === idx ? { ...c, weight: clamped } : c));
-  }
-
-  function addCriterion() {
-    setCriteria(prev => [...prev, { name: "", weight: 0 }]);
-  }
-
-  function removeCriterion(idx: number) {
-    if (criteria.length <= 2) return;
-    setCriteria(prev => prev.filter((_, i) => i !== idx));
-  }
-
-  const weightSum = criteria.reduce((s, c) => s + c.weight, 0);
 
   const [form, setForm] = useState({
     title: defaultValues?.title ?? "",
@@ -203,23 +190,23 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
   return (
     <div className="space-y-5">
       <div>
-        <Label>Название должности</Label>
+        <Label>{t("vacancyForm.titleLabel")}</Label>
         <Input
           className="mt-1"
-          placeholder="например, Старший QA-инженер"
+          placeholder={t("vacancyForm.titlePlaceholder")}
           value={form.title}
           onChange={(e) => set("title", e.target.value)}
         />
       </div>
 
       <div>
-        <Label>Опыт</Label>
+        <Label>{t("vacancyForm.experienceLabel")}</Label>
         <select
           className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={form.experience}
           onChange={(e) => set("experience", e.target.value)}
         >
-          <option value="">— выбрать —</option>
+          <option value="">{t("vacancyForm.selectPlaceholder")}</option>
           {EXPERIENCE_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -234,14 +221,14 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 transition-colors"
         >
           <span className={`transition-transform ${showOptional ? "rotate-90" : ""}`}>›</span>
-          {showOptional ? "Скрыть доп. поля" : "Добавить город, зарплату, занятость и график"}
+          {showOptional ? t("vacancyForm.hideOptionalFields") : t("vacancyForm.showOptionalFields")}
         </button>
       </div>
 
       {showOptional && (
         <>
           <div>
-            <Label>Город / Регион</Label>
+            <Label>{t("vacancyForm.areaLabel")}</Label>
             <select
               className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={form.area_hh_id}
@@ -251,7 +238,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
                 else { set("area", ""); set("area_hh_id", ""); }
               }}
             >
-              <option value="">— выбрать город —</option>
+              <option value="">{t("vacancyForm.selectCityPlaceholder")}</option>
               {areaList.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
@@ -260,27 +247,27 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label>Зарплата от</Label>
+              <Label>{t("vacancyForm.salaryFromLabel")}</Label>
               <Input
                 className="mt-1"
                 type="number"
-                placeholder="1 000 000"
+                placeholder={t("vacancyForm.salaryFromPlaceholder")}
                 value={form.salary_from}
                 onChange={(e) => set("salary_from", e.target.value)}
               />
             </div>
             <div>
-              <Label>Зарплата до</Label>
+              <Label>{t("vacancyForm.salaryToLabel")}</Label>
               <Input
                 className="mt-1"
                 type="number"
-                placeholder="2 000 000"
+                placeholder={t("vacancyForm.salaryToPlaceholder")}
                 value={form.salary_to}
                 onChange={(e) => set("salary_to", e.target.value)}
               />
             </div>
             <div>
-              <Label>Валюта</Label>
+              <Label>{t("vacancyForm.currencyLabel")}</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.currency}
@@ -295,26 +282,26 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Тип занятости</Label>
+              <Label>{t("vacancyForm.employmentTypeLabel")}</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.employment_type}
                 onChange={(e) => set("employment_type", e.target.value)}
               >
-                <option value="">— выбрать —</option>
+                <option value="">{t("vacancyForm.selectPlaceholder")}</option>
                 {EMPLOYMENT_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <Label>График работы</Label>
+              <Label>{t("vacancyForm.scheduleLabel")}</Label>
               <select
                 className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={form.schedule}
                 onChange={(e) => set("schedule", e.target.value)}
               >
-                <option value="">— выбрать —</option>
+                <option value="">{t("vacancyForm.selectPlaceholder")}</option>
                 {SCHEDULE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
@@ -325,11 +312,11 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
       )}
 
       <div>
-        <Label>Навыки</Label>
+        <Label>{t("vacancyForm.skillsLabel")}</Label>
         <div ref={skillRef} className="relative mt-1">
           <div className="flex gap-2">
             <Input
-              placeholder="Добавить навык..."
+              placeholder={t("vacancyForm.skillsPlaceholder")}
               value={form.skillInput}
               onChange={(e) => onSkillInput(e.target.value)}
               onKeyDown={(e) => {
@@ -340,7 +327,7 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
               autoComplete="off"
             />
             <Button type="button" variant="outline" onClick={() => { addSkill(); setSkillOpen(false); setSkillSuggestions([]); }}>
-              Добавить
+              {t("vacancyForm.addButton")}
             </Button>
           </div>
           {skillOpen && skillSuggestions.length > 0 && (
@@ -377,102 +364,17 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
       </div>
 
       <div>
-        <Label>Описание</Label>
+        <Label>{t("vacancyForm.descriptionLabel")}</Label>
         <Textarea
           className="mt-1"
           rows={6}
-          placeholder="Опишите роль, обязанности и требования к кандидату..."
+          placeholder={t("vacancyForm.descriptionPlaceholder")}
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
         />
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Критерии оценки кандидатов</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Настройте вес каждого критерия. Сумма должна быть ровно 100%.
-            </p>
-          </div>
-          <span className={`shrink-0 text-sm font-bold px-2.5 py-1 rounded-lg transition-colors ${
-            weightSum === 100
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-600"
-          }`}>
-            {weightSum === 100 ? "✓" : "✗"} {weightSum}%
-          </span>
-        </div>
-
-        {weightSum !== 100 && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
-            ⚠ Сумма весов <span className="font-bold">{weightSum}%</span> — должно быть ровно <span className="font-bold">100%</span>.
-            {weightSum > 100
-              ? ` Уменьшите на ${weightSum - 100}%.`
-              : ` Добавьте ещё ${100 - weightSum}%.`}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {criteria.map((c, idx) => (
-            <div key={idx} className="space-y-1">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={c.name}
-                  placeholder={`Критерий ${idx + 1}`}
-                  onChange={(e) =>
-                    setCriteria(prev => prev.map((item, i) => i === idx ? { ...item, name: e.target.value } : item))
-                  }
-                  className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                />
-                <div className="relative shrink-0 w-16">
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={c.weight}
-                    onChange={(e) => changeWeight(idx, Number(e.target.value))}
-                    className={`w-full rounded-md border px-1.5 py-1 text-xs font-bold text-center focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                      c.weight >= 40 ? "bg-indigo-50 border-indigo-200 text-indigo-700" :
-                      c.weight >= 20 ? "bg-violet-50 border-violet-200 text-violet-700" :
-                                       "bg-slate-50 border-slate-200 text-slate-600"
-                    }`}
-                  />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50">%</span>
-                </div>
-                {criteria.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => removeCriterion(idx)}
-                    className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors text-sm"
-                    title="Удалить критерий"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={c.weight}
-                onChange={(e) => changeWeight(idx, Number(e.target.value))}
-                className="w-full h-1.5 rounded-full cursor-pointer accent-indigo-500"
-              />
-            </div>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={addCriterion}
-          className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 transition-colors"
-        >
-          <span className="text-base leading-none">+</span> Добавить критерий
-        </button>
-      </div>
+      <CriteriaEditor criteria={criteria} onChange={setCriteria} />
 
       <div className="flex justify-end gap-3 pt-2">
         <Button
@@ -481,14 +383,14 @@ export function VacancyForm({ defaultValues, onSaveDraft, onPublish, loading }: 
           disabled={loading}
           onClick={() => onSaveDraft(collect())}
         >
-          Сохранить черновик
+          {t("common.saveDraft")}
         </Button>
         <Button
           type="button"
           disabled={loading}
           onClick={() => onPublish(collect())}
         >
-          Опубликовать
+          {t("common.publish")}
         </Button>
       </div>
     </div>

@@ -6,275 +6,17 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { InfoItem } from "@/components/vacancies/InfoItem";
+import { MethodCard } from "@/components/vacancies/MethodCard";
+import { MatchTimeline, MatchStep, MATCH_PHASES, HH_MATCH_PHASES } from "@/components/vacancies/MatchTimeline";
+import { CandidateRow } from "@/components/vacancies/CandidateRow";
 import { vacancyApi, candidateApi, matchingApi, talentPoolApi, API_BASE } from "@/lib/api";
 import { Vacancy, EXPERIENCE_OPTIONS, EMPLOYMENT_OPTIONS, SCHEDULE_OPTIONS } from "@/types/vacancy";
 import { Candidate } from "@/types/candidate";
 import useSWR from "swr";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type MatchStep = {
-  step: string;
-  message: string;
-  page?: number;
-  count?: number;
-  total?: number;
-  passed?: number;
-  matched?: number;
-  qualifying?: number;
-  collected?: number;
-  needed?: number;
-  pages?: number;
-  top_score?: number;
-  queries?: string[];
-  hits?: number;
-  upserted?: number;
-  batch?: number;
-  total_batches?: number;
-  skills?: string[];
-};
-
-type MethodId = "rematch" | "pool" | "live" | "file" | "db";
-
-
-// ─── Matching Method Card ─────────────────────────────────────────────────────
-
-type MethodCardProps = {
-  id: MethodId;
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  steps: string[];
-  badge?: React.ReactNode;
-  running: boolean;
-  disabled: boolean;
-  result?: number | null;   // matched count after last run
-  onClick: () => void;
-  onStop?: () => void;
-  accentColor: string;
-  accentBg: string;
-  accentBorder: string;
-};
-
-function MethodCard({ id, icon, label, description, steps, badge, running, disabled, result, onClick, onStop, accentColor, accentBg, accentBorder }: MethodCardProps) {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const hasResult = result != null;
-
-  return (
-    <div className="relative">
-      <button
-        onClick={onClick}
-        disabled={disabled || running}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-        className="group relative flex w-full flex-col items-start gap-2 overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-        style={{
-          borderColor: running ? accentColor : hasResult && result! > 0 ? accentColor + "60" : "#e2e8f0",
-          background: running ? accentBg : "white",
-          boxShadow: running ? `0 0 0 2px ${accentColor}40, 0 4px 12px ${accentColor}20` : "none",
-        }}
-      >
-        {/* Running shimmer */}
-        {running && (
-          <div
-            className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
-            style={{ background: `linear-gradient(90deg, transparent, ${accentColor}10, transparent)` }}
-          />
-        )}
-
-        {/* Icon + badge row */}
-        <div className="flex w-full items-start justify-between">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-base"
-            style={{ background: accentBg, color: accentColor, border: `1px solid ${accentBorder}` }}
-          >
-            {icon}
-          </div>
-          <div className="flex items-center gap-1.5">
-            {/* Result star badge */}
-            {hasResult && !running && (
-              <span
-                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{
-                  background: result! > 0 ? accentColor + "18" : "#64748b18",
-                  color: result! > 0 ? accentColor : "#64748b",
-                  border: `1px solid ${result! > 0 ? accentColor + "30" : "#64748b30"}`,
-                }}
-              >
-                {result! > 0 ? "★" : "○"} {result! > 0 ? `${result} найдено` : "0 найдено"}
-              </span>
-            )}
-            {badge}
-          </div>
-        </div>
-
-        {/* Label */}
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-gray-800 group-hover:text-gray-900">
-            {label}
-          </span>
-          {running && (
-            <span
-              className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{ background: accentBg, color: accentColor }}
-            >
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: accentColor }} />
-              Запуск
-            </span>
-          )}
-        </div>
-
-        {/* Description — clamped to 2 lines so cards in the same row stay equal height */}
-        <p className="line-clamp-2 min-h-[2.6em] text-[11.5px] leading-relaxed text-gray-400">{description}</p>
-      </button>
-
-      {/* Stop button — shown when running */}
-      {running && onStop && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onStop(); }}
-          className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
-          style={{
-            background: "#0f172a",
-            color: "#f87171",
-            border: "1px solid #ef444430",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-          }}
-          title="Остановить подбор"
-        >
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor">
-            <rect x="1" y="1" width="8" height="8" rx="1.5"/>
-          </svg>
-          Stop
-        </button>
-      )}
-
-      {/* Tooltip */}
-      {showTooltip && !running && !disabled && (
-        <div
-          className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl p-3 shadow-xl"
-          style={{
-            background: "#0f172a",
-            border: `1px solid ${accentColor}40`,
-            boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${accentColor}20`,
-          }}
-        >
-          <p
-            className="mb-2 text-[10px] font-bold uppercase tracking-widest"
-            style={{ color: accentColor }}
-          >
-            Как работает
-          </p>
-          <ol className="space-y-1.5">
-            {steps.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11.5px] text-slate-300">
-                <span
-                  className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold"
-                  style={{ background: accentColor + "20", color: accentColor }}
-                >
-                  {i + 1}
-                </span>
-                {s}
-              </li>
-            ))}
-          </ol>
-          {/* Arrow */}
-          <div
-            className="absolute -bottom-1.5 left-6 h-3 w-3 rotate-45"
-            style={{ background: "#0f172a", border: `1px solid ${accentColor}40`, borderTop: "none", borderLeft: "none" }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Match Timeline ────────────────────────────────────────────────────────────
-
-const MATCH_PHASES = [
-  { id: "search", label: "Поиск",      steps: ["planning", "embedding", "searching", "fetched"] },
-  { id: "vector", label: "Векторный",  steps: ["reranking", "reranked"] },
-  { id: "llm",    label: "LLM оценка", steps: ["llm_scoring", "llm_scored", "scoring"] },
-  { id: "done",   label: "Готово",     steps: ["done"] },
-] as const;
-
-// HH search has no vector-reranking step (MCP tool searches, LLM reranks directly) — hide that phase
-type MatchPhase = (typeof MATCH_PHASES)[number];
-const HH_MATCH_PHASES: MatchPhase[] = MATCH_PHASES.filter((p) => p.id !== "vector");
-
-type PhaseStatus = "pending" | "active" | "done" | "skipped";
-
-function MatchTimeline({ steps, running, phases = MATCH_PHASES }: { steps: MatchStep[]; running: boolean; phases?: readonly MatchPhase[] }) {
-  const stepNames = steps.map((s) => s.step);
-  const lastStep = steps[steps.length - 1];
-  const isDone = stepNames.includes("done");
-
-  const getStatus = (phaseIdx: number): PhaseStatus => {
-    const phase = phases[phaseIdx];
-    const next = phases[phaseIdx + 1];
-    const thisStarted = phase.steps.some((s) => stepNames.includes(s));
-    const nextStarted = next ? next.steps.some((s) => stepNames.includes(s)) : false;
-    if (isDone) return "done";
-    if (nextStarted && !thisStarted) return "skipped";
-    if (nextStarted) return "done";
-    if (thisStarted) return "active";
-    return "pending";
-  };
-
-  const activeMessage = running && lastStep && !isDone ? lastStep.message : null;
-
-  return (
-    <div className="mt-3 rounded-xl border border-pink-100 bg-pink-50/60 px-3 pt-3 pb-2">
-      <div className="flex items-start">
-        {phases.map((phase, idx) => {
-          const status = getStatus(idx);
-          const isLast = idx === phases.length - 1;
-          const icons: Record<string, string> = { search: "🔍", vector: "⚡", llm: "🤖", done: "✅" };
-          return (
-            <div key={phase.id} className="flex flex-1 items-start">
-              <div className="flex flex-col items-center gap-1">
-                <div
-                  className={`flex h-7 w-7 items-center justify-center rounded-full text-sm transition-all duration-300 ${
-                    status === "done"
-                      ? "bg-pink-500 text-white"
-                      : status === "active"
-                      ? "bg-pink-400 text-white ring-2 ring-pink-200 animate-pulse"
-                      : status === "skipped"
-                      ? "bg-gray-200 text-gray-400"
-                      : "bg-gray-100 text-gray-300"
-                  }`}
-                >
-                  {status === "done" ? "✓" : icons[phase.id]}
-                </div>
-                <span
-                  className={`text-[9px] font-medium text-center whitespace-nowrap ${
-                    status === "active" ? "text-pink-600" :
-                    status === "done" ? "text-pink-500" :
-                    status === "skipped" ? "text-gray-300" :
-                    "text-gray-400"
-                  }`}
-                >
-                  {phase.label}
-                </span>
-              </div>
-              {!isLast && (
-                <div
-                  className={`flex-1 mt-3.5 h-0.5 mx-0.5 transition-all duration-300 ${
-                    status === "done" || status === "skipped" ? "bg-pink-300" :
-                    status === "active" ? "bg-pink-200" :
-                    "bg-gray-200"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {activeMessage && (
-        <p className="mt-1 text-[10px] text-pink-500 truncate">{activeMessage}</p>
-      )}
-    </div>
-  );
-}
+import { useLocale } from "@/lib/i18n/context";
+import { Skeleton, SkeletonLine, SkeletonTableRows } from "@/components/ui/skeleton";
+import { Dialog, DialogTrigger, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Other helpers ────────────────────────────────────────────────────────────
 
@@ -283,142 +25,6 @@ type Props = { params: Promise<{ id: string }> };
 const labelOf = (val: string | null, opts: { value: string; label: string }[]) =>
   opts.find((o) => o.value === val)?.label ?? val;
 
-function CandidateRow({ candidate, score, onSaved }: { candidate: Candidate; score: number | null; onSaved: () => void }) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
-  const name =
-    [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") ||
-    "Без имени";
-  const salary = candidate.salary_amount
-    ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
-    : null;
-
-  const saveToDb = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSaving(true);
-    try {
-      await candidateApi.save(candidate.id);
-      toast.success("Кандидат сохранён в базу");
-      onSaved();
-    } catch {
-      toast.error("Не удалось сохранить кандидата");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <tr
-      className="group cursor-pointer hover:bg-slate-50/60 transition-colors"
-      onClick={() => router.push(`/candidates/${candidate.id}`)}
-    >
-      <td className="py-3 pl-4 pr-3">
-        <div className="flex items-center gap-3">
-          <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-gray-100">
-            {candidate.photo_url ? (
-              <Image src={candidate.photo_url} alt={name} width={28} height={28} className="object-cover" unoptimized />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-gray-400">
-                {name.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-          <span className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
-            {name}
-          </span>
-        </div>
-      </td>
-      <td className="px-3 py-3 text-sm text-gray-500 max-w-[160px] truncate">{candidate.title || "—"}</td>
-      <td className="px-3 py-3 text-sm text-gray-500">{candidate.area || "—"}</td>
-      <td className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{salary || "—"}</td>
-      <td className="px-3 py-3">
-        <div className="flex flex-wrap gap-1">
-          {candidate.skills.slice(0, 3).map((s) => (
-            <span key={s} className="rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-600">{s}</span>
-          ))}
-          {candidate.skills.length > 3 && (
-            <span className="text-xs text-gray-400">+{candidate.skills.length - 3}</span>
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-3">
-        {candidate.resume_url ? (
-          <a
-            href={candidate.resume_url.startsWith("/api/") ? `${API_BASE}${candidate.resume_url}` : candidate.resume_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors"
-          >
-            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            CV
-          </a>
-        ) : (
-          <span className="text-sm text-gray-300">—</span>
-        )}
-      </td>
-      <td className="px-3 py-3">
-        {score != null && (
-          <div>
-            <span
-              className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                score >= 70
-                  ? "bg-green-50 text-green-700"
-                  : score >= 40
-                  ? "bg-yellow-50 text-yellow-700"
-                  : "bg-red-50 text-red-600"
-              }`}
-            >
-              {score}%
-            </span>
-            {candidate.score_criteria && candidate.score_criteria.length > 0 && (
-              <div className="mt-1.5 space-y-0.5">
-                {candidate.score_criteria.map((c, i) => {
-                  const val = c.score ?? c.value ?? 0;
-                  return (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-gray-400 truncate max-w-[80px]">{c.name}:</span>
-                      <span className={`text-[10px] font-semibold ${
-                        val >= 70 ? "text-green-600" : val >= 40 ? "text-yellow-600" : "text-red-500"
-                      }`}>{val}%</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </td>
-      <td className="px-3 py-3 pr-4">
-        {!candidate.is_saved ? (
-          <button
-            onClick={saveToDb}
-            disabled={saving}
-            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
-          >
-            {saving ? "…" : "Сохранить в базу"}
-          </button>
-        ) : (
-          <span className="text-sm text-gray-300">—</span>
-        )}
-      </td>
-    </tr>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="mt-0.5 text-sm text-gray-800">{value}</p>
-    </div>
-  );
-}
-
 const PROGRESS_KEY = (id: string) => `rematch-progress-${id}`;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -426,6 +32,7 @@ const PROGRESS_KEY = (id: string) => `rematch-progress-${id}`;
 export default function VacancyDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
+  const { t } = useLocale();
 
   // ── matching state ────────────────────────────────────────────────────────
   const [rematching, setRematching] = useState(false);
@@ -453,8 +60,15 @@ export default function VacancyDetailPage({ params }: Props) {
   const [hhMatching, setHhMatching] = useState(false);
   const [hhSteps, setHhSteps] = useState<MatchStep[]>([]);
   const [hhResult, setHhResult] = useState<number | null>(null);
+  const [includeCompanies, setIncludeCompanies] = useState("");
+  const [excludeCompanies, setExcludeCompanies] = useState("");
+  const [showHhSettings, setShowHhSettings] = useState(false);
 
-  const [resultTab, setResultTab] = useState<"llm" | "vector" | "hh">("llm");
+  const [combinedMatching, setCombinedMatching] = useState(false);
+  const [combinedSteps, setCombinedSteps] = useState<MatchStep[]>([]);
+  const [combinedResult, setCombinedResult] = useState<number | null>(null);
+
+  const [resultTab, setResultTab] = useState<"llm" | "vector" | "hh" | "combined">("llm");
 
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);
@@ -462,6 +76,7 @@ export default function VacancyDetailPage({ params }: Props) {
   const liveSourceRef    = useRef<EventSource | null>(null);
   const dbSourceRef      = useRef<EventSource | null>(null);
   const hhSourceRef      = useRef<EventSource | null>(null);
+  const combinedSourceRef = useRef<EventSource | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -494,12 +109,75 @@ export default function VacancyDetailPage({ params }: Props) {
   const vectorCandidates = rawCandidates
     .filter((c) => c.source !== "hh" && c.llm_score == null)
     .sort((a, b) => (b.vector_score ?? b.relevance_score ?? 0) - (a.vector_score ?? a.relevance_score ?? 0));
-  const candidates = resultTab === "llm" ? llmCandidates : resultTab === "vector" ? vectorCandidates : hhCandidates;
+  const combinedCandidates = rawCandidates
+    .filter((c) => c.match_source === "combined")
+    .sort((a, b) => (b.llm_score ?? b.relevance_score ?? 0) - (a.llm_score ?? a.relevance_score ?? 0));
+  const candidates =
+    resultTab === "llm" ? llmCandidates
+    : resultTab === "vector" ? vectorCandidates
+    : resultTab === "combined" ? combinedCandidates
+    : hhCandidates;
 
   if (!vacancy) {
     return (
-      <div className="flex justify-center pt-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <div>
+        <SkeletonLine className="mb-6 h-4 w-16" />
+
+        {/* Vacancy card skeleton */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <SkeletonLine className="h-6 w-64" />
+            <Skeleton className="h-6 w-20 shrink-0 rounded-full" />
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="space-y-1.5">
+                <SkeletonLine className="h-3 w-14" />
+                <SkeletonLine className="h-4 w-24" />
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-16 rounded-md" />
+            ))}
+          </div>
+
+          <div className="mt-5 space-y-2 border-t border-gray-100 pt-4">
+            <SkeletonLine className="h-3.5 w-full" />
+            <SkeletonLine className="h-3.5 w-full" />
+            <SkeletonLine className="h-3.5 w-2/3" />
+          </div>
+        </div>
+
+        {/* AI matching panel skeleton */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2.5">
+            <Skeleton className="h-6 w-6 rounded-lg" />
+            <SkeletonLine className="h-3.5 w-40" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 rounded-xl" />
+            ))}
+          </div>
+        </div>
+
+        {/* Candidates table skeleton */}
+        <div className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <th key={i} className="py-2.5 px-3" />
+                ))}
+              </tr>
+            </thead>
+            <SkeletonTableRows rows={6} cols={8} />
+          </table>
+        </div>
       </div>
     );
   }
@@ -509,10 +187,10 @@ export default function VacancyDetailPage({ params }: Props) {
   const duplicate = async () => {
     try {
       const res = await vacancyApi.duplicate(id);
-      toast.success("Вакансия дублирована");
+      toast.success(t("vacanciesDetail.toastDuplicated"));
       router.push(`/vacancies/${res.data.id}/edit`);
     } catch {
-      toast.error("Не удалось дублировать");
+      toast.error(t("vacanciesDetail.toastDuplicateFailed"));
     }
   };
 
@@ -520,9 +198,9 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await vacancyApi.toggleOpen(id);
       mutateVacancy(res.data);
-      toast.success(res.data.is_open ? "Вакансия открыта" : "Вакансия закрыта");
+      toast.success(res.data.is_open ? t("vacanciesDetail.toastOpened") : t("vacanciesDetail.toastClosed"));
     } catch {
-      toast.error("Не удалось обновить статус");
+      toast.error(t("vacanciesDetail.toastToggleFailed"));
     }
   };
 
@@ -530,11 +208,11 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await vacancyApi.approve(id);
       mutateVacancy(res.data);
-      toast.success("Вакансия опубликована!");
+      toast.success(t("vacanciesDetail.toastPublished"));
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        "Не удалось опубликовать";
+        t("vacanciesDetail.toastPublishFailed");
       toast.error(msg);
     }
   };
@@ -542,14 +220,14 @@ export default function VacancyDetailPage({ params }: Props) {
   const archive = async () => {
     try {
       await vacancyApi.archive(id);
-      toast.success("Вакансия архивирована");
+      toast.success(t("vacanciesDetail.toastArchived"));
       router.push("/vacancies");
     } catch {
-      toast.error("Не удалось архивировать");
+      toast.error(t("vacanciesDetail.toastArchiveFailed"));
     }
   };
 
-  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching || hhMatching;
+  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching || hhMatching || combinedMatching;
 
   // ── Smart Rematch ─────────────────────────────────────────────────────────
   const rematch = () => {
@@ -566,7 +244,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); rematchSourceRef.current = null;
         setRematching(false); mutateCandidates();
         setRematchResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов`) : toast.info("Подходящих кандидатов не найдено.");
+        (event.matched ?? 0) > 0 ? toast.success(t("vacanciesDetail.foundCandidatesRematch", { count: event.matched ?? 0 })) : toast.info(t("vacanciesDetail.noCandidatesFound"));
       }
       if (event.step === "error") {
         source.close(); rematchSourceRef.current = null;
@@ -575,7 +253,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); rematchSourceRef.current = null; setRematching(false);
-      setMatchSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+      setMatchSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
     };
   };
 
@@ -583,7 +261,7 @@ export default function VacancyDetailPage({ params }: Props) {
     rematchSourceRef.current?.close();
     rematchSourceRef.current = null;
     setRematching(false);
-    setMatchSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+    setMatchSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── Talent Pool ───────────────────────────────────────────────────────────
@@ -600,7 +278,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); poolSourceRef.current = null;
         setPoolMatching(false); mutateCandidates(); mutatePool();
         setPoolResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов из пула`) : toast.info("Подходящих кандидатов не найдено в пуле.");
+        (event.matched ?? 0) > 0 ? toast.success(t("vacanciesDetail.foundCandidatesPool", { count: event.matched ?? 0 })) : toast.info(t("vacanciesDetail.noCandidatesInPool"));
       }
       if (event.step === "error") {
         source.close(); poolSourceRef.current = null;
@@ -609,7 +287,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); poolSourceRef.current = null; setPoolMatching(false);
-      setPoolSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+      setPoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
     };
   };
 
@@ -617,7 +295,7 @@ export default function VacancyDetailPage({ params }: Props) {
     poolSourceRef.current?.close();
     poolSourceRef.current = null;
     setPoolMatching(false);
-    setPoolSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+    setPoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── Live Pool ─────────────────────────────────────────────────────────────
@@ -634,7 +312,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); liveSourceRef.current = null;
         setLivePoolMatching(false); mutateCandidates();
         setLiveResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(`Найдено ${event.matched} кандидатов через живой пул`) : toast.info("Подходящих кандидатов не найдено в живом пуле.");
+        (event.matched ?? 0) > 0 ? toast.success(t("vacanciesDetail.foundCandidatesLivePool", { count: event.matched ?? 0 })) : toast.info(t("vacanciesDetail.noCandidatesInLivePool"));
       }
       if (event.step === "error") {
         source.close(); liveSourceRef.current = null;
@@ -643,7 +321,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); liveSourceRef.current = null; setLivePoolMatching(false);
-      setLivePoolSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+      setLivePoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
     };
   };
 
@@ -651,7 +329,7 @@ export default function VacancyDetailPage({ params }: Props) {
     liveSourceRef.current?.close();
     liveSourceRef.current = null;
     setLivePoolMatching(false);
-    setLivePoolSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+    setLivePoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── From our DB ───────────────────────────────────────────────────────────
@@ -670,13 +348,13 @@ export default function VacancyDetailPage({ params }: Props) {
         setDbMatching(false);
         setDbResult(event.matched ?? 0);
         if ((event.matched ?? 0) > 0) {
-          toast.success(`Найдено ${event.matched} подходящих из базы`);
+          toast.success(t("vacanciesDetail.foundCandidatesDb", { count: event.matched ?? 0 }));
           // Explicitly fetch and push into SWR cache — avoids dedup/timing race with passive mutate()
           candidateApi.byVacancy(id).then((r) =>
             mutateCandidates(r.data as Candidate[], { revalidate: false })
           );
         } else {
-          toast.info("Подходящих кандидатов не найдено.");
+          toast.info(t("vacanciesDetail.noCandidatesFound"));
         }
         setTimeout(() => {
           document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
@@ -689,7 +367,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); dbSourceRef.current = null; setDbMatching(false);
-      setDbSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+      setDbSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
     };
   };
 
@@ -697,7 +375,7 @@ export default function VacancyDetailPage({ params }: Props) {
     dbSourceRef.current?.close();
     dbSourceRef.current = null;
     setDbMatching(false);
-    setDbSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+    setDbSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── HeadHunter (HH.ru) search ────────────────────────────────────────────
@@ -705,7 +383,7 @@ export default function VacancyDetailPage({ params }: Props) {
     setHhMatching(true);
     setHhSteps([]);
     setHhResult(null);
-    const url = matchingApi.matchFromHhStreamUrl(id, minScore);
+    const url = matchingApi.matchFromHhStreamUrl(id, minScore, includeCompanies || undefined, excludeCompanies || undefined);
     const source = new EventSource(url, { withCredentials: true });
     hhSourceRef.current = source;
     source.onmessage = (e) => {
@@ -716,12 +394,12 @@ export default function VacancyDetailPage({ params }: Props) {
         setHhMatching(false);
         setHhResult(event.matched ?? 0);
         if ((event.matched ?? 0) > 0) {
-          toast.success(`Найдено ${event.matched} кандидатов на HH.ru`);
+          toast.success(t("vacanciesDetail.foundCandidatesHh", { count: event.matched ?? 0 }));
           candidateApi.byVacancy(id).then((r) =>
             mutateCandidates(r.data as Candidate[], { revalidate: false })
           );
         } else {
-          toast.info("Подходящих кандидатов не найдено.");
+          toast.info(t("vacanciesDetail.noCandidatesFound"));
         }
         setTimeout(() => {
           document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
@@ -734,7 +412,7 @@ export default function VacancyDetailPage({ params }: Props) {
     };
     source.onerror = () => {
       source.close(); hhSourceRef.current = null; setHhMatching(false);
-      setHhSteps((prev) => [...prev, { step: "error", message: "Соединение прервано. Попробуйте снова." }]);
+      setHhSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
     };
   };
 
@@ -742,7 +420,53 @@ export default function VacancyDetailPage({ params }: Props) {
     hhSourceRef.current?.close();
     hhSourceRef.current = null;
     setHhMatching(false);
-    setHhSteps((prev) => [...prev, { step: "error", message: "Остановлено пользователем." }]);
+    setHhSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
+  };
+
+  // ── Combined rerank ───────────────────────────────────────────────────────
+  const matchFromCombined = () => {
+    setCombinedMatching(true);
+    setCombinedSteps([]);
+    setCombinedResult(null);
+    const url = matchingApi.matchFromCombinedStreamUrl(id, minScore);
+    const source = new EventSource(url, { withCredentials: true });
+    combinedSourceRef.current = source;
+    source.onmessage = (e) => {
+      const event: MatchStep = JSON.parse(e.data);
+      setCombinedSteps((prev) => [...prev, event]);
+      if (event.step === "done") {
+        source.close(); combinedSourceRef.current = null;
+        setCombinedMatching(false);
+        setCombinedResult(event.matched ?? 0);
+        if ((event.matched ?? 0) > 0) {
+          toast.success(t("vacanciesDetail.foundCandidatesCombined", { count: event.matched ?? 0 }));
+          candidateApi.byVacancy(id).then((r) =>
+            mutateCandidates(r.data as Candidate[], { revalidate: false })
+          );
+        } else {
+          toast.info(t("vacanciesDetail.noCandidatesToCombine"));
+        }
+        setResultTab("combined");
+        setTimeout(() => {
+          document.getElementById("candidates-section")?.scrollIntoView({ behavior: "smooth" });
+        }, 400);
+      }
+      if (event.step === "error") {
+        source.close(); combinedSourceRef.current = null;
+        setCombinedMatching(false); toast.error(event.message);
+      }
+    };
+    source.onerror = () => {
+      source.close(); combinedSourceRef.current = null; setCombinedMatching(false);
+      setCombinedSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
+    };
+  };
+
+  const stopCombined = () => {
+    combinedSourceRef.current?.close();
+    combinedSourceRef.current = null;
+    setCombinedMatching(false);
+    setCombinedSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── File upload ───────────────────────────────────────────────────────────
@@ -755,12 +479,12 @@ export default function VacancyDetailPage({ params }: Props) {
     try {
       const res = await matchingApi.matchFromFile(id, file);
       const { name, score, total, pool_matched } = res.data;
-      const poolNote = pool_matched > 0 ? ` + ${pool_matched} похожих из пула` : "";
-      toast.success(`${name} — балл: ${score}%${poolNote}`);
+      const poolNote = pool_matched > 0 ? t("vacanciesDetail.fileResultPoolNote", { count: pool_matched }) : "";
+      toast.success(t("vacanciesDetail.fileResultSuccess", { name, score, poolNote }));
       mutateCandidates();
       setFileResult(total);
     } catch {
-      toast.error("Не удалось обработать файл");
+      toast.error(t("vacanciesDetail.fileProcessFailed"));
       setFileResult(0);
     } finally {
       setFileMatching(false);
@@ -782,22 +506,22 @@ export default function VacancyDetailPage({ params }: Props) {
         onClick={() => router.push("/vacancies")}
         className="mb-6 text-sm text-gray-400 hover:text-gray-700 transition-colors"
       >
-        ← Назад
+        {t("vacanciesDetail.back")}
       </button>
 
       {/* Vacancy card */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">{vacancy.title || "Без названия"}</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{vacancy.title || t("vacanciesDetail.untitled")}</h1>
           <StatusBadge status={vacancy.status} />
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
-          <InfoItem label="Город" value={vacancy.area} />
-          <InfoItem label="Зарплата" value={salary ? `${salary} ${vacancy.currency}` : null} />
-          <InfoItem label="Опыт" value={labelOf(vacancy.experience, EXPERIENCE_OPTIONS)} />
-          <InfoItem label="Занятость" value={labelOf(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
-          <InfoItem label="График" value={labelOf(vacancy.schedule, SCHEDULE_OPTIONS)} />
+          <InfoItem label={t("vacanciesDetail.infoCity")} value={vacancy.area} />
+          <InfoItem label={t("vacanciesDetail.infoSalary")} value={salary ? `${salary} ${vacancy.currency}` : null} />
+          <InfoItem label={t("vacanciesDetail.infoExperience")} value={labelOf(vacancy.experience, EXPERIENCE_OPTIONS)} />
+          <InfoItem label={t("vacanciesDetail.infoEmployment")} value={labelOf(vacancy.employment_type, EMPLOYMENT_OPTIONS)} />
+          <InfoItem label={t("vacanciesDetail.infoSchedule")} value={labelOf(vacancy.schedule, SCHEDULE_OPTIONS)} />
         </div>
 
         {(vacancy.skills?.length ?? 0) > 0 && (
@@ -818,20 +542,20 @@ export default function VacancyDetailPage({ params }: Props) {
 
         {/* General actions */}
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>Редактировать</Button>
-          <Button variant="outline" size="sm" onClick={duplicate}>Дублировать</Button>
+          <Button variant="outline" size="sm" onClick={() => router.push(`/vacancies/${id}/edit`)}>{t("common.edit")}</Button>
+          <Button variant="outline" size="sm" onClick={duplicate}>{t("common.duplicate")}</Button>
           {vacancy.status === "draft" && vacancy.is_approvable && (
-            <Button size="sm" onClick={approve}>Опубликовать</Button>
+            <Button size="sm" onClick={approve}>{t("common.publish")}</Button>
           )}
           {(vacancy.status === "approved" || vacancy.status === "closed") && (
             <Button variant="outline" size="sm" onClick={toggle}>
-              {vacancy.is_open ? "Закрыть" : "Открыть"}
+              {vacancy.is_open ? t("common.close") : t("common.open")}
             </Button>
           )}
           <div className="ml-auto flex gap-2">
             {vacancy.status !== "archived" && (
               <Button variant="outline" size="sm" onClick={archive} className="text-red-400 hover:text-red-600 hover:border-red-200">
-                Архив
+                {t("common.archive")}
               </Button>
             )}
           </div>
@@ -848,13 +572,13 @@ export default function VacancyDetailPage({ params }: Props) {
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
               </svg>
             </div>
-            <span className="text-[13px] font-semibold text-gray-800">ИИ-подбор кандидатов</span>
-            <span className="ml-auto text-[11px] text-gray-400">Наведите на карточку, чтобы увидеть как работает метод</span>
+            <span className="text-[13px] font-semibold text-gray-800">{t("vacanciesDetail.aiPanelTitle")}</span>
+            <span className="ml-auto text-[11px] text-gray-400">{t("vacanciesDetail.aiPanelHint")}</span>
           </div>
 
           {/* Shared score threshold — applies to every active method (DB search, HH search) */}
           <div className="mb-3 flex items-center gap-2 px-1">
-            <span className="text-xs text-gray-500">Порог балла:</span>
+            <span className="text-xs text-gray-500">{t("vacanciesDetail.scoreThreshold")}</span>
             <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -888,13 +612,13 @@ export default function VacancyDetailPage({ params }: Props) {
                     <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
                   </svg>
                 }
-                label="Из нашей базы"
-                description="Ищет кандидатов по векторной базе Qdrant, переранжирует кросс-энкодером и оценивает через LLM"
+                label={t("vacanciesDetail.dbLabel")}
+                description={t("vacanciesDetail.dbDescription")}
                 steps={[
-                  "Embed вакансии → поиск top-N в Qdrant",
-                  "Кросс-энкодер переранжирует результаты",
-                  "LLM оценивает каждого кандидата (0–100)",
-                  `Сохраняет кандидатов с баллом ≥ ${minScore}%`,
+                  t("vacanciesDetail.dbStep1"),
+                  t("vacanciesDetail.dbStep2"),
+                  t("vacanciesDetail.dbStep3"),
+                  t("vacanciesDetail.dbStep4", { minScore }),
                 ]}
                 badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{minScore}%</span>}
                 running={dbMatching}
@@ -916,13 +640,13 @@ export default function VacancyDetailPage({ params }: Props) {
               <MethodCard
                 id="rematch"
                 icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
-                label="Умный поиск HH"
-                description="LLM заполняет параметры поиска по вакансии, ищет на HH.ru и оценивает по критериям"
+                label={t("vacanciesDetail.hhLabel")}
+                description={t("vacanciesDetail.hhDescription")}
                 steps={[
-                  "LLM формирует параметры поиска (текст, регион, опыт…) по вакансии",
-                  "Поиск резюме на HH.ru через MCP",
-                  "LLM оценивает каждого кандидата по критериям вакансии",
-                  `Сохраняет кандидатов с баллом ≥ ${minScore}%`,
+                  t("vacanciesDetail.hhStep1"),
+                  t("vacanciesDetail.hhStep2"),
+                  t("vacanciesDetail.hhStep3"),
+                  t("vacanciesDetail.hhStep4", { minScore }),
                 ]}
                 badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
                 running={hhMatching}
@@ -932,8 +656,69 @@ export default function VacancyDetailPage({ params }: Props) {
                 onStop={stopHh}
                 accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
               />
+              <Dialog open={showHhSettings} onOpenChange={setShowHhSettings}>
+                <DialogTrigger className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                  </svg>
+                  {t("matchingUi.searchSettings")}
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogTitle>{t("matchingUi.searchSettings")}</DialogTitle>
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <label className="block text-gray-500 mb-1">{t("vacanciesDetail.hhIncludeCompanies")}</label>
+                      <input
+                        value={includeCompanies}
+                        onChange={(e) => setIncludeCompanies(e.target.value)}
+                        placeholder="Beeline, Yandex"
+                        className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-500 mb-1">{t("vacanciesDetail.hhExcludeCompanies")}</label>
+                      <input
+                        value={excludeCompanies}
+                        onChange={(e) => setExcludeCompanies(e.target.value)}
+                        placeholder="TBC Bank"
+                        className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      />
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
               {(hhMatching || hhSteps.length > 0) && (
                 <MatchTimeline steps={hhSteps} running={hhMatching} phases={HH_MATCH_PHASES} />
+              )}
+            </div>
+
+            {/* Umumiy — combined rerank across every method already run */}
+            <div className="space-y-2">
+              <MethodCard
+                id="combined"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                  </svg>
+                }
+                label={t("vacanciesDetail.combinedLabel")}
+                description={t("vacanciesDetail.combinedDescription")}
+                steps={[
+                  t("vacanciesDetail.combinedStep1"),
+                  t("vacanciesDetail.combinedStep2"),
+                  t("vacanciesDetail.combinedStep3", { minScore }),
+                ]}
+                badge={<span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-600">≥{minScore}%</span>}
+                running={combinedMatching}
+                disabled={(anyRunning && !combinedMatching) || rawCandidates.length === 0}
+                result={combinedResult}
+                onClick={combinedMatching ? stopCombined : matchFromCombined}
+                onStop={stopCombined}
+                accentColor="#0d9488" accentBg="#f0fdfa" accentBorder="#99f6e4"
+              />
+              {(combinedMatching || combinedSteps.length > 0) && (
+                <MatchTimeline steps={combinedSteps} running={combinedMatching} phases={HH_MATCH_PHASES} />
               )}
             </div>
 
@@ -943,15 +728,15 @@ export default function VacancyDetailPage({ params }: Props) {
                 <MethodCard
                   id="pool"
                   icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>}
-                  label="Векторный пул"
-                  description="Поиск по предварительно проиндексированным кандидатам"
-                  steps={["Векторное сходство (Qdrant)", "Переоценка через Ollama", "Сохранение топ кандидатов"]}
+                  label={t("vacanciesDetail.poolLabel")}
+                  description={t("vacanciesDetail.poolDescription")}
+                  steps={[t("vacanciesDetail.poolStep1"), t("vacanciesDetail.poolStep2"), t("vacanciesDetail.poolStep3")]}
                   running={false} disabled={true} result={null} onClick={() => {}}
                   accentColor="#8b5cf6" accentBg="#f5f3ff" accentBorder="#ddd6fe"
                 />
               </div>
               <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
               </div>
             </div>
 
@@ -961,15 +746,15 @@ export default function VacancyDetailPage({ params }: Props) {
                 <MethodCard
                   id="live"
                   icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>}
-                  label="Живой пул HH"
-                  description="2000 свежих резюме с HH.uz, временная индексация"
-                  steps={["Загрузка 2000 резюме с HH.uz", "Временная индексация в Qdrant", "Векторный поиск + оценка"]}
+                  label={t("vacanciesDetail.liveLabel")}
+                  description={t("vacanciesDetail.liveDescription")}
+                  steps={[t("vacanciesDetail.liveStep1"), t("vacanciesDetail.liveStep2"), t("vacanciesDetail.liveStep3")]}
                   running={false} disabled={true} result={null} onClick={() => {}}
                   accentColor="#10b981" accentBg="#ecfdf5" accentBorder="#a7f3d0"
                 />
               </div>
               <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
               </div>
             </div>
 
@@ -980,13 +765,13 @@ export default function VacancyDetailPage({ params }: Props) {
                 <MethodCard
                   id="file"
                   icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
-                  label="Загрузка файла"
-                  description="Загрузите резюме — сохранит и найдёт похожих кандидатов из пула"
+                  label={t("vacanciesDetail.fileLabel")}
+                  description={t("vacanciesDetail.fileDescription")}
                   steps={[
-                    "Извлечение текста из PDF/DOCX",
-                    "ИИ парсит: имя, должность, навыки, зарплату",
-                    "Ollama оценивает соответствие вакансии (0–100)",
-                    "Сохраняет кандидата + ищет похожие профили",
+                    t("vacanciesDetail.fileStep1"),
+                    t("vacanciesDetail.fileStep2"),
+                    t("vacanciesDetail.fileStep3"),
+                    t("vacanciesDetail.fileStep4"),
                   ]}
                   running={fileMatching}
                   disabled={anyRunning && !fileMatching}
@@ -998,7 +783,7 @@ export default function VacancyDetailPage({ params }: Props) {
                 />
               </div>
               <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">🔒 Скоро</span>
+                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
               </div>
             </div>
 
@@ -1012,7 +797,7 @@ export default function VacancyDetailPage({ params }: Props) {
         <div id="candidates-section" className="mt-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-              Подходящие кандидаты ({candidates.length})
+              {t("vacanciesDetail.candidatesHeading", { count: candidates.length })}
             </p>
             <div className="flex items-center gap-1.5 rounded-full bg-gray-100 p-1">
               <button
@@ -1022,7 +807,7 @@ export default function VacancyDetailPage({ params }: Props) {
                   resultTab === "llm" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                LLM оценка ({llmCandidates.length})
+                {t("vacanciesDetail.tabLlm", { count: llmCandidates.length })}
               </button>
               <button
                 type="button"
@@ -1031,7 +816,7 @@ export default function VacancyDetailPage({ params }: Props) {
                   resultTab === "vector" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Векторный поиск ({vectorCandidates.length})
+                {t("vacanciesDetail.tabVector", { count: vectorCandidates.length })}
               </button>
               <button
                 type="button"
@@ -1040,30 +825,41 @@ export default function VacancyDetailPage({ params }: Props) {
                   resultTab === "hh" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                HH ({hhCandidates.length})
+                {t("vacanciesDetail.tabHh", { count: hhCandidates.length })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultTab("combined")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                  resultTab === "combined" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {t("vacanciesDetail.tabCombined", { count: combinedCandidates.length })}
               </button>
             </div>
           </div>
           {candidates.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-400">
               {resultTab === "llm"
-                ? "Нет кандидатов, оценённых LLM — запустите поиск по базе (DB Search)."
+                ? t("vacanciesDetail.emptyLlm")
                 : resultTab === "vector"
-                ? "Нет кандидатов из векторного поиска."
-                : "Нет кандидатов с HH.ru — запустите поиск выше."}
+                ? t("vacanciesDetail.emptyVector")
+                : resultTab === "combined"
+                ? t("vacanciesDetail.emptyCombined")
+                : t("vacanciesDetail.emptyHh")}
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">Имя</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Должность</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Город</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Зарплата</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Навыки</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Резюме</th>
-                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">Совпадение</th>
+                  <th className="py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colName")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colPosition")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colCity")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colSalary")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colSkills")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colResume")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium uppercase tracking-wide text-gray-400">{t("vacanciesDetail.colMatch")}</th>
                   <th className="px-3 py-2.5 pr-4 text-xs font-medium uppercase tracking-wide text-gray-400"></th>
                 </tr>
               </thead>
@@ -1085,7 +881,7 @@ export default function VacancyDetailPage({ params }: Props) {
 
       {vacancy.status === "approved" && candidates.length === 0 && (
         <div className="mt-4 rounded-xl border border-dashed border-gray-200 p-10 text-center">
-          <p className="text-sm text-gray-400">Пока нет кандидатов — выберите метод подбора выше.</p>
+          <p className="text-sm text-gray-400">{t("vacanciesDetail.noCandidatesYet")}</p>
         </div>
       )}
 

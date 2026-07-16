@@ -77,6 +77,17 @@ export const vacancyApi = {
   approve: (id: string) => api.post(`/api/vacancies/${id}/approve`),
   duplicate: (id: string) => api.post(`/api/vacancies/${id}/duplicate`),
   toggleOpen: (id: string) => api.patch(`/api/vacancies/${id}/toggle-open`),
+  delete: (id: string) => api.delete<{ ok: boolean }>(`/api/vacancies/${id}`),
+  deleteMany: (ids: string[]) =>
+    api.delete<{ deleted: number; skipped: number }>("/api/vacancies/bulk", { data: { ids } }),
+};
+
+// --- HH Vacancies (open vacancies on hh.ru) ---
+export const hhVacancyApi = {
+  list: (text?: string) =>
+    api.get<import("@/types/vacancyHh").VacancyHhList>("/api/hh-vacancies/", { params: { text } }),
+  get: (id: string) =>
+    api.get<import("@/types/vacancyHh").VacancyHhDetail>(`/api/hh-vacancies/${id}`),
 };
 
 // --- AI ---
@@ -108,8 +119,16 @@ export const matchingApi = {
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-live-pool`),
   matchFromDbStreamUrl: (vacancyId: string, minScore = 60) =>
     `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-db-stream?min_score=${minScore}`,
-  matchFromHhStreamUrl: (vacancyId: string, minScore = 60) =>
-    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-stream?min_score=${minScore}`,
+  matchFromHhStreamUrl: (vacancyId: string, minScore = 60, includeCompanies?: string, excludeCompanies?: string) => {
+    const params = new URLSearchParams({ min_score: String(minScore) });
+    if (includeCompanies) params.set("include_companies", includeCompanies);
+    if (excludeCompanies) params.set("exclude_companies", excludeCompanies);
+    return `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-stream?${params.toString()}`;
+  },
+  matchFromHhResponsesStreamUrl: (vacancyId: string, minScore = 60) =>
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-responses-stream?min_score=${minScore}`,
+  matchFromCombinedStreamUrl: (vacancyId: string, minScore = 60) =>
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/rerank-combined-stream?min_score=${minScore}`,
 };
 
 // --- Talent Pool ---

@@ -6,6 +6,8 @@ import { candidateApi } from "@/lib/api";
 import { Candidate } from "@/types/candidate";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { useLocale } from "@/lib/i18n/context";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 
 const PAGE_SIZE = 20;
 
@@ -18,20 +20,6 @@ function useDebounce(value: string, delay: number): string {
   return debounced;
 }
 
-const SORT_OPTIONS = [
-  { value: "score", label: "По баллу ↓" },
-  { value: "date",  label: "По дате ↓"  },
-  { value: "name",  label: "По имени А–Я" },
-];
-
-const SOURCE_FILTERS = [
-  { value: "",             label: "Все"           },
-  { value: "xlsx",         label: "📊 Excel"      },
-  { value: "file",         label: "📎 Загрузка"   },
-  { value: "hh",           label: "🔗 HH"         },
-  { value: "cleverstaff",  label: "🟢 Cleverstaff" },
-];
-
 type UploadJobState = {
   status: string;
   total: number;
@@ -41,6 +29,22 @@ type UploadJobState = {
 } | null;
 
 export default function CandidatesPage() {
+  const { t } = useLocale();
+
+  const SORT_OPTIONS = [
+    { value: "score", label: t("candidatesList.sortScore") },
+    { value: "date",  label: t("candidatesList.sortDate")  },
+    { value: "name",  label: t("candidatesList.sortName") },
+  ];
+
+  const SOURCE_FILTERS = [
+    { value: "",             label: t("candidatesList.sourceAll")           },
+    { value: "xlsx",         label: t("candidatesList.sourceExcel")      },
+    { value: "file",         label: t("candidatesList.sourceUpload")   },
+    { value: "hh",           label: t("candidatesList.sourceHh")         },
+    { value: "cleverstaff",  label: t("candidatesList.sourceCleverstaff") },
+  ];
+
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(0);
   const [sortBy, setSortBy]   = useState("score");
@@ -82,16 +86,16 @@ export default function CandidatesPage() {
         if (job.status === "done") {
           stopVectorizePoll();
           setVectorizing(false);
-          toast.success(`✅ Векторизация завершена — ${job.vectorized} кандидатов добавлено в Qdrant`);
+          toast.success(t("candidatesList.toastVectorizeDone", { count: job.vectorized }));
           mutateRef.current();
         } else if (job.status === "error") {
           stopVectorizePoll();
           setVectorizing(false);
-          toast.error(`Ошибка векторизации: ${job.error}`);
+          toast.error(t("candidatesList.toastVectorizeError", { error: job.error ?? "" }));
         }
       } catch { /* ignore */ }
     }, 2000);
-  }, [stopVectorizePoll]);
+  }, [stopVectorizePoll, t]);
 
   useEffect(() => () => stopVectorizePoll(), [stopVectorizePoll]);
 
@@ -100,16 +104,16 @@ export default function CandidatesPage() {
       await candidateApi.vectorizeAll();
       setVectorizing(true);
       setVectorizeJob({ status: "running", total: 0, processed: 0, vectorized: 0 });
-      toast.info("Векторизация запущена…");
+      toast.info(t("candidatesList.toastVectorizeStarted"));
       startVectorizePoll();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       if (err?.response?.data?.detail === "Vectorize already running") {
-        toast.warning("Векторизация уже запущена");
+        toast.warning(t("candidatesList.toastVectorizeAlreadyRunning"));
         setVectorizing(true);
         startVectorizePoll();
       } else {
-        toast.error("Ошибка запуска векторизации");
+        toast.error(t("candidatesList.toastVectorizeStartError"));
       }
     }
   };
@@ -130,13 +134,13 @@ export default function CandidatesPage() {
           stopUploadPoll();
           setUploading(false);
           if (job.results.length > 0) {
-            toast.success(`✅ ${job.results.length} резюме проанализировано`);
+            toast.success(t("candidatesList.toastResumesAnalyzed", { count: job.results.length }));
             // Auto-start vectorization after upload completes
             try {
               await candidateApi.vectorizeAll();
               setVectorizing(true);
               setVectorizeJob({ status: "running", total: 0, processed: 0, vectorized: 0 });
-              toast.info("Векторизация запущена автоматически…");
+              toast.info(t("candidatesList.toastVectorizeAutoStarted"));
               startVectorizePoll();
             } catch (e: unknown) {
               const err = e as { response?: { data?: { detail?: string } } };
@@ -147,20 +151,20 @@ export default function CandidatesPage() {
             }
           }
           if (job.errors > 0) {
-            toast.warning(`${job.errors} файлов не удалось обработать`);
+            toast.warning(t("candidatesList.toastFilesFailed", { count: job.errors }));
           }
           if (job.results.length === 0 && job.errors === 0) {
-            toast.error("Ни одно резюме не обработано");
+            toast.error(t("candidatesList.toastNoResumesProcessed"));
           }
           mutateRef.current();
         } else if (job.status === "error") {
           stopUploadPoll();
           setUploading(false);
-          toast.error(`Ошибка загрузки: ${job.error}`);
+          toast.error(t("candidatesList.toastUploadError", { error: job.error ?? "" }));
         }
       } catch { /* ignore */ }
     }, 2000);
-  }, [stopUploadPoll, startVectorizePoll]);
+  }, [stopUploadPoll, startVectorizePoll, t]);
 
   useEffect(() => () => stopUploadPoll(), [stopUploadPoll]);
 
@@ -184,23 +188,23 @@ export default function CandidatesPage() {
     try {
       setCleverstaffSyncing(true);
       await candidateApi.cleverstaffSync();
-      toast.success("Синхронизация Cleverstaff запущена — продолжается в фоне");
+      toast.success(t("candidatesList.toastCleverstaffSyncStarted"));
     } catch {
-      toast.error("Ошибка синхронизации Cleverstaff");
+      toast.error(t("candidatesList.toastCleverstaffSyncError"));
     } finally {
       setCleverstaffSyncing(false);
     }
   };
 
   const handleCleverstaffClear = async () => {
-    if (!confirm("Удалить всех кандидатов из Cleverstaff? Они будут удалены из MongoDB, Qdrant и Redis.")) return;
+    if (!confirm(t("candidatesList.confirmClearCleverstaff"))) return;
     setCleverstaffClearing(true);
     try {
       const res = await candidateApi.cleverstaffClear();
-      toast.success(`Удалено ${res.data.deleted} кандидатов Cleverstaff`);
+      toast.success(t("candidatesList.toastCleverstaffCleared", { count: res.data.deleted }));
       mutateRef.current();
     } catch {
-      toast.error("Ошибка при очистке Cleverstaff");
+      toast.error(t("candidatesList.toastCleverstaffClearError"));
     } finally {
       setCleverstaffClearing(false);
     }
@@ -250,15 +254,15 @@ export default function CandidatesPage() {
 
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`Удалить ${selectedIds.size} кандидатов?`)) return;
+    if (!confirm(t("candidatesList.confirmDeleteSelected", { count: selectedIds.size }))) return;
     setDeleting(true);
     try {
       const res = await candidateApi.deleteMany(Array.from(selectedIds));
-      toast.success(`${res.data.deleted} кандидатов удалено`);
+      toast.success(t("candidatesList.toastDeleted", { count: res.data.deleted }));
       setSelectedIds(new Set());
       mutate();
     } catch {
-      toast.error("Ошибка при удалении");
+      toast.error(t("candidatesList.toastDeleteError"));
     } finally {
       setDeleting(false);
     }
@@ -274,15 +278,15 @@ export default function CandidatesPage() {
     setUploadJob({ status: "processing", total: files.length, processed: 0, errors: 0 });
     try {
       await candidateApi.upload(files);
-      toast.info(`${files.length} резюме анализируются в фоне…`);
+      toast.info(t("candidatesList.toastResumesAnalyzing", { count: files.length }));
       startUploadPoll();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       if (err?.response?.data?.detail === "Upload already in progress") {
-        toast.warning("Загрузка уже выполняется");
+        toast.warning(t("candidatesList.toastUploadAlreadyInProgress"));
         startUploadPoll();
       } else {
-        toast.error("Ошибка отправки файлов");
+        toast.error(t("candidatesList.toastUploadSendError"));
         setUploading(false);
         setUploadJob(null);
       }
@@ -295,14 +299,14 @@ export default function CandidatesPage() {
     if (!file) return;
     e.target.value = "";
     setImporting(true);
-    const toastId = toast.loading("Импорт кандидатов из Excel…");
+    const toastId = toast.loading(t("candidatesList.toastImportingExcel"));
     try {
       const res = await candidateApi.importXlsx(file);
       const { imported, skipped, total } = res.data;
-      toast.success(`Импортировано ${imported} из ${total} (${skipped} уже есть)`, { id: toastId });
+      toast.success(t("candidatesList.toastImportResult", { imported, total, skipped }), { id: toastId });
       mutate();
     } catch {
-      toast.error("Не удалось импортировать файл", { id: toastId });
+      toast.error(t("candidatesList.toastImportError"), { id: toastId });
     } finally {
       setImporting(false);
     }
@@ -318,8 +322,8 @@ export default function CandidatesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Кандидаты</h1>
-          {total > 0 && <p className="mt-0.5 text-sm text-gray-400">{total} кандидатов</p>}
+          <h1 className="text-xl font-semibold text-gray-900">{t("candidatesList.title")}</h1>
+          {total > 0 && <p className="mt-0.5 text-sm text-gray-400">{t("candidatesList.totalCandidates", { count: total })}</p>}
         </div>
         <div className="flex items-center gap-3">
 
@@ -335,7 +339,7 @@ export default function CandidatesPage() {
                   ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                   : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 }
-                {vectorizing ? "Векторизация…" : `Векторизовать (${selectedIds.size})`}
+                {vectorizing ? t("candidatesList.vectorizing") : t("candidatesList.vectorizeSelected", { count: selectedIds.size })}
               </button>
               <button
                 onClick={handleDeleteSelected}
@@ -346,7 +350,7 @@ export default function CandidatesPage() {
                   ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
                   : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 }
-                Удалить ({selectedIds.size})
+                {t("common.deleteSelected", { count: selectedIds.size })}
               </button>
             </>
           )}
@@ -358,7 +362,7 @@ export default function CandidatesPage() {
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             }
-            {cleverstaffSyncing ? "Sync…" : "Cleverstaff Sync"}
+            {cleverstaffSyncing ? t("candidatesList.cleverstaffSyncing") : t("candidatesList.cleverstaffSync")}
           </button>
 
           {/* Cleverstaff Clear */}
@@ -368,7 +372,7 @@ export default function CandidatesPage() {
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
             }
-            {cleverstaffClearing ? "Очистка…" : "Очистить CS"}
+            {cleverstaffClearing ? t("candidatesList.cleverstaffClearing") : t("candidatesList.cleverstaffClear")}
           </button>
 
           {/* Vectorize All (when nothing selected) */}
@@ -379,7 +383,7 @@ export default function CandidatesPage() {
                 ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                 : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               }
-              {vectorizing ? "Векторизация…" : "Векторизовать"}
+              {vectorizing ? t("candidatesList.vectorizing") : t("candidatesList.vectorizeAll")}
             </button>
           )}
 
@@ -390,7 +394,7 @@ export default function CandidatesPage() {
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             }
-            {importing ? "Импорт…" : "Импорт Excel"}
+            {importing ? t("candidatesList.importing") : t("candidatesList.importExcel")}
           </button>
           <input ref={xlsxInputRef} type="file" accept=".xlsx" className="hidden" onChange={onXlsxChange} />
 
@@ -401,13 +405,13 @@ export default function CandidatesPage() {
               ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
               : <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             }
-            {uploading ? "Загружается…" : "Загрузить резюме"}
+            {uploading ? t("candidatesList.uploadingBtn") : t("candidatesList.uploadResume")}
           </button>
           <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" multiple className="hidden" onChange={onFileChange} />
 
           {/* Search */}
           <div className="relative">
-            <input type="text" placeholder="Поиск…" value={search}
+            <input type="text" placeholder={t("candidatesList.searchPlaceholder")} value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-700 placeholder-gray-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 w-52"
             />
@@ -431,13 +435,13 @@ export default function CandidatesPage() {
               : uploadJob.status === "done"     ? "text-green-700"
               : "text-red-700"
             }`}>
-              {uploadJob.status === "processing" && `⏳ Анализ резюме… (${uploadJob.processed} / ${uploadJob.total})`}
-              {uploadJob.status === "done"       && `✅ Анализ завершён`}
-              {uploadJob.status === "error"      && `❌ Произошла ошибка`}
+              {uploadJob.status === "processing" && t("candidatesList.bannerAnalyzing", { processed: uploadJob.processed, total: uploadJob.total })}
+              {uploadJob.status === "done"       && t("candidatesList.bannerAnalysisComplete")}
+              {uploadJob.status === "error"      && t("candidatesList.bannerError")}
             </span>
             <span className="text-xs text-gray-500">
               {uploadJob.status === "processing" && `${uploadPct}%`}
-              {uploadJob.status === "done"       && `${uploadJob.total - uploadJob.errors} / ${uploadJob.total} успешно`}
+              {uploadJob.status === "done"       && t("candidatesList.bannerSuccessCount", { success: uploadJob.total - uploadJob.errors, total: uploadJob.total })}
             </span>
           </div>
 
@@ -448,7 +452,7 @@ export default function CandidatesPage() {
                   style={{ width: `${Math.max(uploadPct, 3)}%` }} />
               </div>
               <p className="mt-1.5 text-xs text-blue-400">
-                Можно закрыть страницу — процесс продолжается на сервере
+                {t("candidatesList.bannerCanClose")}
               </p>
             </>
           )}
@@ -473,9 +477,9 @@ export default function CandidatesPage() {
               vectorizeJob.status === "running" ? "text-violet-700"
               : vectorizeJob.status === "done"  ? "text-green-700" : "text-red-700"
             }`}>
-              {vectorizeJob.status === "running" && `⏳ Загрузка векторов в Qdrant… ${vectorizeJob.total > 0 ? `(${vectorizeJob.vectorized} / ${vectorizeJob.total})` : ""}`}
-              {vectorizeJob.status === "done"    && `✅ Векторизация завершена`}
-              {vectorizeJob.status === "error"   && `❌ Ошибка векторизации`}
+              {vectorizeJob.status === "running" && `${t("candidatesList.bannerVectorizing")}${vectorizeJob.total > 0 ? ` (${vectorizeJob.vectorized} / ${vectorizeJob.total})` : ""}`}
+              {vectorizeJob.status === "done"    && t("candidatesList.bannerVectorizeComplete")}
+              {vectorizeJob.status === "error"   && t("candidatesList.bannerVectorizeError")}
             </span>
             {vectorizeJob.status !== "error" && (
               <span className={`text-xs font-semibold ${vectorizeJob.status === "done" ? "text-green-600" : "text-violet-600"}`}>
@@ -510,7 +514,7 @@ export default function CandidatesPage() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Сортировка:</span>
+          <span className="text-xs text-gray-400">{t("candidatesList.sortByLabel")}</span>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
             className="rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-sm text-gray-600 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 appearance-none cursor-pointer">
             {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -520,15 +524,29 @@ export default function CandidatesPage() {
 
       {/* Table */}
       {isLoading && candidates.length === 0 ? (
-        <div className="flex justify-center pt-16">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="py-2.5 pl-4 pr-2 w-8"></th>
+                <th className="py-2.5 pl-1 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colName")}</th>
+                <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colPosition")}</th>
+                <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colCity")}</th>
+                <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colSalary")}</th>
+                <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colSkills")}</th>
+                <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colVector")}</th>
+                <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colCv")}</th>
+              </tr>
+            </thead>
+            <SkeletonTableRows rows={8} cols={8} />
+          </table>
         </div>
       ) : candidates.length === 0 ? (
         <div className="pt-16 text-center text-gray-400">
-          {search || source ? <p>Нет кандидатов по заданным фильтрам</p> : (
+          {search || source ? <p>{t("candidatesList.emptyFiltered")}</p> : (
             <>
-              <p>Кандидатов пока нет</p>
-              <p className="mt-1 text-sm">Загрузите резюме или импортируйте Excel</p>
+              <p>{t("candidatesList.emptyNone")}</p>
+              <p className="mt-1 text-sm">{t("candidatesList.emptyHint")}</p>
             </>
           )}
         </div>
@@ -545,13 +563,13 @@ export default function CandidatesPage() {
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                   </th>
-                  <th className="py-2.5 pl-1 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">Имя</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Должность</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Город</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Зарплата</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Навыки</th>
-                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">Вектор</th>
-                  <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">CV</th>
+                  <th className="py-2.5 pl-1 pr-3 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colName")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colPosition")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colCity")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colSalary")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colSkills")}</th>
+                  <th className="px-3 py-2.5 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colVector")}</th>
+                  <th className="px-3 py-2.5 pr-4 text-xs font-medium text-gray-400 uppercase tracking-wide">{t("candidatesList.colCv")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -564,16 +582,16 @@ export default function CandidatesPage() {
 
           {pageCount > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-              <span>{total} кандидатов</span>
+              <span>{t("candidatesList.totalCandidates", { count: total })}</span>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPage((p) => p - 1)} disabled={page === 0}
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  ← Назад
+                  {t("common.prev")}
                 </button>
                 <span className="text-gray-400">{page + 1} / {pageCount}</span>
                 <button onClick={() => setPage((p) => p + 1)} disabled={page + 1 >= pageCount}
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  Вперёд →
+                  {t("common.next")}
                 </button>
               </div>
             </div>

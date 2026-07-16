@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { authApi } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -36,6 +38,7 @@ const EMPTY_FORM = {
 export default function AdminUsersPage() {
   const router = useRouter();
   const { user: me, loading } = useAuth();
+  const { t } = useLocale();
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -55,7 +58,7 @@ export default function AdminUsersPage() {
       const res = await authApi.listUsers();
       setUsers(res.data);
     } catch {
-      toast.error("Не удалось загрузить пользователей");
+      toast.error(t("admin.loadUsersError"));
     } finally {
       setFetching(false);
     }
@@ -73,11 +76,11 @@ export default function AdminUsersPage() {
       setUsers((prev) => [...prev, res.data]);
       setForm(EMPTY_FORM);
       setShowForm(false);
-      toast.success(`Пользователь «${form.username}» создан`);
+      toast.success(t("admin.userCreated", { username: form.username }));
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        "Не удалось создать пользователя";
+        t("admin.createUserError");
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -90,29 +93,55 @@ export default function AdminUsersPage() {
       setUsers((prev) =>
         prev.map((r) => (r.id === u.id ? { ...r, is_active: !u.is_active } : r))
       );
-      toast.success(u.is_active ? "Пользователь деактивирован" : "Пользователь активирован");
+      toast.success(u.is_active ? t("admin.userDeactivated") : t("admin.userActivated"));
     } catch {
-      toast.error("Не удалось обновить пользователя");
+      toast.error(t("admin.updateUserError"));
     }
   };
 
   const handleDelete = async (u: UserRow) => {
-    if (u.id === me?.id) { toast.error("Нельзя удалить самого себя"); return; }
-    if (!confirm(`Удалить пользователя «${u.username}»? Это действие необратимо.`)) return;
+    if (u.id === me?.id) { toast.error(t("admin.cannotDeleteSelf")); return; }
+    if (!confirm(t("admin.confirmDelete", { username: u.username }))) return;
     try {
       await authApi.deleteUser(u.id);
       setUsers((prev) => prev.filter((r) => r.id !== u.id));
-      toast.success("Пользователь удалён");
+      toast.success(t("admin.userDeleted"));
     } catch {
-      toast.error("Не удалось удалить пользователя");
+      toast.error(t("admin.deleteUserError"));
     }
   };
 
   if (loading || fetching) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-400 py-8">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent" />
-        Загрузка...
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">{t("admin.title")}</h1>
+            <p className="text-sm text-gray-500 mt-1">{t("admin.subtitle")}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {t("admin.loginColumn")}
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {t("admin.nameEmailColumn")}
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {t("admin.roleColumn")}
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  {t("admin.statusColumn")}
+                </th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <SkeletonTableRows rows={5} cols={5} />
+          </table>
+        </div>
       </div>
     );
   }
@@ -121,49 +150,49 @@ export default function AdminUsersPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Пользователи</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{t("admin.title")}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Управление учётными записями сотрудников
+            {t("admin.subtitle")}
           </p>
         </div>
         <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Отмена" : "+ Новый пользователь"}
+          {showForm ? t("common.cancel") : t("admin.newUser")}
         </Button>
       </div>
 
       {/* Create form */}
       {showForm && (
         <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-6">
-          <h2 className="text-sm font-semibold text-gray-800 mb-4">Новый пользователь</h2>
+          <h2 className="text-sm font-semibold text-gray-800 mb-4">{t("admin.newUserFormTitle")}</h2>
           <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Логин *</Label>
+              <Label>{t("admin.usernameLabel")}</Label>
               <Input
                 required
-                placeholder="ivanov"
+                placeholder={t("admin.usernamePlaceholder")}
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
+              <Label>{t("admin.emailLabel")}</Label>
               <Input
                 type="email"
-                placeholder="ivan@company.com"
+                placeholder={t("admin.emailPlaceholder")}
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Полное имя</Label>
+              <Label>{t("admin.fullNameLabel")}</Label>
               <Input
-                placeholder="Иван Иванов"
+                placeholder={t("admin.fullNamePlaceholder")}
                 value={form.full_name}
                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Роль</Label>
+              <Label>{t("admin.roleLabel")}</Label>
               <Select
                 value={form.role}
                 onValueChange={(v) => setForm({ ...form, role: v ?? form.role })}
@@ -172,27 +201,27 @@ export default function AdminUsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="staff">Сотрудник</SelectItem>
-                  <SelectItem value="admin">Администратор</SelectItem>
+                  <SelectItem value="staff">{t("nav.staff")}</SelectItem>
+                  <SelectItem value="admin">{t("nav.admin")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5 col-span-2">
-              <Label>Пароль *</Label>
+              <Label>{t("admin.passwordLabel")}</Label>
               <Input
                 type="password"
                 required
-                placeholder="Минимум 6 символов"
+                placeholder={t("admin.passwordPlaceholder")}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
             </div>
             <div className="col-span-2 flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                Отмена
+                {t("common.cancel")}
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Создание..." : "Создать"}
+                {saving ? t("admin.creating") : t("common.create")}
               </Button>
             </div>
           </form>
@@ -205,16 +234,16 @@ export default function AdminUsersPage() {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Логин
+                {t("admin.loginColumn")}
               </th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Имя / Email
+                {t("admin.nameEmailColumn")}
               </th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Роль
+                {t("admin.roleColumn")}
               </th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Статус
+                {t("admin.statusColumn")}
               </th>
               <th className="px-4 py-3" />
             </tr>
@@ -225,11 +254,11 @@ export default function AdminUsersPage() {
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {u.username}
                   {u.id === me?.id && (
-                    <span className="ml-1.5 text-xs text-blue-400">(вы)</span>
+                    <span className="ml-1.5 text-xs text-blue-400">{t("admin.you")}</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-gray-500">
-                  <div>{u.full_name || "—"}</div>
+                  <div>{u.full_name || t("common.none")}</div>
                   {u.email && <div className="text-xs text-gray-400">{u.email}</div>}
                 </td>
                 <td className="px-4 py-3">
@@ -240,7 +269,7 @@ export default function AdminUsersPage() {
                         : "bg-gray-100 text-gray-600"
                     }`}
                   >
-                    {u.role === "admin" ? "Администратор" : "Сотрудник"}
+                    {u.role === "admin" ? t("nav.admin") : t("nav.staff")}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -251,7 +280,7 @@ export default function AdminUsersPage() {
                         : "bg-red-50 text-red-600"
                     }`}
                   >
-                    {u.is_active ? "Активен" : "Деактивирован"}
+                    {u.is_active ? t("admin.active") : t("admin.inactive")}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -261,13 +290,13 @@ export default function AdminUsersPage() {
                         onClick={() => toggleActive(u)}
                         className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
                       >
-                        {u.is_active ? "Деактивировать" : "Активировать"}
+                        {u.is_active ? t("admin.deactivate") : t("admin.activate")}
                       </button>
                       <button
                         onClick={() => handleDelete(u)}
                         className="text-xs text-red-400 hover:text-red-600 transition-colors"
                       >
-                        Удалить
+                        {t("common.delete")}
                       </button>
                     </div>
                   )}
@@ -278,7 +307,7 @@ export default function AdminUsersPage() {
         </table>
         {users.length === 0 && (
           <div className="py-8 text-center text-sm text-gray-400">
-            Пользователи не найдены
+            {t("admin.noUsersFound")}
           </div>
         )}
       </div>

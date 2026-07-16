@@ -33,6 +33,7 @@ class Vacancy(Document):
         {"name": "Уровень опыта",          "weight": 15},
     ])
     is_open: bool = True
+    hh_vacancy_id: Optional[str] = None
     last_matched_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

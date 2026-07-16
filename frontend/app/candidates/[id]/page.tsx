@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { CandidateDetail } from "@/types/candidate";
 import { candidateApi, API_BASE } from "@/lib/api";
 import useSWR from "swr";
+import { useLocale } from "@/lib/i18n/context";
+import { Skeleton, SkeletonLine, SkeletonAvatar } from "@/components/ui/skeleton";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -20,17 +22,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const SOURCE_CONFIG: Record<string, { label: string; cls: string; icon: string }> = {
-  xlsx:         { label: "Импорт Excel",    cls: "bg-green-50 text-green-700 border-green-200",   icon: "📊" },
-  file:         { label: "Загрузка файла",  cls: "bg-purple-50 text-purple-700 border-purple-200", icon: "📎" },
-  hh:           { label: "HeadHunter",      cls: "bg-blue-50 text-blue-700 border-blue-200",       icon: "🔗" },
-  cleverstaff:  { label: "Cleverstaff",     cls: "bg-teal-50 text-teal-700 border-teal-200",       icon: "🤝" },
+const SOURCE_CONFIG: Record<string, { key: string; cls: string; icon: string }> = {
+  xlsx:         { key: "candidateShared.sourceExcel",      cls: "bg-green-50 text-green-700 border-green-200",   icon: "📊" },
+  file:         { key: "candidateShared.sourceFile",       cls: "bg-purple-50 text-purple-700 border-purple-200", icon: "📎" },
+  hh:           { key: "candidateShared.sourceHh",         cls: "bg-blue-50 text-blue-700 border-blue-200",       icon: "🔗" },
+  cleverstaff:  { key: "candidateShared.sourceCleverstaff", cls: "bg-teal-50 text-teal-700 border-teal-200",      icon: "🤝" },
 };
 
 
 export default function CandidateDetailPage({ params }: Props) {
   const { id } = use(params);
   const router = useRouter();
+  const { t } = useLocale();
 
   const { data: candidate, mutate } = useSWR<CandidateDetail>(
     `candidate-${id}`,
@@ -53,9 +56,9 @@ export default function CandidateDetailPage({ params }: Props) {
         },
         { revalidate: false }
       );
-      toast.success("Оценка обновлена");
+      toast.success(t("candidatesDetail.toastScoreUpdated"));
     } catch {
-      toast.error("Не удалось получить объяснение оценки");
+      toast.error(t("candidatesDetail.toastScoreFailed"));
     } finally {
       setExplaining(false);
     }
@@ -63,15 +66,66 @@ export default function CandidateDetailPage({ params }: Props) {
 
   if (!candidate) {
     return (
-      <div className="flex justify-center pt-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <div>
+        {/* Header card */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex items-start gap-4">
+            <SkeletonAvatar className="h-14 w-14" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <SkeletonLine className="w-48" />
+              <SkeletonLine className="w-32" />
+            </div>
+          </div>
+        </div>
+
+        {/* Info card */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 space-y-3">
+          <SkeletonLine className="w-32" />
+          <SkeletonLine className="w-full" />
+          <SkeletonLine className="w-5/6" />
+          <SkeletonLine className="w-2/3" />
+        </div>
+
+        {/* Score card */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 space-y-3">
+          <SkeletonLine className="w-32" />
+          <SkeletonLine className="w-24" />
+          <SkeletonLine className="w-full" />
+          <SkeletonLine className="w-3/4" />
+        </div>
+
+        {/* Skills card */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
+          <SkeletonLine className="w-32 mb-3" />
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-7 w-20 rounded-md" />
+            <Skeleton className="h-7 w-24 rounded-md" />
+            <Skeleton className="h-7 w-16 rounded-md" />
+            <Skeleton className="h-7 w-28 rounded-md" />
+          </div>
+        </div>
+
+        {/* Experience card */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 space-y-3">
+          <SkeletonLine className="w-32" />
+          <SkeletonLine className="w-full" />
+          <SkeletonLine className="w-2/3" />
+          <SkeletonLine className="w-1/2" />
+        </div>
+
+        {/* Education card */}
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6 space-y-3">
+          <SkeletonLine className="w-32" />
+          <SkeletonLine className="w-3/4" />
+          <SkeletonLine className="w-1/2" />
+        </div>
       </div>
     );
   }
 
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ")
     || candidate.title
-    || "Аноним";
+    || t("candidateShared.noName");
 
   const salary = candidate.salary_amount
     ? `${new Intl.NumberFormat("ru-RU").format(candidate.salary_amount)} ${candidate.salary_currency || ""}`
@@ -111,12 +165,12 @@ export default function CandidateDetailPage({ params }: Props) {
   const profileLinks = ((candidate.raw_resume_json?.links as LinkEntry[]) || []).filter((l) => l.url);
 
   const LANG_LEVEL: Record<string, string> = {
-    Native: "Родной", Basic: "Базовый", Intermediate: "Средний",
-    Upper: "Выше среднего", Advanced: "Продвинутый", Fluent: "Свободный",
+    Native: t("candidatesDetail.langNative"), Basic: t("candidatesDetail.langBasic"), Intermediate: t("candidatesDetail.langIntermediate"),
+    Upper: t("candidatesDetail.langUpper"), Advanced: t("candidatesDetail.langAdvanced"), Fluent: t("candidatesDetail.langFluent"),
   };
   const LINK_LABEL: Record<string, string> = {
-    hh: "HH.uz профиль", linkedin: "LinkedIn", github: "GitHub",
-    telegram: "Telegram", facebook: "Facebook",
+    hh: t("candidatesDetail.linkHh"), linkedin: t("candidatesDetail.linkLinkedin"), github: t("candidatesDetail.linkGithub"),
+    telegram: t("candidatesDetail.linkTelegram"), facebook: t("candidatesDetail.linkFacebook"),
   };
 
   const sourceCfg = candidate.source ? (SOURCE_CONFIG[candidate.source] ?? null) : null;
@@ -127,7 +181,7 @@ export default function CandidateDetailPage({ params }: Props) {
         onClick={() => router.back()}
         className="mb-6 text-sm text-gray-400 hover:text-gray-700 transition-colors"
       >
-        ← Назад
+        ← {t("common.back")}
       </button>
 
       {/* Header card */}
@@ -150,7 +204,7 @@ export default function CandidateDetailPage({ params }: Props) {
                   <h1 className="text-lg font-semibold text-gray-900">{name}</h1>
                   {sourceCfg && (
                     <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${sourceCfg.cls}`}>
-                      {sourceCfg.icon} {sourceCfg.label}
+                      {sourceCfg.icon} {t(sourceCfg.key)}
                     </span>
                   )}
                 </div>
@@ -162,7 +216,7 @@ export default function CandidateDetailPage({ params }: Props) {
 
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400">
               {candidate.area && <span>{candidate.area}</span>}
-              {candidate.age && <span>{candidate.age} лет</span>}
+              {candidate.age && <span>{t("candidatesDetail.yearsOld", { age: candidate.age })}</span>}
               {salary && <span className="text-gray-700 font-medium">{salary}</span>}
               {candidate.phone && (
                 <a
@@ -181,13 +235,13 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Application Info — all sources */}
       {(candidate.phone || candidate.comment || candidate.title) && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Информация о кандидате">
+          <Section title={t("candidatesDetail.info")}>
             <div className="space-y-3">
               {candidate.phone && (
                 <div className="flex items-start gap-3">
                   <span className="text-base w-5 text-center">📞</span>
                   <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Телефон</p>
+                    <p className="text-xs text-gray-400 mb-0.5">{t("candidatesDetail.phone")}</p>
                     <a href={`tel:${candidate.phone}`} className="text-sm font-medium text-blue-600 hover:underline">
                       {candidate.phone}
                     </a>
@@ -199,7 +253,7 @@ export default function CandidateDetailPage({ params }: Props) {
                   <span className="text-base w-5 text-center">💼</span>
                   <div>
                     <p className="text-xs text-gray-400 mb-0.5">
-                      {candidate.source === "xlsx" ? "Желаемая стажировка" : "Должность"}
+                      {candidate.source === "xlsx" ? t("candidatesDetail.desiredInternship") : t("candidatesDetail.position")}
                     </p>
                     <p className="text-sm font-medium text-gray-800">{candidate.title}</p>
                   </div>
@@ -209,7 +263,7 @@ export default function CandidateDetailPage({ params }: Props) {
                 <div className="flex items-start gap-3">
                   <span className="text-base w-5 text-center">💬</span>
                   <div>
-                    <p className="text-xs text-gray-400 mb-0.5">Комментарий</p>
+                    <p className="text-xs text-gray-400 mb-0.5">{t("candidatesDetail.comment")}</p>
                     <p className="text-sm text-gray-700 leading-relaxed">{candidate.comment}</p>
                   </div>
                 </div>
@@ -224,7 +278,7 @@ export default function CandidateDetailPage({ params }: Props) {
         const score = candidate.llm_score ?? candidate.relevance_score;
         return (
           <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-            <Section title="Оценка по вакансии">
+            <Section title={t("candidatesDetail.scoreSection")}>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   {score != null && (
@@ -241,7 +295,7 @@ export default function CandidateDetailPage({ params }: Props) {
                     </span>
                   )}
                   {candidate.vector_score != null && (
-                    <span className="text-xs text-gray-400">Вектор: {candidate.vector_score}%</span>
+                    <span className="text-xs text-gray-400">{t("candidatesDetail.vectorScore", { score: candidate.vector_score })}</span>
                   )}
                 </div>
                 <button
@@ -249,14 +303,14 @@ export default function CandidateDetailPage({ params }: Props) {
                   disabled={explaining}
                   className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:border-blue-400 hover:text-blue-700 transition-colors disabled:opacity-50"
                 >
-                  {explaining ? "Оценка…" : "Объяснить оценку"}
+                  {explaining ? t("candidatesDetail.scoring") : t("candidatesDetail.explainScore")}
                 </button>
               </div>
               {candidate.score_reasoning && (
                 <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <span className="text-lg leading-none">💡</span>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Summary</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">{t("candidatesDetail.summary")}</p>
                     <p className="mt-0.5 text-xs leading-relaxed text-amber-900">{candidate.score_reasoning}</p>
                   </div>
                 </div>
@@ -275,7 +329,7 @@ export default function CandidateDetailPage({ params }: Props) {
                       <div key={i} className={`rounded-lg border p-3 ${tone.card}`}>
                         <div className="flex items-center justify-between gap-2">
                           <p className={`text-sm font-medium ${tone.text}`}>
-                            {c.name} <span className="text-xs font-normal opacity-60">· вес {c.weight}%</span>
+                            {c.name} <span className="text-xs font-normal opacity-60">{t("candidatesDetail.weightLabel", { weight: c.weight })}</span>
                           </p>
                           <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-bold ${tone.badge}`}>{val}%</span>
                         </div>
@@ -294,17 +348,16 @@ export default function CandidateDetailPage({ params }: Props) {
                     className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     <span className={`inline-block transition-transform ${showMethod ? "rotate-90" : ""}`}>▸</span>
-                    ⓘ Как считается итоговый балл?
+                    {t("candidatesDetail.howCalculated")}
                   </button>
                   {showMethod && (
                     <div className="mt-1.5 rounded-lg bg-gray-50 p-3 text-xs leading-relaxed text-gray-500">
                       <p>
-                        Итоговый балл — средневзвешенная сумма оценок по каждому критерию вакансии,
-                        округлённая до целого числа:
+                        {t("candidatesDetail.scoreFormulaIntro")}
                       </p>
                       <p className="mt-1.5 font-mono text-[11px] text-gray-600">
                         {candidate.score_criteria
-                          .map((c) => `${c.weight}% × «${c.name}»`)
+                          .map((c) => t("candidatesDetail.criteriaFormulaItem", { weight: c.weight, name: c.name }))
                           .join(" + ")}
                       </p>
                     </div>
@@ -319,7 +372,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Skills */}
       {candidate.skills.length > 0 && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Навыки">
+          <Section title={t("candidatesDetail.skills")}>
             <div className="flex flex-wrap gap-2">
               {candidate.skills.map((s) => (
                 <span key={s} className="rounded-md bg-blue-50 px-3 py-1 text-sm text-blue-700">
@@ -334,7 +387,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Experience */}
       {experience.length > 0 && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Опыт работы">
+          <Section title={t("candidatesDetail.experience")}>
             <div className="space-y-4">
               {experience.map((exp, i) => (
                 <div key={i} className="flex gap-4">
@@ -343,7 +396,7 @@ export default function CandidateDetailPage({ params }: Props) {
                     <p className="font-medium text-gray-900 text-sm">{exp.position}</p>
                     <p className="text-sm text-gray-500">{companyName(exp.company)}</p>
                     <p className="mt-0.5 text-xs text-gray-400">
-                      {exp.start?.slice(0, 7) || exp.from_date || ""} — {exp.end != null ? exp.end.slice(0, 7) : (exp.to_date && exp.to_date !== "сейчас" ? exp.to_date : "по настоящее время")}
+                      {exp.start?.slice(0, 7) || exp.from_date || ""} — {exp.end != null ? exp.end.slice(0, 7) : (exp.to_date && exp.to_date !== "сейчас" ? exp.to_date : t("candidatesDetail.present"))}
                     </p>
                     {exp.description && (
                       <p className="mt-1.5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">
@@ -361,7 +414,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Education */}
       {education.length > 0 && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Образование">
+          <Section title={t("candidatesDetail.education")}>
             <div className="space-y-3">
               {education.map((edu, i) => (
                 <div key={i} className="flex gap-4">
@@ -385,7 +438,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Languages */}
       {languages.length > 0 && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Языки">
+          <Section title={t("candidatesDetail.languages")}>
             <div className="flex flex-wrap gap-2">
               {languages.map((lang, i) => (
                 <span key={i} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-gray-700">
@@ -405,7 +458,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Profile links */}
       {profileLinks.length > 0 && (
         <div className="mt-4 rounded-xl border border-gray-200 bg-white p-6">
-          <Section title="Профили">
+          <Section title={t("candidatesDetail.profiles")}>
             <div className="flex flex-wrap gap-3">
               {profileLinks.map((link, i) => (
                 <a
@@ -426,7 +479,7 @@ export default function CandidateDetailPage({ params }: Props) {
       {/* Resume */}
       {candidate.resume_url && (
         <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/40 p-6">
-          <Section title="Резюме">
+          <Section title={t("candidatesDetail.resume")}>
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
                 <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -437,17 +490,17 @@ export default function CandidateDetailPage({ params }: Props) {
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-800">
                   {candidate.source === "cleverstaff"
-                    ? "Резюме из Cleverstaff"
+                    ? t("candidatesDetail.resumeCleverstaffTitle")
                     : candidate.resume_url.startsWith("/api/")
-                    ? "Загруженное резюме"
-                    : "Полное резюме на HH.uz"}
+                    ? t("candidatesDetail.resumeUploadedTitle")
+                    : t("candidatesDetail.resumeHhTitle")}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">
                   {candidate.source === "cleverstaff"
-                    ? "Оригинальный файл резюме из базы Cleverstaff"
+                    ? t("candidatesDetail.resumeCleverstaffDesc")
                     : candidate.resume_url.startsWith("/api/")
-                    ? "Просмотреть оригинальный файл резюме"
-                    : "Открывает публичный профиль кандидата на HeadHunter Узбекистан"}
+                    ? t("candidatesDetail.resumeUploadedDesc")
+                    : t("candidatesDetail.resumeHhDesc")}
                 </p>
               </div>
               <a
@@ -457,10 +510,10 @@ export default function CandidateDetailPage({ params }: Props) {
                 className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
               >
                 {candidate.source === "cleverstaff"
-                  ? "Открыть резюме ↗"
+                  ? t("candidatesDetail.resumeCleverstaffBtn")
                   : candidate.resume_url.startsWith("/api/")
-                  ? "Скачать резюме ↓"
-                  : "Открыть на HH.uz →"}
+                  ? t("candidatesDetail.resumeUploadedBtn")
+                  : t("candidatesDetail.resumeHhBtn")}
               </a>
             </div>
 
@@ -476,7 +529,7 @@ export default function CandidateDetailPage({ params }: Props) {
                 <div className="mt-4 overflow-hidden rounded-lg border border-blue-200 bg-white">
                   <iframe
                     src={`${API_BASE}${candidate.resume_url}`}
-                    title="Резюме"
+                    title={t("candidatesDetail.resume")}
                     className="w-full"
                     style={{ height: "780px" }}
                   />
@@ -494,7 +547,7 @@ export default function CandidateDetailPage({ params }: Props) {
             href={`/vacancies/${candidate.vacancy_id}`}
             className="text-sm text-gray-400 hover:text-gray-700 transition-colors"
           >
-            ← Вернуться к вакансии
+            ← {t("candidatesDetail.backToVacancy")}
           </Link>
         </div>
       )}

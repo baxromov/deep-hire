@@ -1,11 +1,16 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from app.schemas.vacancy import VacancyResponse, VacancyUpdate
 from app.services import vacancy_service
 
 router = APIRouter(prefix="/api/vacancies", tags=["vacancies"])
+
+
+class BulkDeleteBody(BaseModel):
+    ids: List[str]
 
 
 async def list_vacancies(
@@ -67,10 +72,26 @@ async def toggle_open(vacancy_id: str):
     return VacancyResponse.from_doc(doc)
 
 
+async def delete_vacancy(vacancy_id: str):
+    try:
+        ok = await vacancy_service.delete_vacancy(vacancy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if not ok:
+        raise HTTPException(status_code=404, detail="Vacancy not found")
+    return {"ok": True}
+
+
+async def delete_vacancies_bulk(body: BulkDeleteBody):
+    return await vacancy_service.delete_vacancies_bulk(body.ids)
+
+
 router.add_api_route("/", list_vacancies, methods=["GET"])
 router.add_api_route("/", create_vacancy, methods=["POST"])
+router.add_api_route("/bulk", delete_vacancies_bulk, methods=["DELETE"])
 router.add_api_route("/{vacancy_id}", get_vacancy, methods=["GET"])
 router.add_api_route("/{vacancy_id}", update_vacancy, methods=["PUT"])
+router.add_api_route("/{vacancy_id}", delete_vacancy, methods=["DELETE"])
 router.add_api_route("/{vacancy_id}/archive", archive_vacancy, methods=["POST"])
 router.add_api_route("/{vacancy_id}/approve", approve_vacancy, methods=["POST"])
 router.add_api_route("/{vacancy_id}/duplicate", duplicate_vacancy, methods=["POST"])

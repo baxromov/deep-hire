@@ -26,6 +26,7 @@ class CandidateResponse(BaseModel):
     is_saved: bool = True
     matched_at: Optional[datetime] = None
     source: Optional[str] = None
+    match_source: Optional[str] = None
     phone: Optional[str] = None
     comment: Optional[str] = None
     score_reasoning: Optional[str] = None
@@ -74,6 +75,7 @@ class CandidateResponse(BaseModel):
             is_saved=doc.is_saved,
             matched_at=mr.matched_at if mr else None,
             source=raw.get("source"),
+            match_source=mr.source if mr else None,
             phone=raw.get("phone"),
             comment=raw.get("comment"),
             score_reasoning=score_reasoning,
@@ -107,6 +109,7 @@ class CandidateResponse(BaseModel):
             is_saved=False,
             matched_at=hit.matched_at,
             source=hit.source,
+            match_source=hit.source,
             phone=raw.get("phone"),
             comment=raw.get("comment"),
             score_reasoning=hit.score_reasoning,

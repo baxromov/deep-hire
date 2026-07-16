@@ -2,6 +2,9 @@
 
 import { authApi } from "@/lib/api";
 import useSWR from "swr";
+import { useLocale } from "@/lib/i18n/context";
+import { LOCALES } from "@/lib/i18n";
+import { Skeleton, SkeletonAvatar, SkeletonLine } from "@/components/ui/skeleton";
 
 interface Profile {
   id: string;
@@ -22,7 +25,14 @@ function Row({ label, value }: { label: string; value?: string | boolean | null 
   );
 }
 
+const LANGUAGE_KEYS = {
+  uz: "profile.languageUz",
+  ru: "profile.languageRu",
+  en: "profile.languageEn",
+} as const;
+
 export default function ProfilePage() {
+  const { t, locale, setLocale } = useLocale();
   const { data: profile, isLoading } = useSWR<Profile>(
     "me",
     () => authApi.me().then((r) => r.data)
@@ -30,8 +40,25 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center pt-20">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <div className="max-w-xl">
+        <Skeleton className="h-6 w-24 mb-6" />
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="flex items-center gap-4 mb-6">
+            <SkeletonAvatar className="h-14 w-14" />
+            <div className="space-y-2">
+              <SkeletonLine className="h-4 w-32" />
+              <SkeletonLine className="h-3.5 w-20" />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <SkeletonLine />
+            <SkeletonLine />
+            <SkeletonLine />
+            <SkeletonLine />
+          </div>
+        </div>
       </div>
     );
   }
@@ -45,10 +72,11 @@ export default function ProfilePage() {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+  const roleLabel = t(profile.role === "admin" ? "nav.admin" : "nav.staff");
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-xl font-semibold text-gray-900 mb-6">Профиль</h1>
+      <h1 className="text-xl font-semibold text-gray-900 mb-6">{t("profile.title")}</h1>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-4 mb-6">
@@ -57,17 +85,38 @@ export default function ProfilePage() {
           </div>
           <div>
             <p className="text-base font-semibold text-gray-900">{displayName}</p>
-            <p className="text-sm text-gray-400">
-              {profile.role === "admin" ? "Администратор" : "Сотрудник"}
-            </p>
+            <p className="text-sm text-gray-400">{roleLabel}</p>
           </div>
         </div>
 
         <div>
-          <Row label="Логин" value={profile.username} />
-          <Row label="Email" value={profile.email} />
-          <Row label="Роль" value={profile.role === "admin" ? "Администратор" : "Сотрудник"} />
-          <Row label="Активен" value={profile.is_active ? "Да" : "Нет"} />
+          <Row label={t("profile.username")} value={profile.username} />
+          <Row label={t("profile.email")} value={profile.email} />
+          <Row label={t("profile.role")} value={roleLabel} />
+          <Row
+            label={t("profile.active")}
+            value={profile.is_active ? t("common.yes") : t("common.no")}
+          />
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">{t("profile.settingsTitle")}</h2>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm text-gray-400">{t("profile.languageLabel")}</span>
+          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+            {LOCALES.map((l) => (
+              <button
+                key={l}
+                onClick={() => setLocale(l)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  locale === l ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                {t(LANGUAGE_KEYS[l])}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -217,6 +217,54 @@ async def get_candidates_for_vacancy(
     return pairs
 
 
+async def get_combined_pool_for_vacancy(vacancy_id: str) -> List[Dict[str, Any]]:
+    """Gather every candidate already found for this vacancy by any method — real
+    Candidate docs (via MatchResult) plus still-unconfirmed MatchCandidateHit rows —
+    deduped by hh_resume_id (a real Candidate wins over a staged hit for the same
+    person). Used for a combined re-ranking pass: each dict carries what's needed
+    to re-score (title/skills/work_experience) and to re-persist a new MatchResult
+    (candidate_id known) or MatchCandidateHit (only _hit_fields known) row.
+    """
+    oid = PydanticObjectId(vacancy_id)
+    pool: Dict[str, Dict[str, Any]] = {}
+
+    hits = await MatchCandidateHit.find({"vacancy_id": oid}).to_list()
+    for hit in hits:
+        raw = hit.raw_resume_json or {}
+        work_exp = raw.get("work_experience") or raw.get("extracted", {}).get("experience") or []
+        pool[hit.hh_resume_id] = {
+            "hh_resume_id": hit.hh_resume_id,
+            "candidate_id": None,
+            "title": hit.title,
+            "skills": hit.skills,
+            "work_experience": work_exp,
+            "prior_score": hit.relevance_score or hit.llm_score or hit.vector_score or 0,
+            "_hit_fields": {
+                "first_name": hit.first_name, "last_name": hit.last_name, "age": hit.age,
+                "gender": hit.gender, "area": hit.area, "title": hit.title,
+                "salary_amount": hit.salary_amount, "salary_currency": hit.salary_currency,
+                "skills": hit.skills, "photo_url": hit.photo_url, "resume_url": hit.resume_url,
+                "raw_resume_json": hit.raw_resume_json,
+            },
+        }
+
+    pairs = await get_candidates_for_vacancy(vacancy_id)
+    for doc, mr in pairs:
+        raw = doc.raw_resume_json or {}
+        work_exp = raw.get("work_experience") or raw.get("extracted", {}).get("experience") or []
+        pool[doc.hh_resume_id] = {  # real Candidate wins over any staged hit sharing the id
+            "hh_resume_id": doc.hh_resume_id,
+            "candidate_id": str(doc.id),
+            "title": doc.title,
+            "skills": doc.skills,
+            "work_experience": work_exp,
+            "prior_score": mr.relevance_score or mr.llm_score or mr.vector_score or 0,
+            "_hit_fields": None,
+        }
+
+    return list(pool.values())
+
+
 async def get_all_candidates(
     skip: int = 0,
     limit: int = 20,
