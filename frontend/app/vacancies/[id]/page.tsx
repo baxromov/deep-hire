@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,13 +10,14 @@ import { InfoItem } from "@/components/vacancies/InfoItem";
 import { MethodCard } from "@/components/vacancies/MethodCard";
 import { MatchTimeline, MatchStep, MATCH_PHASES, HH_MATCH_PHASES } from "@/components/vacancies/MatchTimeline";
 import { CandidateRow } from "@/components/vacancies/CandidateRow";
-import { vacancyApi, candidateApi, matchingApi, talentPoolApi, API_BASE } from "@/lib/api";
+import { vacancyApi, candidateApi, matchingApi, API_BASE } from "@/lib/api";
 import { Vacancy, EXPERIENCE_OPTIONS, EMPLOYMENT_OPTIONS, SCHEDULE_OPTIONS } from "@/types/vacancy";
 import { Candidate } from "@/types/candidate";
 import useSWR from "swr";
 import { useLocale } from "@/lib/i18n/context";
 import { Skeleton, SkeletonLine, SkeletonTableRows } from "@/components/ui/skeleton";
 import { Dialog, DialogTrigger, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { usePersistedSteps } from "@/lib/usePersistedSteps";
 
 // ─── Other helpers ────────────────────────────────────────────────────────────
 
@@ -39,17 +40,6 @@ export default function VacancyDetailPage({ params }: Props) {
   const [matchSteps, setMatchSteps] = useState<MatchStep[]>([]);
   const [rematchResult, setRematchResult] = useState<number | null>(null);
 
-  const [poolMatching, setPoolMatching] = useState(false);
-  const [poolSteps, setPoolSteps] = useState<MatchStep[]>([]);
-  const [poolResult, setPoolResult] = useState<number | null>(null);
-
-  const [livePoolMatching, setLivePoolMatching] = useState(false);
-  const [livePoolSteps, setLivePoolSteps] = useState<MatchStep[]>([]);
-  const [liveResult, setLiveResult] = useState<number | null>(null);
-
-  const [fileMatching, setFileMatching] = useState(false);
-  const [fileResult, setFileResult] = useState<number | null>(null);
-
   const [dbMatching, setDbMatching] = useState(false);
   const [dbSteps, setDbSteps] = useState<MatchStep[]>([]);
   const [dbResult, setDbResult] = useState<number | null>(null);
@@ -63,6 +53,7 @@ export default function VacancyDetailPage({ params }: Props) {
   const [includeCompanies, setIncludeCompanies] = useState("");
   const [excludeCompanies, setExcludeCompanies] = useState("");
   const [showHhSettings, setShowHhSettings] = useState(false);
+  const [hhPage, setHhPage] = useState(0);
 
   const [combinedMatching, setCombinedMatching] = useState(false);
   const [combinedSteps, setCombinedSteps] = useState<MatchStep[]>([]);
@@ -72,23 +63,13 @@ export default function VacancyDetailPage({ params }: Props) {
 
   // EventSource refs — used by stop handlers
   const rematchSourceRef = useRef<EventSource | null>(null);
-  const poolSourceRef    = useRef<EventSource | null>(null);
-  const liveSourceRef    = useRef<EventSource | null>(null);
   const dbSourceRef      = useRef<EventSource | null>(null);
   const hhSourceRef      = useRef<EventSource | null>(null);
   const combinedSourceRef = useRef<EventSource | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const { data: vacancy, mutate: mutateVacancy } = useSWR<Vacancy>(
     `vacancy-${id}`,
     () => vacancyApi.get(id).then((r) => r.data)
-  );
-
-  const { data: poolStatus, mutate: mutatePool } = useSWR(
-    "talent-pool-status",
-    () => talentPoolApi.status().then((r) => r.data),
-    { refreshInterval: poolMatching ? 3000 : 0 }
   );
 
   const { data: rawCandidates = [], mutate: mutateCandidates } = useSWR<Candidate[]>(
@@ -97,6 +78,14 @@ export default function VacancyDetailPage({ params }: Props) {
       : null,
     () => candidateApi.byVacancy(id).then((r) => r.data)
   );
+
+  // Reset HH search pagination whenever the search filters change — a new filter means a fresh search, not "more of the same".
+  useEffect(() => { setHhPage(0); }, [includeCompanies, excludeCompanies]);
+
+  // Timelines survive a page refresh instead of vanishing — restored as historical (never re-marked as "running").
+  usePersistedSteps(`dh-match-steps-${id}-db`, dbSteps, setDbSteps);
+  usePersistedSteps(`dh-match-steps-${id}-hh`, hhSteps, setHhSteps);
+  usePersistedSteps(`dh-match-steps-${id}-combined`, combinedSteps, setCombinedSteps);
 
   // Each candidate belongs to exactly one tab: HH-sourced first, then LLM-scored,
   // then whatever's left goes to Vector — no more overlap between tabs.
@@ -112,6 +101,13 @@ export default function VacancyDetailPage({ params }: Props) {
   const combinedCandidates = rawCandidates
     .filter((c) => c.match_source === "combined")
     .sort((a, b) => (b.llm_score ?? b.relevance_score ?? 0) - (a.llm_score ?? a.relevance_score ?? 0));
+
+  // Persisted counts — so a "★ N found" badge survives a page refresh instead of
+  // resetting to nothing just because the live SSE result state is gone.
+  const dbPersistedCount = rawCandidates.filter((c) => c.match_source === "db_search").length;
+  const hhPersistedCount = rawCandidates.filter((c) => c.match_source === "hh").length;
+  const combinedPersistedCount = combinedCandidates.length;
+
   const candidates =
     resultTab === "llm" ? llmCandidates
     : resultTab === "vector" ? vectorCandidates
@@ -158,8 +154,8 @@ export default function VacancyDetailPage({ params }: Props) {
             <Skeleton className="h-6 w-6 rounded-lg" />
             <SkeletonLine className="h-3.5 w-40" />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-32 rounded-xl" />
             ))}
           </div>
@@ -227,7 +223,7 @@ export default function VacancyDetailPage({ params }: Props) {
     }
   };
 
-  const anyRunning = rematching || poolMatching || livePoolMatching || fileMatching || dbMatching || hhMatching || combinedMatching;
+  const anyRunning = rematching || dbMatching || hhMatching || combinedMatching;
 
   // ── Smart Rematch ─────────────────────────────────────────────────────────
   const rematch = () => {
@@ -262,74 +258,6 @@ export default function VacancyDetailPage({ params }: Props) {
     rematchSourceRef.current = null;
     setRematching(false);
     setMatchSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
-  };
-
-  // ── Talent Pool ───────────────────────────────────────────────────────────
-  const matchFromPool = () => {
-    setPoolMatching(true);
-    setPoolSteps([]);
-    setPoolResult(null);
-    const source = new EventSource(`${API_BASE}/api/matching/vacancies/${id}/match-from-pool-stream`, { withCredentials: true });
-    poolSourceRef.current = source;
-    source.onmessage = (e) => {
-      const event: MatchStep = JSON.parse(e.data);
-      setPoolSteps((prev) => [...prev, event]);
-      if (event.step === "done") {
-        source.close(); poolSourceRef.current = null;
-        setPoolMatching(false); mutateCandidates(); mutatePool();
-        setPoolResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(t("vacanciesDetail.foundCandidatesPool", { count: event.matched ?? 0 })) : toast.info(t("vacanciesDetail.noCandidatesInPool"));
-      }
-      if (event.step === "error") {
-        source.close(); poolSourceRef.current = null;
-        setPoolMatching(false); toast.error(event.message);
-      }
-    };
-    source.onerror = () => {
-      source.close(); poolSourceRef.current = null; setPoolMatching(false);
-      setPoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
-    };
-  };
-
-  const stopPool = () => {
-    poolSourceRef.current?.close();
-    poolSourceRef.current = null;
-    setPoolMatching(false);
-    setPoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
-  };
-
-  // ── Live Pool ─────────────────────────────────────────────────────────────
-  const matchFromLivePool = () => {
-    setLivePoolMatching(true);
-    setLivePoolSteps([]);
-    setLiveResult(null);
-    const source = new EventSource(`${API_BASE}/api/matching/vacancies/${id}/match-from-live-pool-stream`, { withCredentials: true });
-    liveSourceRef.current = source;
-    source.onmessage = (e) => {
-      const event: MatchStep = JSON.parse(e.data);
-      setLivePoolSteps((prev) => [...prev, event]);
-      if (event.step === "done") {
-        source.close(); liveSourceRef.current = null;
-        setLivePoolMatching(false); mutateCandidates();
-        setLiveResult(event.matched ?? 0);
-        (event.matched ?? 0) > 0 ? toast.success(t("vacanciesDetail.foundCandidatesLivePool", { count: event.matched ?? 0 })) : toast.info(t("vacanciesDetail.noCandidatesInLivePool"));
-      }
-      if (event.step === "error") {
-        source.close(); liveSourceRef.current = null;
-        setLivePoolMatching(false); toast.error(event.message);
-      }
-    };
-    source.onerror = () => {
-      source.close(); liveSourceRef.current = null; setLivePoolMatching(false);
-      setLivePoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.connectionLost") }]);
-    };
-  };
-
-  const stopLivePool = () => {
-    liveSourceRef.current?.close();
-    liveSourceRef.current = null;
-    setLivePoolMatching(false);
-    setLivePoolSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
   };
 
   // ── From our DB ───────────────────────────────────────────────────────────
@@ -383,7 +311,7 @@ export default function VacancyDetailPage({ params }: Props) {
     setHhMatching(true);
     setHhSteps([]);
     setHhResult(null);
-    const url = matchingApi.matchFromHhStreamUrl(id, minScore, includeCompanies || undefined, excludeCompanies || undefined);
+    const url = matchingApi.matchFromHhStreamUrl(id, minScore, includeCompanies || undefined, excludeCompanies || undefined, hhPage);
     const source = new EventSource(url, { withCredentials: true });
     hhSourceRef.current = source;
     source.onmessage = (e) => {
@@ -393,6 +321,7 @@ export default function VacancyDetailPage({ params }: Props) {
         source.close(); hhSourceRef.current = null;
         setHhMatching(false);
         setHhResult(event.matched ?? 0);
+        setHhPage((p) => p + 1);
         if ((event.matched ?? 0) > 0) {
           toast.success(t("vacanciesDetail.foundCandidatesHh", { count: event.matched ?? 0 }));
           candidateApi.byVacancy(id).then((r) =>
@@ -467,28 +396,6 @@ export default function VacancyDetailPage({ params }: Props) {
     combinedSourceRef.current = null;
     setCombinedMatching(false);
     setCombinedSteps((prev) => [...prev, { step: "error", message: t("vacanciesDetail.stoppedByUser") }]);
-  };
-
-  // ── File upload ───────────────────────────────────────────────────────────
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    setFileMatching(true);
-    setFileResult(null);
-    try {
-      const res = await matchingApi.matchFromFile(id, file);
-      const { name, score, total, pool_matched } = res.data;
-      const poolNote = pool_matched > 0 ? t("vacanciesDetail.fileResultPoolNote", { count: pool_matched }) : "";
-      toast.success(t("vacanciesDetail.fileResultSuccess", { name, score, poolNote }));
-      mutateCandidates();
-      setFileResult(total);
-    } catch {
-      toast.error(t("vacanciesDetail.fileProcessFailed"));
-      setFileResult(0);
-    } finally {
-      setFileMatching(false);
-    }
   };
 
   const salary = [
@@ -601,7 +508,7 @@ export default function VacancyDetailPage({ params }: Props) {
           </div>
 
           {/* Method cards grid */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
 
             {/* ── Из нашей базы — ПЕРВЫЙ (активный) ── */}
             <div className="space-y-2">
@@ -623,7 +530,7 @@ export default function VacancyDetailPage({ params }: Props) {
                 badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{minScore}%</span>}
                 running={dbMatching}
                 disabled={anyRunning && !dbMatching}
-                result={dbResult}
+                result={dbResult ?? (dbPersistedCount > 0 ? dbPersistedCount : null)}
                 onClick={dbMatching ? stopDb : matchFromDb}
                 onStop={stopDb}
                 accentColor="#ec4899"
@@ -637,33 +544,37 @@ export default function VacancyDetailPage({ params }: Props) {
 
             {/* Умный поиск HH */}
             <div className="space-y-2">
-              <MethodCard
-                id="rematch"
-                icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
-                label={t("vacanciesDetail.hhLabel")}
-                description={t("vacanciesDetail.hhDescription")}
-                steps={[
-                  t("vacanciesDetail.hhStep1"),
-                  t("vacanciesDetail.hhStep2"),
-                  t("vacanciesDetail.hhStep3"),
-                  t("vacanciesDetail.hhStep4", { minScore }),
-                ]}
-                badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
-                running={hhMatching}
-                disabled={anyRunning && !hhMatching}
-                result={hhResult}
-                onClick={hhMatching ? stopHh : matchFromHh}
-                onStop={stopHh}
-                accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
-              />
               <Dialog open={showHhSettings} onOpenChange={setShowHhSettings}>
-                <DialogTrigger className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                  </svg>
-                  {t("matchingUi.searchSettings")}
-                </DialogTrigger>
+                <MethodCard
+                  id="rematch"
+                  icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
+                  label={t("vacanciesDetail.hhLabel")}
+                  description={t("vacanciesDetail.hhDescription")}
+                  steps={[
+                    t("vacanciesDetail.hhStep1"),
+                    t("vacanciesDetail.hhStep2"),
+                    t("vacanciesDetail.hhStep3"),
+                    t("vacanciesDetail.hhStep4", { minScore }),
+                  ]}
+                  badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
+                  running={hhMatching}
+                  disabled={anyRunning && !hhMatching}
+                  result={hhResult ?? (hhPersistedCount > 0 ? hhPersistedCount : null)}
+                  onClick={hhMatching ? stopHh : matchFromHh}
+                  onStop={stopHh}
+                  cornerAction={
+                    <DialogTrigger
+                      title={t("matchingUi.searchSettings")}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-blue-200 bg-white text-blue-500 shadow-md transition-all hover:scale-110 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                      </svg>
+                    </DialogTrigger>
+                  }
+                  accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
+                />
                 <DialogContent>
                   <DialogTitle>{t("matchingUi.searchSettings")}</DialogTitle>
                   <div className="space-y-3 text-xs">
@@ -712,7 +623,7 @@ export default function VacancyDetailPage({ params }: Props) {
                 badge={<span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-600">≥{minScore}%</span>}
                 running={combinedMatching}
                 disabled={(anyRunning && !combinedMatching) || rawCandidates.length === 0}
-                result={combinedResult}
+                result={combinedResult ?? (combinedPersistedCount > 0 ? combinedPersistedCount : null)}
                 onClick={combinedMatching ? stopCombined : matchFromCombined}
                 onStop={stopCombined}
                 accentColor="#0d9488" accentBg="#f0fdfa" accentBorder="#99f6e4"
@@ -720,71 +631,6 @@ export default function VacancyDetailPage({ params }: Props) {
               {(combinedMatching || combinedSteps.length > 0) && (
                 <MatchTimeline steps={combinedSteps} running={combinedMatching} phases={HH_MATCH_PHASES} />
               )}
-            </div>
-
-            {/* Векторный пул — Скоро */}
-            <div className="relative">
-              <div className="pointer-events-none select-none opacity-70">
-                <MethodCard
-                  id="pool"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>}
-                  label={t("vacanciesDetail.poolLabel")}
-                  description={t("vacanciesDetail.poolDescription")}
-                  steps={[t("vacanciesDetail.poolStep1"), t("vacanciesDetail.poolStep2"), t("vacanciesDetail.poolStep3")]}
-                  running={false} disabled={true} result={null} onClick={() => {}}
-                  accentColor="#8b5cf6" accentBg="#f5f3ff" accentBorder="#ddd6fe"
-                />
-              </div>
-              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
-              </div>
-            </div>
-
-            {/* Живой пул — Скоро */}
-            <div className="relative">
-              <div className="pointer-events-none select-none opacity-70">
-                <MethodCard
-                  id="live"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>}
-                  label={t("vacanciesDetail.liveLabel")}
-                  description={t("vacanciesDetail.liveDescription")}
-                  steps={[t("vacanciesDetail.liveStep1"), t("vacanciesDetail.liveStep2"), t("vacanciesDetail.liveStep3")]}
-                  running={false} disabled={true} result={null} onClick={() => {}}
-                  accentColor="#10b981" accentBg="#ecfdf5" accentBorder="#a7f3d0"
-                />
-              </div>
-              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
-              </div>
-            </div>
-
-            {/* Загрузка файла — Скоро */}
-            <div className="relative">
-              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={onFileChange} />
-              <div className="pointer-events-none select-none opacity-70">
-                <MethodCard
-                  id="file"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>}
-                  label={t("vacanciesDetail.fileLabel")}
-                  description={t("vacanciesDetail.fileDescription")}
-                  steps={[
-                    t("vacanciesDetail.fileStep1"),
-                    t("vacanciesDetail.fileStep2"),
-                    t("vacanciesDetail.fileStep3"),
-                    t("vacanciesDetail.fileStep4"),
-                  ]}
-                  running={fileMatching}
-                  disabled={anyRunning && !fileMatching}
-                  result={fileResult}
-                  onClick={() => fileInputRef.current?.click()}
-                  accentColor="#f59e0b"
-                  accentBg="#fffbeb"
-                  accentBorder="#fde68a"
-                />
-              </div>
-              <div className="absolute inset-0 rounded-xl backdrop-blur-[2px] bg-white/70 flex items-center justify-center">
-                <span className="rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-400 tracking-wide shadow-sm">{t("vacanciesDetail.comingSoon")}</span>
-              </div>
             </div>
 
           </div>

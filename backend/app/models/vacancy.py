@@ -35,6 +35,10 @@ class Vacancy(Document):
     is_open: bool = True
     hh_vacancy_id: Optional[str] = None
     last_matched_at: Optional[datetime] = None
+    created_by: Optional[str] = None            # User.id of the staff member who created this vacancy
+    created_by_name: Optional[str] = None        # denormalized display name, for the dashboard
+    last_matched_by: Optional[str] = None        # User.id of the staff member who last ran a match
+    last_matched_by_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -24,14 +24,14 @@ async def get_vacancy_hh(vacancy_id: str) -> dict:
     return await _call_mcp("get_vacancy_hh", {"vacancy_id": vacancy_id})
 
 
-async def get_vacancy_responses_hh(hh_vacancy_id: str, limit: int = 10) -> dict:
+async def get_vacancy_responses_hh(hh_vacancy_id: str, limit: int = 5) -> dict:
     """Applicants who already applied to this hh.ru vacancy, full profiles (skills,
     work history) via the vacancy_responses_hh MCP tool. detail="full" is capped at
-    10 by the tool itself (hh.ru per-resume view quota) — total/by_state stay exact
+    5 by the tool itself (hh.ru per-resume view quota) — total/by_state stay exact
     regardless."""
     return await _call_mcp("vacancy_responses_hh", {
         "vacancy_id": hh_vacancy_id,
-        "limit": limit,
+        "limit": min(limit, 5),
         "detail": "full",
     })
 

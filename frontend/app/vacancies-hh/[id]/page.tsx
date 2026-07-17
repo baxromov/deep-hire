@@ -18,6 +18,7 @@ import { VacancyHhDetail } from "@/types/vacancyHh";
 import { Vacancy } from "@/types/vacancy";
 import { Candidate } from "@/types/candidate";
 import useSWR from "swr";
+import { usePersistedSteps } from "@/lib/usePersistedSteps";
 
 type Props = { params: Promise<{ id: string }> };
 type ResultTab = "llm" | "vector" | "hh_responses" | "hh" | "combined";
@@ -128,6 +129,7 @@ export default function VacancyHhDetailPage({ params }: Props) {
   const [includeCompanies, setIncludeCompanies] = useState("");
   const [excludeCompanies, setExcludeCompanies] = useState("");
   const [showHhSettings, setShowHhSettings] = useState(false);
+  const [hhPage, setHhPage] = useState(0);
 
   const [combinedMatching, setCombinedMatching] = useState(false);
   const [combinedSteps, setCombinedSteps] = useState<MatchStep[]>([]);
@@ -213,11 +215,20 @@ export default function VacancyHhDetailPage({ params }: Props) {
     setHhRespSteps((prev) => [...prev, { step: "error", message: t("vacanciesHhDetail.toastStoppedByUser") }]);
   };
 
+  // Reset pagination whenever the search filters change — a new filter means a fresh search, not "more of the same".
+  useEffect(() => { setHhPage(0); }, [includeCompanies, excludeCompanies]);
+
+  // Timelines survive a page refresh instead of vanishing — restored as historical (never re-marked as "running").
+  usePersistedSteps(`dh-match-steps-${id}-db`, dbSteps, setDbSteps);
+  usePersistedSteps(`dh-match-steps-${id}-hh-responses`, hhRespSteps, setHhRespSteps);
+  usePersistedSteps(`dh-match-steps-${id}-hh`, hhSteps, setHhSteps);
+  usePersistedSteps(`dh-match-steps-${id}-combined`, combinedSteps, setCombinedSteps);
+
   const matchFromHh = () => {
     if (!internalId) return;
     setHhMatching(true); setHhSteps([]); setHhResult(null);
     const source = new EventSource(
-      matchingApi.matchFromHhStreamUrl(internalId, minScore, includeCompanies || undefined, excludeCompanies || undefined),
+      matchingApi.matchFromHhStreamUrl(internalId, minScore, includeCompanies || undefined, excludeCompanies || undefined, hhPage),
       { withCredentials: true }
     );
     hhSourceRef.current = source;
@@ -227,6 +238,7 @@ export default function VacancyHhDetailPage({ params }: Props) {
       if (event.step === "done") {
         source.close(); hhSourceRef.current = null;
         setHhMatching(false); setHhResult(event.matched ?? 0);
+        setHhPage((p) => p + 1);
         (event.matched ?? 0) > 0
           ? toast.success(t("vacanciesHhDetail.toastHhFound", { count: event.matched ?? 0 }))
           : toast.info(t("vacanciesHhDetail.toastNoCandidates"));
@@ -466,7 +478,7 @@ export default function VacancyHhDetailPage({ params }: Props) {
               badge={<span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-bold text-pink-600">≥{minScore}%</span>}
               running={dbMatching}
               disabled={anyRunning && !dbMatching}
-              result={dbResult}
+              result={dbResult ?? (dbCandidates.length > 0 ? dbCandidates.length : null)}
               onClick={dbMatching ? stopDb : matchFromDb}
               onStop={stopDb}
               accentColor="#ec4899"
@@ -493,7 +505,7 @@ export default function VacancyHhDetailPage({ params }: Props) {
               badge={<span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-600">≥{minScore}%</span>}
               running={hhRespMatching}
               disabled={anyRunning && !hhRespMatching}
-              result={hhRespResult}
+              result={hhRespResult ?? (hhRespCandidates.length > 0 ? hhRespCandidates.length : null)}
               onClick={hhRespMatching ? stopHhResponses : matchFromHhResponses}
               onStop={stopHhResponses}
               accentColor="#7c3aed"
@@ -507,33 +519,37 @@ export default function VacancyHhDetailPage({ params }: Props) {
 
           {/* Умный поиск HH */}
           <div className="space-y-2">
-            <MethodCard
-              id="hh"
-              icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
-              label={t("vacanciesHhDetail.methodHhLabel")}
-              description={t("vacanciesHhDetail.methodHhDescription")}
-              steps={[
-                t("vacanciesHhDetail.methodHhStep1"),
-                t("vacanciesHhDetail.methodHhStep2"),
-                t("vacanciesHhDetail.methodHhStep3"),
-                t("vacanciesHhDetail.stepSaveThreshold", { minScore }),
-              ]}
-              badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
-              running={hhMatching}
-              disabled={anyRunning && !hhMatching}
-              result={hhResult}
-              onClick={hhMatching ? stopHh : matchFromHh}
-              onStop={stopHh}
-              accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
-            />
             <Dialog open={showHhSettings} onOpenChange={setShowHhSettings}>
-              <DialogTrigger className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"/>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-                {t("matchingUi.searchSettings")}
-              </DialogTrigger>
+              <MethodCard
+                id="hh"
+                icon={<Image src="/hh-logo.svg" width={16} height={16} alt="hh.ru" />}
+                label={t("vacanciesHhDetail.methodHhLabel")}
+                description={t("vacanciesHhDetail.methodHhDescription")}
+                steps={[
+                  t("vacanciesHhDetail.methodHhStep1"),
+                  t("vacanciesHhDetail.methodHhStep2"),
+                  t("vacanciesHhDetail.methodHhStep3"),
+                  t("vacanciesHhDetail.stepSaveThreshold", { minScore }),
+                ]}
+                badge={<span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-600">≥{minScore}%</span>}
+                running={hhMatching}
+                disabled={anyRunning && !hhMatching}
+                result={hhResult ?? (hhCandidates.length > 0 ? hhCandidates.length : null)}
+                onClick={hhMatching ? stopHh : matchFromHh}
+                onStop={stopHh}
+                cornerAction={
+                  <DialogTrigger
+                    title={t("matchingUi.searchSettings")}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-blue-200 bg-white text-blue-500 shadow-md transition-all hover:scale-110 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                  </DialogTrigger>
+                }
+                accentColor="#3b82f6" accentBg="#eff6ff" accentBorder="#bfdbfe"
+              />
               <DialogContent>
                 <DialogTitle>{t("matchingUi.searchSettings")}</DialogTitle>
                 <div className="space-y-3 text-xs">
@@ -582,7 +598,7 @@ export default function VacancyHhDetailPage({ params }: Props) {
               badge={<span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-600">≥{minScore}%</span>}
               running={combinedMatching}
               disabled={(anyRunning && !combinedMatching) || rawCandidates.length === 0}
-              result={combinedResult}
+              result={combinedResult ?? (combinedCandidates.length > 0 ? combinedCandidates.length : null)}
               onClick={combinedMatching ? stopCombined : matchFromCombined}
               onStop={stopCombined}
               accentColor="#0d9488" accentBg="#f0fdfa" accentBorder="#99f6e4"

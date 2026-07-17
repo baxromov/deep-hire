@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import quote as urlquote, urlparse, urlunparse
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -13,9 +13,11 @@ logger = logging.getLogger(__name__)
 
 from beanie import PydanticObjectId
 
+from app.dependencies import require_admin
 from app.models.candidate import Candidate
 from app.models.match_candidate_hit import MatchCandidateHit
 from app.models.match_result import MatchResult
+from app.models.user import User
 from app.models.vacancy import Vacancy, VacancyStatus
 from app.schemas.candidate import CandidateDetailResponse, CandidateResponse
 from app.services import ai_service, candidate_service, file_service, minio_service
@@ -723,8 +725,9 @@ async def delete_candidates_bulk(body: BulkDeleteBody):
     return {"deleted": result.deleted_count}
 
 
-async def clear_cleverstaff_candidates():
-    """Delete all Cleverstaff-synced candidates from MongoDB, Qdrant, and Redis."""
+async def clear_cleverstaff_candidates(_: User = Depends(require_admin)):
+    """Delete all Cleverstaff-synced candidates from MongoDB, Qdrant, and Redis. Admin-only —
+    irreversibly wipes CleverStaff-sourced data for the whole team, not just the caller."""
     from app.database import get_qdrant, get_redis
     from app.config import settings
     from qdrant_client.http import models as qmodels

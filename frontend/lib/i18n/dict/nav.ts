@@ -1,5 +1,6 @@
 export const nav = {
   uz: {
+    "nav.dashboard": "Boshqaruv paneli",
     "nav.vacancies": "Vakansiyalar",
     "nav.candidates": "Nomzodlar",
     "nav.integrations": "Integratsiyalar",
@@ -7,8 +8,11 @@ export const nav = {
     "nav.logout": "Chiqish",
     "nav.admin": "Administrator",
     "nav.staff": "Xodim",
+    "nav.collapseSidebar": "Panelni yig'ish",
+    "nav.expandSidebar": "Panelni yoyish",
   },
   ru: {
+    "nav.dashboard": "Дашборд",
     "nav.vacancies": "Вакансии",
     "nav.candidates": "Кандидаты",
     "nav.integrations": "Интеграции",
@@ -16,8 +20,11 @@ export const nav = {
     "nav.logout": "Выйти",
     "nav.admin": "Администратор",
     "nav.staff": "Сотрудник",
+    "nav.collapseSidebar": "Свернуть панель",
+    "nav.expandSidebar": "Развернуть панель",
   },
   en: {
+    "nav.dashboard": "Dashboard",
     "nav.vacancies": "Vacancies",
     "nav.candidates": "Candidates",
     "nav.integrations": "Integrations",
@@ -25,5 +32,7 @@ export const nav = {
     "nav.logout": "Log out",
     "nav.admin": "Administrator",
     "nav.staff": "Staff",
+    "nav.collapseSidebar": "Collapse sidebar",
+    "nav.expandSidebar": "Expand sidebar",
   },
 };

@@ -18,6 +18,8 @@ class MatchResult(Document):
     score_criteria: List[Dict[str, Any]] = Field(default_factory=list)
     source: str = "db_search"
     matched_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    matched_by: Optional[str] = None       # User.id of the staff member who ran this match
+    matched_by_name: Optional[str] = None  # denormalized display name, for the dashboard
 
     class Settings:
         name = "match_results"

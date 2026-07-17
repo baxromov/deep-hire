@@ -74,7 +74,10 @@ async def _call_mcp(tool_name: str, arguments: dict) -> dict:
     raw_text = data["result"]["content"][0]["text"]
     logger.info("MCP raw response: %s", raw_text)
 
-    result = json.loads(raw_text)
+    try:
+        result = json.loads(raw_text)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"MCP tool '{tool_name}' returned a non-JSON response: {raw_text}")
     candidates = result.get("candidates", [])
     logger.info("MCP parsed → total=%s returned=%s", result.get("total"), len(candidates))
     for i, cand in enumerate(candidates):

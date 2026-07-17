@@ -87,6 +87,8 @@ async def _link_or_stage(
     hit_col,
     now: datetime,
     existing_hh_resume_id: Optional[str] = None,
+    matched_by: Optional[str] = None,
+    matched_by_name: Optional[str] = None,
 ) -> str:
     """Write one scored resume as either a MatchResult link (existing_candidate_id known)
     or a MatchCandidateHit staging row (candidate_id unknown — never touches Candidate).
@@ -110,6 +112,8 @@ async def _link_or_stage(
         "score_reasoning": resume.get("score_reasoning"),
         "score_criteria": resume.get("score_criteria") or [],
         "matched_at": now,
+        "matched_by": matched_by,
+        "matched_by_name": matched_by_name,
     }
 
     if existing_candidate_id:
@@ -136,7 +140,10 @@ async def _link_or_stage(
     return "staged"
 
 
-async def stage_hh_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: str = "hh") -> Dict[str, int]:
+async def stage_hh_hits(
+    vacancy: Vacancy, scored_resumes: List[tuple], source: str = "hh",
+    matched_by: Optional[str] = None, matched_by_name: Optional[str] = None,
+) -> Dict[str, int]:
     """Persist fresh HH.ru search hits without polluting the permanent Candidate collection.
 
     Each hit is checked against the permanent Qdrant pool by re-embedding it: a
@@ -163,7 +170,7 @@ async def stage_hh_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: s
 
         outcome = await _link_or_stage(
             vacancy, resume, score, existing_candidate_id, source, mr_col, hit_col, now,
-            existing_hh_resume_id,
+            existing_hh_resume_id, matched_by, matched_by_name,
         )
         if outcome:
             counts[outcome] += 1
@@ -171,7 +178,10 @@ async def stage_hh_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: s
     return counts
 
 
-async def stage_pool_hits(vacancy: Vacancy, scored_resumes: List[tuple], source: str) -> Dict[str, int]:
+async def stage_pool_hits(
+    vacancy: Vacancy, scored_resumes: List[tuple], source: str,
+    matched_by: Optional[str] = None, matched_by_name: Optional[str] = None,
+) -> Dict[str, int]:
     """Persist permanent-pool search hits (db_search/talent_pool) without polluting Candidate.
 
     Unlike stage_hh_hits, each resume here was already retrieved from a Qdrant hit in
@@ -188,6 +198,7 @@ async def stage_pool_hits(vacancy: Vacancy, scored_resumes: List[tuple], source:
     for resume, score in scored_resumes:
         outcome = await _link_or_stage(
             vacancy, resume, score, resume.get("_candidate_id"), source, mr_col, hit_col, now,
+            None, matched_by, matched_by_name,
         )
         if outcome:
             counts[outcome] += 1

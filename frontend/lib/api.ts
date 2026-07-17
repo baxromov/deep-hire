@@ -17,6 +17,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Builds a query string for SSE endpoints consumed via the browser's native EventSource,
+// which can't send an Authorization header — the JWT rides along as ?token= instead
+// (see backend app.dependencies.get_current_user_sse).
+function sseAuthParams(extra: Record<string, string>): string {
+  const token = typeof window !== "undefined" ? localStorage.getItem("dh_token") : null;
+  const params = new URLSearchParams(extra);
+  if (token) params.set("token", token);
+  return params.toString();
+}
+
 // Redirect to login on 401
 api.interceptors.response.use(
   (res) => res,
@@ -118,17 +128,17 @@ export const matchingApi = {
   matchFromLivePool: (vacancyId: string) =>
     api.post<{ matched: number; total: number }>(`/api/matching/vacancies/${vacancyId}/match-from-live-pool`),
   matchFromDbStreamUrl: (vacancyId: string, minScore = 60) =>
-    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-db-stream?min_score=${minScore}`,
-  matchFromHhStreamUrl: (vacancyId: string, minScore = 60, includeCompanies?: string, excludeCompanies?: string) => {
-    const params = new URLSearchParams({ min_score: String(minScore) });
-    if (includeCompanies) params.set("include_companies", includeCompanies);
-    if (excludeCompanies) params.set("exclude_companies", excludeCompanies);
-    return `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-stream?${params.toString()}`;
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-db-stream?${sseAuthParams({ min_score: String(minScore) })}`,
+  matchFromHhStreamUrl: (vacancyId: string, minScore = 60, includeCompanies?: string, excludeCompanies?: string, page = 0) => {
+    const params: Record<string, string> = { min_score: String(minScore), page: String(page) };
+    if (includeCompanies) params.include_companies = includeCompanies;
+    if (excludeCompanies) params.exclude_companies = excludeCompanies;
+    return `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-stream?${sseAuthParams(params)}`;
   },
   matchFromHhResponsesStreamUrl: (vacancyId: string, minScore = 60) =>
-    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-responses-stream?min_score=${minScore}`,
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/match-from-hh-responses-stream?${sseAuthParams({ min_score: String(minScore) })}`,
   matchFromCombinedStreamUrl: (vacancyId: string, minScore = 60) =>
-    `${API_BASE}/api/matching/vacancies/${vacancyId}/rerank-combined-stream?min_score=${minScore}`,
+    `${API_BASE}/api/matching/vacancies/${vacancyId}/rerank-combined-stream?${sseAuthParams({ min_score: String(minScore) })}`,
 };
 
 // --- Talent Pool ---
@@ -218,4 +228,10 @@ export const candidateApi = {
     api.delete<{ ok: boolean }>(`/api/candidates/${id}`),
   deleteMany: (ids: string[]) =>
     api.delete<{ deleted: number }>("/api/candidates/bulk", { data: { ids } }),
+};
+
+// --- Dashboard ---
+export const dashboardApi = {
+  stats: () => api.get<import("@/types/dashboard").DashboardStats>("/api/dashboard/stats"),
+  hhQuota: () => api.get<import("@/types/dashboard").HhQuota>("/api/dashboard/hh-quota"),
 };

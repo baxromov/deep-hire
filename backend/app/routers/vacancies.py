@@ -1,8 +1,10 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app.dependencies import get_current_user
+from app.models.user import User
 from app.schemas.vacancy import VacancyResponse, VacancyUpdate
 from app.services import vacancy_service
 
@@ -22,8 +24,11 @@ async def list_vacancies(
     return {"items": [VacancyResponse.from_doc(d) for d in items], "total": total}
 
 
-async def create_vacancy():
-    doc = await vacancy_service.create_vacancy()
+async def create_vacancy(current_user: User = Depends(get_current_user)):
+    doc = await vacancy_service.create_vacancy(
+        created_by=str(current_user.id),
+        created_by_name=current_user.full_name or current_user.username,
+    )
     return VacancyResponse.from_doc(doc)
 
 

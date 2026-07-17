@@ -9,8 +9,8 @@ from app.schemas.vacancy import VacancyUpdate
 from app.services import hh_vacancy_service
 
 
-async def create_vacancy() -> Vacancy:
-    v = Vacancy()
+async def create_vacancy(created_by: Optional[str] = None, created_by_name: Optional[str] = None) -> Vacancy:
+    v = Vacancy(created_by=created_by, created_by_name=created_by_name)
     await v.insert()
     return v
 

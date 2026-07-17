@@ -1,8 +1,10 @@
 import { admin } from "./dict/admin";
+import { authLogin } from "./dict/authLogin";
 import { candidateShared } from "./dict/candidateShared";
 import { candidatesDetail } from "./dict/candidatesDetail";
 import { candidatesList } from "./dict/candidatesList";
 import { common } from "./dict/common";
+import { dashboard } from "./dict/dashboard";
 import { matchingUi } from "./dict/matchingUi";
 import { nav } from "./dict/nav";
 import { profileSettings } from "./dict/profileSettings";
@@ -18,6 +20,8 @@ import { vacancyForm } from "./dict/vacancyForm";
 // are never touched by more than one editor at a time, only this list is.
 const PARTS = [
   common,
+  authLogin,
+  dashboard,
   nav,
   vacancyCard,
   vacancyForm,

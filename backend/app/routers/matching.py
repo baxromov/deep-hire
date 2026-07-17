@@ -4,13 +4,15 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 
 from beanie import PydanticObjectId
 
 from app.config import settings
 from app.database import get_qdrant
+from app.dependencies import get_current_user_sse
+from app.models.user import User
 from app.models.vacancy import VacancyStatus
 from app.services import ai_service, candidate_service, file_service, hh_mcp_service, hh_service, hh_vacancy_service, minio_service, vacancy_service
 from app.services.embedding_service import build_resume_text, build_vacancy_text, embed, embed_batch, rerank
@@ -38,6 +40,7 @@ SCORE_CONCURRENCY = 10  # parallel Ollama scoring calls
 REMATCH_TOP_N = 50      # top candidates saved after vector reranking
 DB_VECTOR_PRESCORE_N = 25  # Qdrant pre-filter: score only top-N before LLM
 MAX_COMBINED_RERANK = 30  # cap on how many already-found candidates get re-scored in one combined pass
+HH_SEARCH_LIMIT = 5      # search_candidate_hh MCP tool itself rejects any limit above 5
 
 # Read thresholds from settings (tunable via env vars — used by pool flows)
 MIN_SCORE: int = settings.match_min_score
@@ -981,8 +984,10 @@ async def match_from_live_pool_stream(vacancy_id: str):
     )
 
 
-async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0, le=100)):
+async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0, le=100), current_user: User = Depends(get_current_user_sse)):
     """SSE: search main Qdrant collection directly (no MongoDB pre-fetch, no re-embedding)."""
+    matched_by = str(current_user.id)
+    matched_by_name = current_user.full_name or current_user.username
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -1268,9 +1273,11 @@ async def match_from_db_stream(vacancy_id: str, min_score: int = Query(40, ge=0,
                 }).delete()
                 await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "db_search"}).delete()
 
-                staged = await candidate_service.stage_pool_hits(vacancy, scored, source="db_search")
+                staged = await candidate_service.stage_pool_hits(vacancy, scored, source="db_search", matched_by=matched_by, matched_by_name=matched_by_name)
                 count = staged["linked"] + staged["staged"]
                 vacancy.last_matched_at = now
+                vacancy.last_matched_by = matched_by
+                vacancy.last_matched_by_name = matched_by_name
                 await vacancy.save()
 
                 await emit({
@@ -1304,10 +1311,16 @@ async def match_from_hh_stream(
     min_score: int = Query(MIN_SCORE, ge=0, le=100),
     include_companies: str | None = Query(None, description="Comma-separated company names — only candidates who worked there"),
     exclude_companies: str | None = Query(None, description="Comma-separated company names — drop candidates who worked there"),
+    page: int = Query(0, ge=0, description="HH search results page — 0 for a fresh search, incremented by the caller on each subsequent click to page through more candidates"),
+    current_user: User = Depends(get_current_user_sse),
 ):
     """SSE: LLM fills HH MCP search params from the vacancy, searches HeadHunter via
     search_candidate_hh, LLM-scores results against vacancy criteria, auto-saves top
-    matches with source='hh'."""
+    matches with source='hh'. page=0 replaces any prior HH results for this vacancy;
+    page>0 accumulates on top of them (the caller re-issues this with an incrementing
+    page on each additional click of the same search)."""
+    matched_by = str(current_user.id)
+    matched_by_name = current_user.full_name or current_user.username
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -1358,8 +1371,8 @@ async def match_from_hh_stream(
                                f"{companies_note}",
                 })
 
-                await emit({"step": "searching", "message": "Поиск резюме на HH.ru…"})
-                result = await hh_mcp_service.search_candidates_hh(**hh_params, limit=10, page=0)
+                await emit({"step": "searching", "message": f"Поиск резюме на HH.ru… (страница {page + 1})"})
+                result = await hh_mcp_service.search_candidates_hh(**hh_params, limit=HH_SEARCH_LIMIT, page=page)
                 raw_candidates = result.get("candidates", [])
 
                 # Tool itself hints to drop the most specific filter when nothing matches —
@@ -1367,7 +1380,7 @@ async def match_from_hh_stream(
                 if not raw_candidates and hh_params.get("min_experience") is not None:
                     await emit({"step": "searching", "message": "Ничего не найдено — повторяю поиск без фильтра по опыту…"})
                     retry_params = {**hh_params, "min_experience": None}
-                    result = await hh_mcp_service.search_candidates_hh(**retry_params, limit=10, page=0)
+                    result = await hh_mcp_service.search_candidates_hh(**retry_params, limit=HH_SEARCH_LIMIT, page=page)
                     raw_candidates = result.get("candidates", [])
 
                 await emit({
@@ -1430,16 +1443,26 @@ async def match_from_hh_stream(
 
                 from app.models.match_candidate_hit import MatchCandidateHit
                 from app.models.match_result import MatchResult as MatchResultModel
-                await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
-                await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
-                staged = await candidate_service.stage_hh_hits(vacancy, good, source="hh")
-                count = staged["linked"] + staged["staged"]
+                if page == 0:
+                    # Fresh search (not paging further into the same one) — replace prior HH results.
+                    await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
+                    await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh"}).delete()
+                staged = await candidate_service.stage_hh_hits(vacancy, good, source="hh", matched_by=matched_by, matched_by_name=matched_by_name)
                 vacancy.last_matched_at = datetime.now(timezone.utc)
+                vacancy.last_matched_by = matched_by
+                vacancy.last_matched_by_name = matched_by_name
                 await vacancy.save()
+
+                # Cumulative across every page fetched so far for this vacancy (upserts dedup
+                # by hh_resume_id, so this stays accurate even if a page's candidates overlap).
+                total_count = (
+                    await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh"}).count()
+                    + await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh"}).count()
+                )
 
                 await emit({
                     "step": "done",
-                    "matched": count, "total": len(good),
+                    "matched": total_count, "total": len(good),
                     "message": f"Done. {staged['linked']} already in DB, {staged['staged']} new from HH.ru.",
                 })
             except Exception as exc:
@@ -1462,11 +1485,13 @@ async def match_from_hh_stream(
     )
 
 
-async def match_from_hh_responses_stream(vacancy_id: str, min_score: int = Query(MIN_SCORE, ge=0, le=100)):
+async def match_from_hh_responses_stream(vacancy_id: str, min_score: int = Query(MIN_SCORE, ge=0, le=100), current_user: User = Depends(get_current_user_sse)):
     """SSE: LLM-score applicants who already responded to this hh.ru vacancy
     (vacancy_responses_hh), auto-saves top matches with source='hh_responses'.
     Only usable for hh-backed vacancies (vacancy.hh_vacancy_id set) — see
     hh_vacancies.get_hh_vacancy, which creates that backing Vacancy on demand."""
+    matched_by = str(current_user.id)
+    matched_by_name = current_user.full_name or current_user.username
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -1548,9 +1573,11 @@ async def match_from_hh_responses_stream(vacancy_id: str, min_score: int = Query
                 from app.models.match_result import MatchResult as MatchResultModel
                 await MatchResultModel.find({"vacancy_id": vacancy.id, "source": "hh_responses"}).delete()
                 await MatchCandidateHit.find({"vacancy_id": vacancy.id, "source": "hh_responses"}).delete()
-                staged = await candidate_service.stage_hh_hits(vacancy, good, source="hh_responses")
+                staged = await candidate_service.stage_hh_hits(vacancy, good, source="hh_responses", matched_by=matched_by, matched_by_name=matched_by_name)
                 count = staged["linked"] + staged["staged"]
                 vacancy.last_matched_at = datetime.now(timezone.utc)
+                vacancy.last_matched_by = matched_by
+                vacancy.last_matched_by_name = matched_by_name
                 await vacancy.save()
 
                 await emit({
@@ -1578,11 +1605,13 @@ async def match_from_hh_responses_stream(vacancy_id: str, min_score: int = Query
     )
 
 
-async def rerank_combined_stream(vacancy_id: str, min_score: int = Query(MIN_SCORE, ge=0, le=100)):
+async def rerank_combined_stream(vacancy_id: str, min_score: int = Query(MIN_SCORE, ge=0, le=100), current_user: User = Depends(get_current_user_sse)):
     """SSE: gather every candidate already found for this vacancy by any other
     method (real + staged), dedupe by person, and re-score all of them with ONE
     consistent LLM pass so scores are directly comparable across sources. Persists
     as source='combined' — doesn't create any new Candidate."""
+    matched_by = str(current_user.id)
+    matched_by_name = current_user.full_name or current_user.username
 
     async def event_stream():
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -1669,6 +1698,8 @@ async def rerank_combined_stream(vacancy_id: str, min_score: int = Query(MIN_SCO
                         "score_criteria": criteria,
                         "matched_at": now,
                         "source": "combined",
+                        "matched_by": matched_by,
+                        "matched_by_name": matched_by_name,
                     }
                     if person["candidate_id"]:
                         await mr_col.update_one(
@@ -1692,6 +1723,11 @@ async def rerank_combined_stream(vacancy_id: str, min_score: int = Query(MIN_SCO
                             }},
                             upsert=True,
                         )
+
+                vacancy.last_matched_at = now
+                vacancy.last_matched_by = matched_by
+                vacancy.last_matched_by_name = matched_by_name
+                await vacancy.save()
 
                 await emit({
                     "step": "done",

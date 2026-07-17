@@ -15,12 +15,13 @@ export type MethodCardProps = {
   result?: number | null;   // matched count after last run
   onClick: () => void;
   onStop?: () => void;
+  cornerAction?: React.ReactNode; // e.g. a settings-dialog trigger pinned to the top-right corner
   accentColor: string;
   accentBg: string;
   accentBorder: string;
 };
 
-export function MethodCard({ icon, label, description, steps, badge, running, disabled, result, onClick, onStop, accentColor, accentBg, accentBorder }: MethodCardProps) {
+export function MethodCard({ icon, label, description, steps, badge, running, disabled, result, onClick, onStop, cornerAction, accentColor, accentBg, accentBorder }: MethodCardProps) {
   const { t } = useLocale();
   const [showTooltip, setShowTooltip] = useState(false);
   const hasResult = result != null;
@@ -32,7 +33,7 @@ export function MethodCard({ icon, label, description, steps, badge, running, di
         disabled={disabled || running}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
-        className="group relative flex w-full flex-col items-start gap-2 overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`group relative flex w-full flex-col items-start gap-2 overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${cornerAction ? "pr-12" : ""}`}
         style={{
           borderColor: running ? accentColor : hasResult && result! > 0 ? accentColor + "60" : "#e2e8f0",
           background: running ? accentBg : "white",
@@ -92,6 +93,13 @@ export function MethodCard({ icon, label, description, steps, badge, running, di
         {/* Description — clamped to 2 lines so cards in the same row stay equal height */}
         <p className="line-clamp-2 min-h-[2.6em] text-[11.5px] leading-relaxed text-gray-400">{description}</p>
       </button>
+
+      {/* Corner action — e.g. a settings-dialog trigger, sits above the card button so it never nests inside it */}
+      {cornerAction && (
+        <div className="absolute top-2.5 right-2.5 z-10" onClick={(e) => e.stopPropagation()}>
+          {cornerAction}
+        </div>
+      )}
 
       {/* Stop button — shown when running */}
       {running && onStop && (
